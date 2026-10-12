@@ -97,6 +97,7 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   padding: 10px max(16px, calc((100% - 960px) / 2));
+  background: var(--bg);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);

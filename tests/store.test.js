@@ -245,3 +245,48 @@ test('答题时排好下次复习, 记今天学过; 存了再读还在', () => {
   store.amendAnswer(set.id, pear.id);
   assert.equal(store.getSet(set.id).stats[pear.id].interval, 1);
 });
+
+test('存不进去 (空间满了): 不抛错, 告诉 onSaveError; 编辑保存 (putSet) 才抛错', () => {
+  const storage = memoryStorage();
+  const store = new Store(storage);
+  const set = store.putSet(sampleSet());
+  let told = 0;
+  store.onSaveError = () => told++;
+  storage.setItem = () => {
+    throw new Error('QuotaExceededError');
+  };
+  store.setKnown(set.id, set.cards[0].id, true);
+  store.recordAnswer(set.id, set.cards[0].id, true);
+  assert.equal(told, 2);
+  assert.throws(() => store.putSet(sampleSet()));
+});
+
+test('撤销时恢复统计; 删卡片集时清掉它另外记的东西', () => {
+  const storage = memoryStorage();
+  const store = new Store(storage);
+  const set = store.putSet(sampleSet());
+  const [apple] = set.cards;
+  store.recordAnswer(set.id, apple.id, true);
+  const before = structuredClone(store.getSet(set.id).stats[apple.id]);
+  store.recordAnswer(set.id, apple.id, false);
+  store.restoreStat(set.id, apple.id, before);
+  assert.deepEqual(store.getSet(set.id).stats[apple.id], before);
+  store.restoreStat(set.id, apple.id, null);
+  assert.equal(store.getSet(set.id).stats[apple.id], undefined);
+
+  storage.setItem(`wengu:cards-session:${set.id}`, '{}');
+  storage.setItem(`wengu:learn-goal:${set.id}`, '"cram"');
+  store.deleteSet(set.id);
+  assert.equal(storage.getItem(`wengu:cards-session:${set.id}`), null);
+  assert.equal(storage.getItem(`wengu:learn-goal:${set.id}`), null);
+});
+
+test('导入备份时合并打卡记录 (同一天取多的)', () => {
+  const from = new Store(memoryStorage());
+  from.putSet(sampleSet());
+  from.data.activity = { '2026-10-10': 5, '2026-10-11': 2 };
+  const to = new Store(memoryStorage());
+  to.data.activity = { '2026-10-11': 7, '2026-10-12': 1 };
+  to.importBackup(from.exportBackup());
+  assert.deepEqual(to.data.activity, { '2026-10-10': 5, '2026-10-11': 7, '2026-10-12': 1 });
+});

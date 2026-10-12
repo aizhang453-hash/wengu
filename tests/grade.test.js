@@ -63,3 +63,16 @@ test('编辑距离按字算', () => {
   assert.equal(editDistance('苹果', '苹菓'), 1);
   assert.equal(editDistance('', 'abc'), 3);
 });
+
+test('英文解释里的逗号是一句话, 只写半句不算对', () => {
+  assert.ok(wrong(grade('especially in fear', 'to run quickly, especially in fear')));
+  assert.ok(wrong(grade('a large', 'a large, gray animal')));
+  assert.ok(ok(grade('a large, gray animal', 'a large, gray animal')));
+  // 一个词一个词列出来的才是几个意思
+  assert.ok(ok(grade('large', 'big, large, huge')));
+  assert.ok(ok(grade('飞奔', '跑，奔跑，飞奔')));
+  // 中文长句子里的逗号也不拆
+  assert.ok(wrong(grade('经常在害怕的时候', '很快地跑开，经常在害怕的时候')));
+  // 分号、斜杠照样是几个意思
+  assert.ok(ok(grade('to sprint', 'to run quickly; to sprint')));
+});

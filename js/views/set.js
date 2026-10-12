@@ -181,7 +181,10 @@ export function renderSet({ store, go }, id) {
           '＋ 新建文件夹',
         ),
       ],
-      onClose: () => go(base),
+      // 关掉时重画这一页 (显示在哪些文件夹里); 已经换到别的页就不管了
+      onClose: () => {
+        if (location.hash === base) go(base);
+      },
     });
   }
 

@@ -22,12 +22,23 @@ function stripAccents(s) {
   return s.normalize('NFD').replace(/\p{M}/gu, '').normalize('NFC');
 }
 
-// 几个意思用逗号、分号、斜杠、顿号、「 or 」隔开。
+// 几个意思用分号、斜杠、顿号、「 or 」隔开; 逗号要小心:
+// 「big, large, huge」「跑，奔跑」是几个意思, 「to run quickly, especially in fear」是一句话。
+// 所以只有逗号隔开的每一段都很短 (外文一个词, 中日韩四个字以内) 才当成几个意思。
 // 只有一个字母的不算 (免得「km/h」写个「h」也算对), 一个汉字算
 export function alternatives(expected) {
-  return stripMarks(String(expected ?? ''))
-    .replace(PARENS, ' ')
-    .split(/[,;/|、，；]|\s+or\s+/i)
+  const text = stripMarks(String(expected ?? '')).replace(PARENS, ' ');
+  const short = (piece) => {
+    const p = piece.trim();
+    if (!p) return true;
+    return CJK.test(p) ? Array.from(p.replace(/\s/g, '')).length <= 4 : !/\s/.test(p);
+  };
+  return text
+    .split(/[;/|、；]|\s+or\s+/i)
+    .flatMap((part) => {
+      const pieces = part.split(/[,，]/);
+      return pieces.length > 1 && pieces.every(short) ? pieces : [part];
+    })
     .map((s) => normalize(s))
     .filter((s) => CJK.test(s) || Array.from(s).length >= 2);
 }

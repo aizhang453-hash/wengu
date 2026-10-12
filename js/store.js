@@ -176,9 +176,15 @@ export class Store {
     this.data = this.load();
   }
 
-  // 存不下 (超过浏览器给的空间) 会抛错, 交给调用的地方提示
+  // 存不下 (超过浏览器给的空间、无痕模式) 时不抛错, 调 onSaveError 提示一下, 返回 false
   save() {
-    this.storage?.setItem(KEY, JSON.stringify(this.data));
+    try {
+      this.storage?.setItem(KEY, JSON.stringify(this.data));
+      return true;
+    } catch (e) {
+      this.onSaveError?.(e);
+      return false;
+    }
   }
 
   // 最近改过的在前面
@@ -257,7 +263,8 @@ export class Store {
     const i = this.data.sets.findIndex((s) => s.id === clean.id);
     if (i === -1) this.data.sets.push(clean);
     else this.data.sets[i] = clean;
-    this.save();
+    // 编辑页靠这个提示「存不下了」
+    if (!this.save()) throw new Error('存不下了');
     return clean;
   }
 
@@ -265,6 +272,16 @@ export class Store {
     this.data.sets = this.data.sets.filter((s) => s.id !== id);
     for (const f of this.data.folders) f.setIds = f.setIds.filter((sid) => sid !== id);
     this.save();
+    this.forgetLocal(id);
+  }
+
+  // 这个卡片集 (或文件夹) 在浏览器里另外记的东西: 单词卡背到哪了、学习目标
+  forgetLocal(id) {
+    try {
+      for (const key of [`wengu:cards-session:${id}`, `wengu:learn-goal:${id}`]) this.storage?.removeItem(key);
+    } catch {
+      // 删不掉就算了
+    }
   }
 
   // ---- 文件夹 ----
@@ -289,6 +306,7 @@ export class Store {
   deleteFolder(id) {
     this.data.folders = this.data.folders.filter((f) => f.id !== id);
     this.save();
+    this.forgetLocal(FOLDER_PREFIX + id);
   }
 
   // 卡片集放进 / 拿出文件夹
@@ -345,6 +363,15 @@ export class Store {
     Object.assign(s, schedule(s, correct, now));
     this.touchActivity(now);
     if (save) this.save();
+  }
+
+  // 撤销时把一张卡片的统计恢复成以前的样子 (null 就是以前没有)
+  restoreStat(setId, cardId, stat) {
+    const set = this.ownerOf(setId, cardId);
+    if (!set) return;
+    if (stat) set.stats[cardId] = stat;
+    else delete set.stats[cardId];
+    this.save();
   }
 
   // 今天学过 (连续打卡)
@@ -408,6 +435,10 @@ export class Store {
         this.data.sets[i] = set;
         replaced++;
       }
+    }
+    // 打卡记录: 同一天取多的
+    for (const [day, n] of Object.entries(incoming.activity)) {
+      this.data.activity[day] = Math.max(this.data.activity[day] ?? 0, n);
     }
     for (const folder of incoming.folders) {
       const i = this.data.folders.findIndex((f) => f.id === folder.id);

@@ -15,7 +15,7 @@
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
-import { h } from './dom.js';
+import { h, toast } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
@@ -29,6 +29,13 @@ import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
 
 const store = new Store();
+let lastSaveError = 0;
+store.onSaveError = () => {
+  // 一直存不进去时别每次都弹
+  if (Date.now() - lastSaveError < 10000) return;
+  lastSaveError = Date.now();
+  toast('存不进去了: 浏览器给的空间满了, 或者开着无痕模式。刚才的改动可能没存上, 先导出备份。');
+};
 const main = document.getElementById('main');
 
 let current = null; // 当前页 { cleanup, canLeave }
@@ -69,6 +76,8 @@ function render() {
     history.replaceState(null, '', shownHash);
     return;
   }
+  // 换页时 (比如按了浏览器的返回) 关掉还开着的弹出窗口
+  for (const d of document.querySelectorAll('dialog[open]')) d.close();
   current?.cleanup?.();
   current = null;
   shownHash = hash;

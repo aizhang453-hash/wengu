@@ -1,7 +1,10 @@
 // 打陨石 (照 Quizlet 的 Blast): 下面给一个词, 上面飘下来几块陨石, 每块写着一个答案,
 // 打中对的那块。打错或者让对的那块掉下去, 少一条命。答对 5 题升一关, 越来越快。
 
-import { h } from '../dom.js';
+import { h, dialogOpen } from '../dom.js';
+
+// 在这些框里打字时不接快捷键 (比如顶上的搜索框)
+const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 import { sayCard, canSay, stopSpeaking } from '../speech.js';
 import { rich } from '../cardview.js';
 import { stripMarks } from '../rich.js';
@@ -292,7 +295,7 @@ export function renderBlast({ store }, id) {
   }
 
   function onKey(e) {
-    if (!state || state.over || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!state || state.over || e.metaKey || e.ctrlKey || e.altKey || dialogOpen() || e.target.closest?.(TYPING)) return;
     if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
       e.preventDefault();
       state.togglePause();
