@@ -3598,6 +3598,16 @@ a.card-row.search-hit:hover {
   margin: 20px auto;
 }
 
+/* ---- 分享 ---- */
+.share-page {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.dialog-body > .input {
+  margin: 8px 0;
+}
+
 /* ---- 空页面 ---- */
 .empty {
   padding: 48px 0;
