@@ -47,7 +47,8 @@ function stopAll() {
   if (canSpeak()) window.speechSynthesis.cancel();
 }
 
-export function speak(raw, lang = 'auto') {
+// rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」)
+export function speak(raw, lang = 'auto', { rate = 1 } = {}) {
   const text = stripMarks(raw);
   if (!canSpeak() || !text.trim()) return;
   stopAll();
@@ -55,6 +56,7 @@ export function speak(raw, lang = 'auto') {
   const u = new SpeechSynthesisUtterance(text);
   const code = lang === 'auto' ? guessLang(text) : lang;
   u.lang = code;
+  u.rate = rate;
   // 有这个语言的声音就用它 (有的浏览器光设 lang 不够; 安卓写成 en_US)
   const base = code.split('-')[0];
   const voices = synth.getVoices().map((v) => [v, v.lang.replace('_', '-')]);
@@ -65,18 +67,19 @@ export function speak(raw, lang = 'auto') {
 }
 
 // 念卡片的一面 (side 是 'term' 或 'def'): 有录音放录音, 没有就朗读
-export async function sayCard(card, side, set) {
+export async function sayCard(card, side, set, { slow = false } = {}) {
   const id = side === 'term' ? card.termAudio : card.defAudio;
   if (id) {
     const url = await mediaURL(id);
     if (url) {
       stopAll();
       playing = new Audio(url);
+      if (slow) playing.playbackRate = 0.7;
       playing.play().catch(() => {});
       return;
     }
   }
-  speak(card[side], side === 'term' ? set.termLang : set.defLang);
+  speak(card[side], side === 'term' ? set.termLang : set.defLang, { rate: slow ? 0.6 : 1 });
 }
 
 // 这一面能不能念 (有录音, 或者有字而且浏览器能朗读)

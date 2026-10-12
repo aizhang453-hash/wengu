@@ -2,7 +2,7 @@
 // 每张卡片有个程度: 0 没学过, 1 认得了, 2 掌握了。
 // 目标「全部记住」(memorize):
 //   - 没学过的先出「认」的题 (选择题 / 判断题), 答对变「认得了」
-//   - 认得了的出「写」的题 (打字 / 单词卡), 答对就「掌握了」
+//   - 认得了的出「写」的题 (打字 / 听写 / 单词卡), 答对就「掌握了」
 // 目标「备考」(cram): 时间紧, 开着的题型随便出, 每张答对一次就算掌握。
 // 答错程度不升 (掌握了的答错退回认得了), 这一轮后面再问一次。
 // 一轮最多 7 张, 一轮完了歇一下看看进度, 直到全部掌握。
@@ -15,15 +15,16 @@ export const MASTERED = 2;
 
 export const DEFAULT_LEARN_OPTIONS = {
   goal: 'memorize',
-  types: { mc: true, tf: false, written: true, flash: false },
+  types: { mc: true, tf: false, written: true, flash: false, listen: false },
   answerWith: 'def',
   smart: true,
   shuffle: true,
   roundSize: 7,
+  canListen: () => true, // 这张卡片能不能出听写 (念得出来、有词可写)
 };
 
 const RECOGNIZE = ['mc', 'tf'];
-const RECALL = ['written', 'flash'];
+const RECALL = ['written', 'flash', 'listen'];
 
 export class LearnSession {
   // levels: { 卡片 id: 0 | 1 | 2 }
@@ -85,7 +86,7 @@ export class LearnSession {
   // 这张卡片该出什么题
   typeFor(card) {
     const recognize = this.enabled(RECOGNIZE);
-    const recall = this.enabled(RECALL);
+    const recall = this.enabled(RECALL).filter((t) => t !== 'listen' || this.options.canListen(card));
     if (this.options.goal === 'cram') return this.pick([...recognize, ...recall]) ?? 'written';
     if (this.level(card) === NEW) return this.pick(recognize) ?? this.pick(recall) ?? 'written';
     return this.pick(recall) ?? this.pick(recognize) ?? 'written';

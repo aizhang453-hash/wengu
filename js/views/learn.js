@@ -2,7 +2,7 @@
 // 再一轮一轮做题 (选择、判断、打字、单词卡), 直到全部掌握。
 
 import { h, fill, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
-import { speak, canSpeak, sayCard, stopSpeaking } from '../speech.js';
+import { speak, canSpeak, canSay, sayCard, stopSpeaking } from '../speech.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
@@ -14,11 +14,12 @@ import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../lear
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const PREFS_KEY = 'wengu:learn-prefs';
 const PRAISE = ['答对了!', '没错!', '好样的!', '对了!', '记住了!'];
-const TYPE_LABELS = { mc: '多项选择', tf: '判断题', written: '打字 (书面问题)', flash: '单词卡' };
+const TYPE_LABELS = { mc: '多项选择', tf: '判断题', written: '打字 (书面问题)', listen: '听写', flash: '单词卡' };
+const isTyping = (q) => q.type === 'written' || q.type === 'listen'; // 要打字的题
 
 export const GOALS = {
   cram: { name: '备考', desc: '时间紧, 先把整套过一遍: 每张答对一次就算过, 题型混着出。' },
-  memorize: { name: '全部记住', desc: '记得最牢: 每张先认出来 (选择 / 判断), 再写出来 (打字 / 单词卡), 都答对才算掌握。' },
+  memorize: { name: '全部记住', desc: '记得最牢: 每张先认出来 (选择 / 判断), 再写出来 (打字 / 听写 / 单词卡), 都答对才算掌握。' },
 };
 
 function defaultPrefs() {
@@ -136,6 +137,7 @@ export function renderLearn({ store }, id) {
       answerWith: answerWith(prefs),
       smart: prefs.smart,
       shuffle: prefs.shuffle,
+      canListen: (card) => card.term.trim() !== '' && canSay(card, 'term'),
     });
     // 选择题的错误选项从整个卡片集里挑, 只学星标时也一样
     session.pool = set.cards;
@@ -158,7 +160,8 @@ export function renderLearn({ store }, id) {
     const view = questionView(q);
     stage.replaceChildren(view);
     stage.querySelector('[data-autofocus]')?.focus();
-    if (prefs.autoSpeak) sayCard(q.card, otherSide(q.side), set);
+    if (q.type === 'listen') sayCard(q.card, 'term', set);
+    else if (prefs.autoSpeak) sayCard(q.card, otherSide(q.side), set);
   }
 
   // 这题答完了: 记下来, 给反馈
@@ -277,6 +280,48 @@ export function renderLearn({ store }, id) {
     });
   }
 
+  // 听写题的上半部分: 再听一遍、慢一点; 解释 (和图片) 藏着当提示
+  function listenPrompt(q) {
+    const focusInput = () => stage.querySelector('.question input[type=text]')?.focus();
+    const hint = h(
+      'div',
+      { class: 'listen-hint', hidden: true },
+      h('span', { class: 'muted small' }, '解释'),
+      q.card.image ? cardImage(q.card.image, 'q-img') : null,
+      h('div', { class: 'q-text small' }, q.prompt.trim() ? rich(q.prompt) : h('span', { class: 'muted' }, '(空)')),
+    );
+    const hintBtn = h(
+      'button',
+      {
+        class: 'link-btn',
+        type: 'button',
+        onclick: () => {
+          hint.hidden = false;
+          hintBtn.remove();
+          focusInput();
+        },
+      },
+      '听不出来? 看看解释',
+    );
+    return h(
+      'div',
+      { class: 'q-prompt listen-prompt' },
+      h(
+        'div',
+        { class: 'listen-main' },
+        h(
+          'div',
+          { class: 'row' },
+          h('button', { class: 'btn listen-btn', type: 'button', onclick: () => (sayCard(q.card, 'term', set), focusInput()) }, '🔊 再听一遍'),
+          h('button', { class: 'btn', type: 'button', onclick: () => (sayCard(q.card, 'term', set, { slow: true }), focusInput()) }, '🐢 慢一点'),
+        ),
+        hintBtn,
+        hint,
+      ),
+      h('div', { class: 'q-prompt-tools' }, editButton(() => editCard(q))),
+    );
+  }
+
   // 图片跟着解释走; 设置里「图片放在题目里」时, 题目里总有图片 (当提示)
   const imageWithPrompt = (q) => q.card.image && (q.side === 'term' || prefs.imageInPrompt);
   const imageWithAnswer = (q) => q.card.image && q.side === 'def' && !prefs.imageInPrompt;
@@ -289,10 +334,11 @@ export function renderLearn({ store }, id) {
       mc: `选择答案 · 选出对的${answerName}`,
       tf: `判断 · 这个${answerName}对吗?`,
       written: `打字 · 写出${answerName}`,
+      listen: '听写 · 听发音, 写出词',
       flash: `单词卡 · 先想一想${answerName}, 再翻过来`,
     }[q.type];
 
-    const prompt = h(
+    const prompt = q.type === 'listen' ? listenPrompt(q) : h(
       'div',
       { class: 'q-prompt' },
       h(
@@ -387,11 +433,11 @@ export function renderLearn({ store }, id) {
       const input = h('input', {
         class: 'input big',
         type: 'text',
-        placeholder: `写出${answerName}`,
+        placeholder: q.type === 'listen' ? '写出你听到的词' : `写出${answerName}`,
         autocomplete: 'off',
         autocapitalize: 'off',
         spellcheck: 'false',
-        'aria-label': `写出${answerName}`,
+        'aria-label': q.type === 'listen' ? '写出你听到的词' : `写出${answerName}`,
         dataset: { autofocus: '1' },
         onkeydown: (e) => {
           if (e.key === 'Enter' && !e.isComposing) {
@@ -438,8 +484,8 @@ export function renderLearn({ store }, id) {
     const fb = stage.firstChild.feedback;
     if (correct && !close) {
       fb.className = 'feedback good';
-      fb.replaceChildren(h('strong', {}, PRAISE[Math.floor(Math.random() * PRAISE.length)]));
-      autoTimer = setTimeout(proceed, q.type === 'written' ? 900 : 700);
+      fill(fb, h('strong', {}, PRAISE[Math.floor(Math.random() * PRAISE.length)]), q.type === 'listen' && q.prompt.trim() ? h('div', { class: 'muted small' }, '意思: ', rich(q.prompt)) : null);
+      autoTimer = setTimeout(proceed, q.type === 'listen' ? 1600 : q.type === 'written' ? 900 : 700);
       return;
     }
     const cont = h('button', { class: 'btn primary', onclick: proceed }, '继续');
@@ -457,11 +503,11 @@ export function renderLearn({ store }, id) {
       return;
     }
     fb.className = 'feedback bad';
-    const parts = [h('strong', {}, q.type === 'written' && typed === '' ? '没关系, 记一下:' : '还没记住, 再看一眼')];
-    if (q.type === 'written' && typed) parts.push(h('div', { class: 'typed' }, h('span', { class: 'muted small' }, '你写的'), h('div', { class: 'strike' }, typed)));
+    const parts = [h('strong', {}, isTyping(q) && typed === '' ? '没关系, 记一下:' : '还没记住, 再看一眼')];
+    if (isTyping(q) && typed) parts.push(h('div', { class: 'typed' }, h('span', { class: 'muted small' }, '你写的'), h('div', { class: 'strike' }, typed)));
     if (q.type !== 'mc') parts.push(answerLine);
     const row = h('div', { class: 'row' }, cont);
-    if (q.type === 'written' && typed) {
+    if (isTyping(q) && typed) {
       row.append(
         h(
           'button',
@@ -482,7 +528,7 @@ export function renderLearn({ store }, id) {
       );
     }
     // 更正选项「答错了把正确答案打一遍」: 打对了才能继续
-    if (prefs.retype && q.type === 'written') {
+    if (prefs.retype && isTyping(q)) {
       cont.disabled = true;
       const retype = h('input', {
         class: 'input',
@@ -658,6 +704,7 @@ export function renderLearn({ store }, id) {
             ['mc', TYPE_LABELS.mc, '四个里选一个'],
             ['tf', TYPE_LABELS.tf, '给一个答案, 判断对不对'],
             ['written', TYPE_LABELS.written, '自己把答案打出来'],
+            ['listen', TYPE_LABELS.listen, canSpeak() ? '念出词 (有录音放录音), 听着把词打出来' : '这个浏览器不能朗读, 只有带录音的卡片能出听写'],
             ['flash', TYPE_LABELS.flash, '想一想再翻过来, 自己说会不会'],
           ],
           (k) => draft.types[k],

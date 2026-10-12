@@ -46,7 +46,12 @@ export function distractors(card, pool, side, n, rng = Math.random) {
 
 // 出一道题。卡片太少出不了选择题、判断题的, 改成打字。
 // 'flash' 是学习模式里的单词卡题: 看题目, 自己想, 翻过来对答案, 自己说会不会
+// 'listen' 是听写: 念词, 把听到的打出来 (总是写词; 解释可以当提示看)
 export function makeQuestion(type, card, pool, { answerWith = 'def', rng = Math.random } = {}) {
+  if (type === 'listen') {
+    if (card.term.trim()) return { type, card, side: 'term', prompt: card.def, answer: card.term };
+    type = 'written';
+  }
   const side = pickSide(answerWith, rng);
   const base = {
     type,
