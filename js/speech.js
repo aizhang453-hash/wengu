@@ -1,4 +1,8 @@
 // 用浏览器自带的朗读 (speechSynthesis), 不用联网下载声音。
+// 卡片上有自己录的音就放录音。
+
+import { stripMarks } from './rich.js';
+import { mediaURL } from './media.js';
 
 export const LANGS = [
   ['auto', '自动'],
@@ -27,10 +31,19 @@ export function canSpeak() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
-export function speak(text, lang = 'auto') {
+let playing = null;
+
+function stopAll() {
+  playing?.pause();
+  playing = null;
+  if (canSpeak()) window.speechSynthesis.cancel();
+}
+
+export function speak(raw, lang = 'auto') {
+  const text = stripMarks(raw);
   if (!canSpeak() || !text.trim()) return;
+  stopAll();
   const synth = window.speechSynthesis;
-  synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
   const code = lang === 'auto' ? guessLang(text) : lang;
   u.lang = code;
@@ -41,4 +54,28 @@ export function speak(text, lang = 'auto') {
     voices.find(([, l]) => l === code)?.[0] ?? voices.find(([, l]) => l.startsWith(base))?.[0];
   if (voice) u.voice = voice;
   synth.speak(u);
+}
+
+// 念卡片的一面 (side 是 'term' 或 'def'): 有录音放录音, 没有就朗读
+export async function sayCard(card, side, set) {
+  const id = side === 'term' ? card.termAudio : card.defAudio;
+  if (id) {
+    const url = await mediaURL(id);
+    if (url) {
+      stopAll();
+      playing = new Audio(url);
+      playing.play().catch(() => {});
+      return;
+    }
+  }
+  speak(card[side], side === 'term' ? set.termLang : set.defLang);
+}
+
+// 这一面能不能念 (有录音, 或者有字而且浏览器能朗读)
+export function canSay(card, side) {
+  return Boolean(side === 'term' ? card.termAudio : card.defAudio) || (canSpeak() && stripMarks(card[side]).trim() !== '');
+}
+
+export function stopSpeaking() {
+  stopAll();
 }

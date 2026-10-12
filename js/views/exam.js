@@ -1,8 +1,9 @@
 // 测试模式: 设置 → 答卷 → 交卷打分, 看错题, 只考错的
 
-import { h, toast } from '../dom.js';
-import { speak, canSpeak } from '../speech.js';
-import { TYPE_NAMES } from '../questions.js';
+import { h, toast, fill } from '../dom.js';
+import { stopSpeaking } from '../speech.js';
+import { TYPE_NAMES, otherSide } from '../questions.js';
+import { rich, cardImage, sayButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
 
 const PREFS_KEY = 'wengu:exam-prefs';
@@ -197,22 +198,23 @@ export function renderExam({ store }, id) {
     window.scrollTo(0, 0);
   }
 
-  function promptBlock(text, lang, n) {
+  // 题目: 解释那面当题目时带上图片
+  function promptBlock(q, n) {
+    const image = q.side === 'term' ? q.card.image : '';
     return h(
       'div',
       { class: 'exam-prompt' },
       h('span', { class: 'qnum' }, String(n)),
-      h('div', { class: 'q-text small' }, text || h('span', { class: 'muted' }, '(空)')),
-      canSpeak() && text.trim()
-        ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(text, lang) }, '🔊')
-        : null,
+      h(
+        'div',
+        { class: 'q-text small' },
+        cardImage(image, 'q-img small'),
+        q.prompt.trim() ? rich(q.prompt) : image ? null : h('span', { class: 'muted' }, '(空)'),
+      ),
+      sayButton(q.card, otherSide(q.side), set),
     );
   }
 
-  const langs = (q) => ({
-    prompt: q.side === 'def' ? set.termLang : set.defLang,
-    answer: q.side === 'def' ? set.defLang : set.termLang,
-  });
   const num = (qid) => Number(qid.slice(1));
 
   function questionInput(type, q, setAnswer) {
@@ -240,19 +242,18 @@ export function renderExam({ store }, id) {
             'ol',
             { class: 'match-prompts' },
             q.items.map((item, i) =>
-              h('li', {}, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt || '(空)'), selects[i]),
+              h('li', {}, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'), selects[i]),
             ),
           ),
           h(
             'ol',
             { class: 'match-options' },
-            q.options.map((opt, i) => h('li', {}, h('span', { class: 'letter' }, LETTERS[i]), h('span', {}, opt || '(空)'))),
+            q.options.map((opt, i) => h('li', {}, h('span', { class: 'letter' }, LETTERS[i]), h('span', {}, opt ? rich(opt) : '(空)'))),
           ),
         ),
       );
     }
 
-    const l = langs(q);
     const answerName = q.side === 'def' ? '解释' : '词';
     if (type === 'tf') {
       const buttons = [true, false].map((v) =>
@@ -277,8 +278,8 @@ export function renderExam({ store }, id) {
       return h(
         'div',
         { class: 'exam-q' },
-        promptBlock(q.prompt, l.prompt, num(q.qid)),
-        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, `${answerName}对吗?`), h('div', { class: 'q-text small' }, q.shown || '(空)')),
+        promptBlock(q, num(q.qid)),
+        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, `${answerName}对吗?`), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)')),
         h('div', { class: 'options-grid two' }, buttons),
       );
     }
@@ -300,15 +301,15 @@ export function renderExam({ store }, id) {
             },
           },
           h('span', { class: 'key' }, LETTERS[i]),
-          h('span', { class: 'option-text' }, opt || '(空)'),
+          h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
         ),
       );
-      return h('div', { class: 'exam-q' }, promptBlock(q.prompt, l.prompt, num(q.qid)), h('div', { class: 'options-grid' }, buttons));
+      return h('div', { class: 'exam-q' }, promptBlock(q, num(q.qid)), h('div', { class: 'options-grid' }, buttons));
     }
     return h(
       'div',
       { class: 'exam-q' },
-      promptBlock(q.prompt, l.prompt, num(q.qid)),
+      promptBlock(q, num(q.qid)),
       h('input', {
         class: 'input',
         type: 'text',
@@ -351,7 +352,8 @@ export function renderExam({ store }, id) {
       scoreBig.className = `big-score ${pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'bad'}`;
       scoreLine.textContent = `对了 ${right} / ${results.length} 题 · 用时 ${clock(elapsed)} · ${pct === 100 ? '满分! 🎉' : pct >= 80 ? '很不错!' : pct >= 50 ? '继续加油' : '再学学, 下次会更好'}`;
       const missed = [...new Map(results.filter((r) => !r.correct).map((r) => [r.card.id, r.card])).values()];
-      actions.replaceChildren(
+      fill(
+        actions,
         missed.length ? h('button', { class: 'btn primary', onclick: () => startExam(missed, missed.length) }, `只考错的 ${missed.length} 题`) : null,
         h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: () => startExam(cards) }, '再考一次 (换题)'),
         h('button', { class: 'btn', onclick: showSetup }, '改设置'),
@@ -397,16 +399,16 @@ export function renderExam({ store }, id) {
               { class: r.correct ? 'right' : 'wrong' },
               mark(r.correct),
               h('span', { class: 'qnum' }, String(num(item.qid))),
-              h('span', { class: 'mp-text' }, item.prompt || '(空)'),
+              h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'),
               h(
                 'span',
                 { class: 'mr-answer' },
                 r.correct
-                  ? item.answer
+                  ? rich(item.answer)
                   : [
-                      given === undefined || given === null ? h('span', { class: 'muted' }, '没答') : h('span', { class: 'strike' }, q.options[given]),
+                      given === undefined || given === null ? h('span', { class: 'muted' }, '没答') : h('span', { class: 'strike' }, rich(q.options[given])),
                       h('span', { class: 'arrow' }, ' → '),
-                      h('strong', {}, item.answer),
+                      h('strong', {}, rich(item.answer)),
                     ],
               ),
             );
@@ -416,22 +418,21 @@ export function renderExam({ store }, id) {
     }
 
     const r = byQid[q.qid];
-    const l = langs(q);
     const given = answers[q.qid];
     const box = h('div', { class: `exam-q reviewed ${r.correct ? 'right' : 'wrong'}` });
-    const head = h('div', { class: 'review-head' }, mark(r.correct), promptBlock(q.prompt, l.prompt, num(q.qid)));
+    const head = h('div', { class: 'review-head' }, mark(r.correct), promptBlock(q, num(q.qid)));
     const parts = [head];
 
     if (type === 'tf') {
       parts.push(
-        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, '题目给的'), h('div', { class: 'q-text small' }, q.shown || '(空)')),
+        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, '题目给的'), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)')),
         h(
           'p',
           { class: 'review-line' },
           `你选: ${given === undefined ? '没答' : given ? '对' : '错'} · 应该是: ${q.isTrue ? '对' : '错'}`,
         ),
       );
-      if (!q.isTrue) parts.push(answerLine(q.answer, l.answer));
+      if (!q.isTrue) parts.push(answerLine(q));
     } else if (type === 'mc') {
       parts.push(
         h(
@@ -442,7 +443,7 @@ export function renderExam({ store }, id) {
               'div',
               { class: `option static${i === q.correctIndex ? ' right' : i === given ? ' wrong' : ''}` },
               h('span', { class: 'key' }, LETTERS[i]),
-              h('span', { class: 'option-text' }, opt || '(空)'),
+              h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
             ),
           ),
         ),
@@ -453,11 +454,11 @@ export function renderExam({ store }, id) {
       if (r.correct && !r.close) {
         parts.push(h('p', { class: 'review-line' }, `你写的: ${typed}`));
       } else if (r.close) {
-        parts.push(h('p', { class: 'review-line' }, `你写的: ${typed} (差一点, 算你对)`), answerLine(q.answer, l.answer));
+        parts.push(h('p', { class: 'review-line' }, `你写的: ${typed} (差一点, 算你对)`), answerLine(q));
       } else {
         parts.push(
           h('p', { class: 'review-line' }, typed ? h('span', {}, '你写的: ', h('span', { class: 'strike' }, typed)) : h('span', { class: 'muted' }, '没答')),
-          answerLine(q.answer, l.answer),
+          answerLine(q),
         );
         if (typed) {
           const amend = h(
@@ -483,13 +484,14 @@ export function renderExam({ store }, id) {
     return box;
   }
 
-  function answerLine(text, lang) {
+  function answerLine(q) {
+    const image = q.side === 'def' ? q.card.image : '';
     return h(
       'div',
       { class: 'answer-line' },
       h('span', { class: 'muted small' }, '正确答案'),
-      h('div', { class: 'answer-text' }, text || '(空)'),
-      canSpeak() && text.trim() ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(text, lang) }, '🔊') : null,
+      h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '(空)', cardImage(image, 'q-img small')),
+      sayButton(q.card, q.side, set),
     );
   }
 
@@ -502,7 +504,7 @@ export function renderExam({ store }, id) {
     canLeave: () => !inProgress?.() || confirm('卷子还没交, 确定要走吗?'),
     cleanup: () => {
       clearInterval(timer);
-      if (canSpeak()) window.speechSynthesis.cancel();
+      stopSpeaking();
     },
   };
 }

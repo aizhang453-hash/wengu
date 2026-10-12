@@ -25,6 +25,14 @@ export function h(tag, props = {}, ...children) {
   return el;
 }
 
+// 换掉 el 里的东西; 跟 h 一样, null / false 跳过, 数组摊开
+// (浏览器自带的 replaceChildren 会把 null 显示成「null」这几个字)
+export function fill(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
 function append(el, children) {
   for (const child of children) {
     if (child === null || child === undefined || child === false) continue;

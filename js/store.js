@@ -13,7 +13,8 @@ function emptyData() {
 }
 
 // 一个卡片集:
-// { id, title, description, termLang, defLang, cards: [{ id, term, def }],
+// { id, title, description, termLang, defLang,
+//   cards: [{ id, term, def, image, termAudio, defAudio }]  (图片、录音是 media.js 里的 id, 没有就是 '')
 //   known: [卡片 id...]        单词卡里标了「会了」的
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
@@ -40,9 +41,11 @@ export function makeSet(fields = {}) {
   };
 }
 
-export function makeCard(term = '', def = '') {
-  return { id: newId(), term, def };
+export function makeCard(term = '', def = '', extra = {}) {
+  return { id: newId(), term, def, image: '', termAudio: '', defAudio: '', ...extra };
 }
+
+const mediaId = (v) => (typeof v === 'string' && /^m_[\w-]+$/.test(v) ? v : '');
 
 // 老数据或备份里缺的字段补上, 不认识的东西丢掉
 function cleanSet(raw) {
@@ -54,6 +57,9 @@ function cleanSet(raw) {
           id: typeof c.id === 'string' && c.id ? c.id : newId(),
           term: String(c.term ?? ''),
           def: String(c.def ?? ''),
+          image: mediaId(c.image),
+          termAudio: mediaId(c.termAudio),
+          defAudio: mediaId(c.defAudio),
         }))
     : [];
   const ids = new Set(cards.map((c) => c.id));

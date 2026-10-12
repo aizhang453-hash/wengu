@@ -2,6 +2,7 @@
 
 import { h } from '../dom.js';
 import { playSound } from '../sound.js';
+import { rich, cardImage } from '../cardview.js';
 import { makeBoard, isPair, pickDistinct, formatTime, MATCH_PENALTY_MS } from '../games.js';
 
 const SOUND_KEY = 'wengu:game-sound';
@@ -98,9 +99,12 @@ export function renderMatch({ store }, id) {
     penalty = 0;
 
     const board = h('div', { class: `match-board n${tiles.length}` });
+    const byId = new Map(set.cards.map((c) => [c.id, c]));
     for (const tile of tiles) {
-      const size = tile.text.length > 60 ? ' tiny' : tile.text.length > 24 ? ' small' : '';
-      const el = h('button', { class: `match-tile${size}`, onclick: () => pick(tile, el) }, tile.text);
+      // 解释那张牌带上卡片的图片
+      const image = tile.side === 'def' ? byId.get(tile.cardId)?.image : '';
+      const size = tile.text.length > 60 || (image && tile.text.length > 20) ? ' tiny' : tile.text.length > 24 || image ? ' small' : '';
+      const el = h('button', { class: `match-tile${size}`, onclick: () => pick(tile, el) }, h('span', { class: 'tile-body' }, cardImage(image, 'tile-img'), rich(tile.text)));
       board.append(el);
     }
 

@@ -11,6 +11,7 @@
 //   #/set/<id>/blast      打陨石游戏
 
 import { Store, KEY } from './store.js';
+import { cleanMedia } from './media.js';
 import { h } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
@@ -117,5 +118,8 @@ window.addEventListener('beforeunload', (e) => {
 
 // 请浏览器别在空间紧的时候自己清掉卡片 (不一定答应, 答不答应都不影响用)
 navigator.storage?.persist?.().catch(() => {});
+
+// 没有卡片用的图片、录音 (比如编辑时加了又没保存), 过一会儿删掉
+setTimeout(() => cleanMedia(store), 5000);
 
 render();

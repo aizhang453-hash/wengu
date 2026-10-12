@@ -4,11 +4,13 @@
 //   - 有几个意思的写出一个就行: 答案「跑, 奔跑」写「奔跑」算对
 //   - 打错一两个字母、少了重音符号、词的顺序不一样, 算对但提醒一下 (close)
 
+import { stripMarks } from './rich.js';
+
 const PARENS = /[(（[【][^)）\]】]*[)）\]】]/g;
 const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 
 export function normalize(text, { dropParens = false } = {}) {
-  let s = String(text ?? '').normalize('NFKC').toLowerCase();
+  let s = stripMarks(String(text ?? '')).normalize('NFKC').toLowerCase();
   if (dropParens) s = s.replace(PARENS, ' ');
   return s
     .replace(/\p{P}/gu, ' ')
@@ -23,7 +25,7 @@ function stripAccents(s) {
 // 几个意思用逗号、分号、斜杠、顿号、「 or 」隔开。
 // 只有一个字母的不算 (免得「km/h」写个「h」也算对), 一个汉字算
 export function alternatives(expected) {
-  return String(expected ?? '')
+  return stripMarks(String(expected ?? ''))
     .replace(PARENS, ' ')
     .split(/[,;/|、，；]|\s+or\s+/i)
     .map((s) => normalize(s))

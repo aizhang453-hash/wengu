@@ -2347,6 +2347,223 @@ kbd {
   margin: 8px 0 16px;
 }
 
+/* ---- 文字格式、图片、录音 ---- */
+mark {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #ffe58a;
+  color: #2a2410;
+}
+
+@media (prefers-color-scheme: dark) {
+  mark {
+    background: #8a6d12;
+    color: #fff7d6;
+  }
+}
+
+.edit-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.side-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 30px;
+}
+
+.fmt {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* 格式按钮只在正在写这一面的时候出来 */
+.edit-side:not(:focus-within) .fmt {
+  display: none;
+}
+
+.fmt-btn {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.fmt-btn.bold {
+  font-weight: 800;
+}
+
+.fmt-btn.italic {
+  font-style: italic;
+  font-family: Georgia, serif;
+}
+
+.fmt-btn.underline {
+  text-decoration: underline;
+}
+
+.fmt-btn.highlight {
+  background: #ffe58a;
+  color: #2a2410;
+  border-color: #e6c75a;
+}
+
+.tool-btn {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.tool-btn:hover {
+  border-style: solid;
+  color: var(--text);
+}
+
+.tool-btn.recording {
+  border: 1px solid var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.media-slot:empty {
+  display: none;
+}
+
+.media-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+}
+
+.image-chip {
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.chip-play,
+.chip-x {
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.chip-x {
+  padding: 0 6px;
+  color: var(--muted);
+}
+
+.chip-play:hover,
+.chip-x:hover {
+  background: var(--surface);
+}
+
+.edit-thumb {
+  display: block;
+  max-width: 120px;
+  max-height: 80px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.edit-row.drop {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-soft);
+}
+
+.def-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.card-thumb {
+  display: block;
+  max-width: 140px;
+  max-height: 100px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.face-text.with-image {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.face-img {
+  display: block;
+  max-width: 100%;
+  max-height: 62%;
+  min-height: 0;
+  margin: 0 auto;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.q-img {
+  display: block;
+  max-width: min(100%, 360px);
+  max-height: 220px;
+  margin: 6px 0;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.q-img.small {
+  max-height: 140px;
+}
+
+.tile-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tile-img {
+  display: block;
+  max-width: 100%;
+  max-height: 70px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 /* ---- 空页面 ---- */
 .empty {
   padding: 48px 0;

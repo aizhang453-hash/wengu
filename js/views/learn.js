@@ -2,7 +2,9 @@
 // 再一轮一轮做题 (选择、判断、打字、单词卡), 直到全部掌握。
 
 import { h, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
-import { speak, canSpeak } from '../speech.js';
+import { speak, canSpeak, sayCard, stopSpeaking } from '../speech.js';
+import { rich, cardImage, sayButton } from '../cardview.js';
+import { otherSide } from '../questions.js';
 import { grade } from '../grade.js';
 import { playSound } from '../sound.js';
 import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../learn.js';
@@ -30,6 +32,7 @@ function defaultPrefs() {
     starredOnly: false,
     sound: true,
     autoSpeak: false,
+    imageInPrompt: false,
   };
 }
 
@@ -154,7 +157,7 @@ export function renderLearn({ store }, id) {
     const view = questionView(q);
     stage.replaceChildren(view);
     stage.querySelector('[data-autofocus]')?.focus();
-    if (prefs.autoSpeak) speak(q.prompt, q.side === 'def' ? set.termLang : set.defLang);
+    if (prefs.autoSpeak) sayCard(q.card, otherSide(q.side), set);
   }
 
   // 这题答完了: 记下来, 给反馈
@@ -238,16 +241,20 @@ export function renderLearn({ store }, id) {
   }
 
   // ---- 一道题 ----
+  // 不是这张卡片自己的字 (判断题给的答案), 只能朗读
   function speakBtn(text, lang) {
     return canSpeak() && text.trim()
       ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: (e) => (e.stopPropagation(), speak(text, lang)) }, '🔊')
       : null;
   }
 
+  // 图片跟着解释走; 设置里「图片放在题目里」时, 题目里总有图片 (当提示)
+  const imageWithPrompt = (q) => q.card.image && (q.side === 'term' || prefs.imageInPrompt);
+  const imageWithAnswer = (q) => q.card.image && q.side === 'def' && !prefs.imageInPrompt;
+
   function questionView(q) {
     const answerName = q.side === 'def' ? '解释' : '词';
     const promptName = q.side === 'def' ? '词' : '解释';
-    const promptLang = q.side === 'def' ? set.termLang : set.defLang;
     const answerLang = q.side === 'def' ? set.defLang : set.termLang;
     const label = {
       mc: `选择答案 · 选出对的${answerName}`,
@@ -259,8 +266,14 @@ export function renderLearn({ store }, id) {
     const prompt = h(
       'div',
       { class: 'q-prompt' },
-      h('div', {}, h('div', { class: 'q-label muted small' }, promptName), h('div', { class: 'q-text' }, q.prompt || h('span', { class: 'muted' }, '(空)'))),
-      speakBtn(q.prompt, promptLang),
+      h(
+        'div',
+        {},
+        h('div', { class: 'q-label muted small' }, promptName),
+        imageWithPrompt(q) ? cardImage(q.card.image, 'q-img') : null,
+        h('div', { class: 'q-text' }, q.prompt.trim() ? rich(q.prompt) : imageWithPrompt(q) ? null : h('span', { class: 'muted' }, '(空)')),
+      ),
+      sayButton(q.card, otherSide(q.side), set),
     );
 
     let body;
@@ -270,7 +283,7 @@ export function renderLearn({ store }, id) {
           'button',
           { class: 'option', onclick: () => choose(i) },
           h('span', { class: 'key' }, String(i + 1)),
-          h('span', { class: 'option-text' }, opt || '(空)'),
+          h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
         ),
       );
       const choose = (i) => {
@@ -302,7 +315,7 @@ export function renderLearn({ store }, id) {
           'div',
           { class: 'tf-shown' },
           h('span', { class: 'muted small' }, answerName),
-          h('div', { class: 'q-text small' }, q.shown || '(空)'),
+          h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)'),
           speakBtn(q.shown, answerLang),
         ),
         h('div', { class: 'options-grid two' }, tfButtons),
@@ -313,8 +326,9 @@ export function renderLearn({ store }, id) {
         'div',
         { class: 'flash-answer', hidden: true },
         h('span', { class: 'muted small' }, answerName),
-        h('div', { class: 'q-text small' }, q.answer || '(空)'),
-        speakBtn(q.answer, answerLang),
+        imageWithAnswer(q) ? cardImage(q.card.image, 'q-img') : null,
+        h('div', { class: 'q-text small' }, q.answer ? rich(q.answer) : '(空)'),
+        sayButton(q.card, q.side, set),
       );
       const judge = h(
         'div',
@@ -330,7 +344,7 @@ export function renderLearn({ store }, id) {
         answerBox.hidden = false;
         judge.hidden = false;
         flipBtn.remove();
-        if (prefs.autoSpeak) speak(q.answer, answerLang);
+        if (prefs.autoSpeak) sayCard(q.card, q.side, set);
       };
       const grade_ = (correct) => {
         if (!shown || phase !== 'question') return;
@@ -392,7 +406,6 @@ export function renderLearn({ store }, id) {
 
   function showFeedback(q, { correct, close, typed }) {
     const fb = stage.firstChild.feedback;
-    const answerLang = q.side === 'def' ? set.defLang : set.termLang;
     if (correct && !close) {
       fb.className = 'feedback good';
       fb.replaceChildren(h('strong', {}, PRAISE[Math.floor(Math.random() * PRAISE.length)]));
@@ -404,8 +417,8 @@ export function renderLearn({ store }, id) {
       'div',
       { class: 'answer-line' },
       h('span', { class: 'muted small' }, '正确答案'),
-      h('div', { class: 'answer-text' }, q.answer || '(空)'),
-      canSpeak() && q.answer.trim() ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(q.answer, answerLang) }, '🔊') : null,
+      h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '(空)', imageWithAnswer(q) ? cardImage(q.card.image, 'q-img small') : null),
+      sayButton(q.card, q.side, set),
     );
     if (close) {
       fb.className = 'feedback close';
@@ -504,8 +517,8 @@ export function renderLearn({ store }, id) {
               'li',
               {},
               h('span', { class: `dot l${level}`, title: level >= MASTERED ? '掌握了' : level === LEARNING ? '认得了' : '没学过' }),
-              h('span', { class: 'rl-term' }, card.term),
-              h('span', { class: 'muted' }, card.def),
+              h('span', { class: 'rl-term' }, rich(card.term)),
+              h('span', { class: 'muted' }, rich(card.def)),
             );
           }),
         ),
@@ -649,9 +662,18 @@ export function renderLearn({ store }, id) {
           onchange: (v) => (draft.retype = v),
         }),
       ),
+      section(
+        '图片位置',
+        switchRow({
+          label: '图片放在题目里',
+          desc: '卡片的图片跟着解释走。打开后, 答解释的时候图片也放在题目里当提示',
+          checked: draft.imageInPrompt,
+          onchange: (v) => (draft.imageInPrompt = v),
+        }),
+      ),
       switchRow({
         label: '自动朗读',
-        desc: canSpeak() ? '每道题一出来就把题目念出来' : '这个浏览器不能朗读',
+        desc: canSpeak() ? '每道题一出来就把题目念出来 (有录音放录音)' : '这个浏览器不能朗读',
         checked: draft.autoSpeak,
         disabled: !canSpeak(),
         onchange: (v) => (draft.autoSpeak = v),
@@ -744,7 +766,7 @@ export function renderLearn({ store }, id) {
       clearTimeout(autoTimer);
       dialog?.close();
       document.removeEventListener('keydown', onKey);
-      if (canSpeak()) window.speechSynthesis.cancel();
+      stopSpeaking();
     },
   };
 }

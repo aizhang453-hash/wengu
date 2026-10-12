@@ -1,9 +1,21 @@
-// 新建 / 编辑卡片集, 包括从 Quizlet 粘贴导入
+// 新建 / 编辑卡片集, 包括从 Quizlet 粘贴导入。
+// 每张卡片: 词、解释 (能加粗、斜体、下划线、高亮), 解释那面能放图片, 两面都能录音。
 
-import { h, toast } from '../dom.js';
+import { h, toast, fill } from '../dom.js';
 import { makeSet, makeCard } from '../store.js';
 import { parseCards, guessTermSep, guessCardSep } from '../parse.js';
 import { LANGS } from '../speech.js';
+import { MARKS, toggleMark } from '../rich.js';
+import { putMedia, mediaURL, shrinkImage, cleanMedia } from '../media.js';
+import { canRecord, record } from '../recorder.js';
+import { cardImage } from '../cardview.js';
+
+const FORMATS = [
+  ['bold', 'B', '加粗 (Ctrl+B)'],
+  ['italic', 'I', '斜体 (Ctrl+I)'],
+  ['underline', 'U', '下划线 (Ctrl+U)'],
+  ['highlight', '高亮', '高亮 (Ctrl+Shift+H)'],
+];
 
 export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   const existing = id ? store.getSet(id) : null;
@@ -50,7 +62,19 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
 
   // ---- 卡片一行一行 ----
   const rowsEl = h('ol', { class: 'edit-rows' });
-  const rows = []; // { id, termEl, defEl, li }
+  const rows = []; // { id, termEl, defEl, image, termAudio, defAudio, li, drawMedia }
+  let recording = null; // 正在录的 { stop }
+
+  // 格式快捷键: Ctrl/⌘ + B / I / U, Ctrl/⌘ + Shift + H 高亮
+  function formatKeys(e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    const kind = !e.shiftKey && { b: 'bold', i: 'italic', u: 'underline' }[k];
+    const marker = kind ? MARKS[kind] : e.shiftKey && k === 'h' ? MARKS.highlight : null;
+    if (!marker) return;
+    e.preventDefault();
+    toggleMark(e.target, marker);
+  }
 
   function addRow(card = makeCard(), { focus = false } = {}) {
     const termEl = h('textarea', {
@@ -60,6 +84,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       value: card.term,
       'aria-label': '词',
       oninput: onInput,
+      onkeydown: formatKeys,
     });
     const defEl = h('textarea', {
       class: 'input grow',
@@ -69,6 +94,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       'aria-label': '解释',
       oninput: onInput,
       onkeydown: (e) => {
+        formatKeys(e);
         // 在最后一张的「解释」里按 Tab, 自动加一张新的 (跟 Quizlet 一样)
         if (e.key === 'Tab' && !e.shiftKey && rows.at(-1)?.defEl === defEl) {
           e.preventDefault();
@@ -77,12 +103,117 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         }
       },
     });
-    const row = { id: card.id, termEl, defEl, li: null };
+    const row = { id: card.id, termEl, defEl, image: card.image ?? '', termAudio: card.termAudio ?? '', defAudio: card.defAudio ?? '', li: null };
+
+    // 图片 (解释那面)
+    const imageSlot = h('span', { class: 'media-slot' });
+    const fileInput = h('input', {
+      type: 'file',
+      accept: 'image/*',
+      hidden: true,
+      onchange: () => {
+        const file = fileInput.files?.[0];
+        fileInput.value = '';
+        if (file) setImage(row, file);
+      },
+    });
+    const imageBtn = h('button', { class: 'tool-btn', type: 'button', title: '加图片 (也可以直接粘贴或拖进来)', onclick: () => fileInput.click() }, '🖼 图片');
+
+    const audioSlots = { term: h('span', { class: 'media-slot' }), def: h('span', { class: 'media-slot' }) };
+    const micBtns = {
+      term: h('button', { class: 'tool-btn', type: 'button', title: '给词录音', onclick: () => toggleRecord(row, 'term') }, '🎤 录音'),
+      def: h('button', { class: 'tool-btn', type: 'button', title: '给解释录音', onclick: () => toggleRecord(row, 'def') }, '🎤 录音'),
+    };
+    row.micBtns = micBtns;
+
+    row.drawMedia = () => {
+      fill(
+        imageSlot,
+        row.image
+          ? h(
+              'span',
+              { class: 'media-chip image-chip' },
+              cardImage(row.image, 'edit-thumb'),
+              h('button', { class: 'chip-x', type: 'button', title: '去掉图片', 'aria-label': '去掉图片', onclick: () => ((row.image = ''), row.drawMedia(), markDirty()) }, '✕'),
+            )
+          : null,
+      );
+      imageBtn.hidden = Boolean(row.image);
+      for (const side of ['term', 'def']) {
+        const key = side === 'term' ? 'termAudio' : 'defAudio';
+        fill(
+          audioSlots[side],
+          row[key]
+            ? h(
+                'span',
+                { class: 'media-chip' },
+                h('button', { class: 'chip-play', type: 'button', title: '听录音', onclick: () => playMedia(row[key]) }, '▶ 录音'),
+                h('button', { class: 'chip-x', type: 'button', title: '删掉录音', 'aria-label': '删掉录音', onclick: () => ((row[key] = ''), row.drawMedia(), markDirty()) }, '✕'),
+              )
+            : null,
+        );
+        micBtns[side].hidden = Boolean(row[key]) || !canRecord();
+      }
+    };
+
+    // 格式按钮放最后: 它们只在写这一面时出来, 放前面会把录音、图片按钮挤走
+    const sideTools = (textarea, side) =>
+      h(
+        'div',
+        { class: 'side-tools' },
+        micBtns[side],
+        audioSlots[side],
+        side === 'def' ? [imageBtn, fileInput, imageSlot] : null,
+        h(
+          'span',
+          { class: 'fmt' },
+          FORMATS.map(([kind, label, title]) =>
+            h(
+              'button',
+              {
+                class: `fmt-btn ${kind}`,
+                type: 'button',
+                title,
+                'aria-label': title,
+                // 按下时不让文字框失去焦点, 选中的字还在
+                onmousedown: (e) => e.preventDefault(),
+                onclick: () => toggleMark(textarea, MARKS[kind]),
+              },
+              label,
+            ),
+          ),
+        ),
+      );
+
+    // 粘贴、拖进来的图片
+    const takeImage = (files) => {
+      const file = [...(files ?? [])].find((f) => f.type.startsWith('image/'));
+      if (!file) return false;
+      setImage(row, file);
+      return true;
+    };
+
     row.li = h(
       'li',
-      { class: 'edit-row' },
+      {
+        class: 'edit-row',
+        onpaste: (e) => {
+          if (takeImage(e.clipboardData?.files)) e.preventDefault();
+        },
+        ondragover: (e) => {
+          if ([...(e.dataTransfer?.items ?? [])].some((i) => i.type.startsWith('image/'))) {
+            e.preventDefault();
+            row.li.classList.add('drop');
+          }
+        },
+        ondragleave: () => row.li.classList.remove('drop'),
+        ondrop: (e) => {
+          row.li.classList.remove('drop');
+          if (takeImage(e.dataTransfer?.files)) e.preventDefault();
+        },
+      },
       h('span', { class: 'row-num' }),
-      h('div', { class: 'edit-sides' }, termEl, defEl),
+      h('div', { class: 'edit-sides' }, h('div', { class: 'edit-side' }, termEl, sideTools(termEl, 'term')), h('div', { class: 'edit-side' }, defEl, sideTools(defEl, 'def'))),
       h(
         'button',
         {
@@ -101,6 +232,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     );
     rows.push(row);
     rowsEl.append(row.li);
+    row.drawMedia();
     autoGrow(termEl);
     autoGrow(defEl);
     if (focus) termEl.focus();
@@ -113,7 +245,57 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   }
 
   function isBlank(row) {
-    return !row.termEl.value.trim() && !row.defEl.value.trim();
+    return !row.termEl.value.trim() && !row.defEl.value.trim() && !row.image && !row.termAudio && !row.defAudio;
+  }
+
+  async function setImage(row, file) {
+    try {
+      row.image = await putMedia(await shrinkImage(file));
+      row.drawMedia();
+      markDirty();
+    } catch {
+      toast('图片存不进去, 可能浏览器空间满了');
+    }
+  }
+
+  let player = null;
+  async function playMedia(id) {
+    const url = await mediaURL(id);
+    if (!url) return toast('录音找不到了');
+    player?.pause();
+    player = new Audio(url);
+    player.play().catch(() => {});
+  }
+
+  // 点一下开始录, 再点一下停 (正在录时点哪个录音按钮都是停)
+  async function toggleRecord(row, side) {
+    if (recording) {
+      recording.stop();
+      return;
+    }
+    const btn = row.micBtns[side];
+    let rec;
+    try {
+      rec = await record({ onTick: (ms) => (btn.textContent = `⏹ 停 ${Math.floor(ms / 1000)} 秒`) });
+    } catch {
+      toast('用不了麦克风 (要在浏览器里允许温故用麦克风)');
+      return;
+    }
+    recording = rec;
+    btn.classList.add('recording');
+    btn.textContent = '⏹ 停 0 秒';
+    const blob = await rec.done;
+    recording = null;
+    btn.classList.remove('recording');
+    btn.textContent = '🎤 录音';
+    if (!blob.size) return toast('没录到声音');
+    try {
+      row[side === 'term' ? 'termAudio' : 'defAudio'] = await putMedia(blob);
+      row.drawMedia();
+      markDirty();
+    } catch {
+      toast('录音存不进去, 可能浏览器空间满了');
+    }
   }
 
   for (const card of draft.cards) addRow(card);
@@ -277,7 +459,14 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   function save() {
     const cards = rows
       .filter((r) => !isBlank(r))
-      .map((r) => ({ id: r.id, term: r.termEl.value.trim(), def: r.defEl.value.trim() }));
+      .map((r) => ({
+        id: r.id,
+        term: r.termEl.value.trim(),
+        def: r.defEl.value.trim(),
+        image: r.image,
+        termAudio: r.termAudio,
+        defAudio: r.defAudio,
+      }));
     if (cards.length === 0) {
       toast('至少写一张卡片');
       rows[0]?.termEl.focus();
@@ -304,12 +493,16 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     }
     dirty = false;
     toast('保存好了');
+    cleanMedia(store); // 不用的图片、录音删掉
     go(`#/set/${encodeURIComponent(draft.id)}`);
   }
 
+  // 图片还是跟着解释那面, 录音跟着字走
   function swapAll() {
     for (const r of rows) {
       [r.termEl.value, r.defEl.value] = [r.defEl.value, r.termEl.value];
+      [r.termAudio, r.defAudio] = [r.defAudio, r.termAudio];
+      r.drawMedia();
       autoGrow(r.termEl);
       autoGrow(r.defEl);
     }
@@ -357,6 +550,10 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     focus: openImport ? pasteEl : existing ? null : titleInput,
     isDirty: () => dirty,
     canLeave: () => !dirty || confirm('改的东西还没保存, 确定要走吗?'),
+    cleanup: () => {
+      recording?.stop();
+      player?.pause();
+    },
   };
 }
 

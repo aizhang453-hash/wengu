@@ -2,7 +2,10 @@
 // 打中对的那块。打错或者让对的那块掉下去, 少一条命。答对 5 题升一关, 越来越快。
 
 import { h } from '../dom.js';
-import { speak, canSpeak } from '../speech.js';
+import { sayCard, canSay, stopSpeaking } from '../speech.js';
+import { rich } from '../cardview.js';
+import { stripMarks } from '../rich.js';
+import { otherSide } from '../questions.js';
 import { makeQuestion, shuffle } from '../questions.js';
 import { pickDistinct, blastSpeed, blastPoints, blastLevel, BLAST_LIVES } from '../games.js';
 import { soundToggle, sound } from './match.js';
@@ -128,16 +131,15 @@ export function renderBlast({ store }, id) {
         q = makeQuestion('mc', usable[Math.floor(Math.random() * usable.length)], set.cards, { answerWith });
       }
       state.q = q;
-      promptText.textContent = q.prompt;
-      const lang = q.side === 'def' ? set.termLang : set.defLang;
-      promptSpeak.onclick = () => speak(q.prompt, lang);
-      promptSpeak.hidden = !canSpeak();
+      promptText.replaceChildren(rich(q.prompt));
+      promptSpeak.onclick = () => sayCard(q.card, otherSide(q.side), set);
+      promptSpeak.hidden = !canSay(q.card, otherSide(q.side));
       // 分到几条道上, 从左到右编号 1–4, 起点高低错开
       const lanes = shuffle([...Array(q.options.length).keys()]);
       const order = [];
       q.options.forEach((text, i) => {
         const lane = lanes[i];
-        const el = h('button', { class: 'rock', style: `left:${((lane + 0.5) / q.options.length) * 100}%` }, h('span', { class: 'rock-key' }), h('span', { class: 'rock-text' }, text || '(空)'));
+        const el = h('button', { class: 'rock', style: `left:${((lane + 0.5) / q.options.length) * 100}%` }, h('span', { class: 'rock-key' }), h('span', { class: 'rock-text' }, text ? rich(text) : '(空)'));
         const rock = { el, text, correct: i === q.correctIndex, lane, y: 0.08 + Math.random() * 0.14, alive: true };
         el.addEventListener('click', () => shoot(rock));
         space.append(el);
@@ -205,7 +207,7 @@ export function renderBlast({ store }, id) {
               // 对的那块掉下去了
               sound('wrong');
               state.missed.set(state.q.card.id, state.q.card);
-              flash(`答案是: ${r.text}`);
+              flash(`答案是: ${stripMarks(r.text)}`);
               loseLife();
               if (!state.over) setTimeout(() => !state.over && nextQuestion(), 600);
               for (const o of state.rocks) if (o.alive) (o.alive = false), o.el.classList.add('fade');
@@ -267,7 +269,7 @@ export function renderBlast({ store }, id) {
                 h(
                   'ul',
                   { class: 'round-list' },
-                  missed.map((c) => h('li', {}, h('span', { class: 'dot' }), h('span', { class: 'rl-term' }, c.term), h('span', { class: 'muted' }, c.def))),
+                  missed.map((c) => h('li', {}, h('span', { class: 'dot' }), h('span', { class: 'rl-term' }, rich(c.term)), h('span', { class: 'muted' }, rich(c.def)))),
                 ),
               )
             : null,
@@ -317,7 +319,7 @@ export function renderBlast({ store }, id) {
       stop();
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVisibility);
-      if (canSpeak()) window.speechSynthesis.cancel();
+      stopSpeaking();
     },
   };
 }

@@ -3,7 +3,9 @@
 // 背到一半关掉, 下次打开接着背。
 
 import { h, shuffled, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
-import { speak, canSpeak } from '../speech.js';
+import { canSpeak, sayCard, stopSpeaking } from '../speech.js';
+import { stripMarks } from '../rich.js';
+import { rich, cardImage, sayButton } from '../cardview.js';
 
 // 在这些框里打字时不接快捷键 (勾选框、单选框不算)
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
@@ -34,7 +36,7 @@ function saveJSON(key, value) {
 // 「显示提示」: 每个词只露第一个字, 后面用下划线, 比如 apple pie → a____ p__。
 // 只有一个字的词什么都不露, 只告诉你有一个字
 export function hintOf(text) {
-  return text
+  return stripMarks(text)
     .split(/(\s+)/)
     .map((word) => {
       if (/^\s*$/.test(word)) return word;
@@ -249,11 +251,14 @@ export function renderCards({ store }, id) {
     else page.requestFullscreen?.().catch(() => {});
   }
 
+  // 现在看到的是哪一面
+  function showingSide() {
+    return flipped !== (prefs.front === 'def') ? 'def' : 'term';
+  }
+
   function autoSpeak() {
     if (!prefs.autoSpeak || finished) return;
-    const card = deck[index];
-    const showingDef = flipped !== (prefs.front === 'def');
-    speak(showingDef ? card.def : card.term, showingDef ? set.defLang : set.termLang);
+    sayCard(deck[index], showingSide(), set);
   }
 
   // ---- 画出来 ----
@@ -282,9 +287,10 @@ export function renderCards({ store }, id) {
       return;
     }
     const card = deck[index];
-    const defFront = prefs.front === 'def';
-    faceFront.replaceChildren(...face(defFront ? card.def : card.term, defFront ? set.defLang : set.termLang, card, defFront ? card.term : card.def));
-    faceBack.replaceChildren(...face(defFront ? card.term : card.def, defFront ? set.termLang : set.defLang, card, null));
+    const front = prefs.front === 'def' ? 'def' : 'term';
+    const back = front === 'def' ? 'term' : 'def';
+    faceFront.replaceChildren(...face(card, front, card[back]));
+    faceBack.replaceChildren(...face(card, back, null));
     cardEl.className = 'flashcard';
     cardEl.classList.toggle('flipped', flipped);
     stage.replaceChildren(cardEl);
@@ -331,8 +337,10 @@ export function renderCards({ store }, id) {
     playBtn.title = prefs.track ? '自动播放 (关掉跟踪进度才能用)' : playTimer ? '暂停 (P)' : '自动播放 (P)';
   }
 
-  // 卡片的一面。hintFor 是背面的答案, 只有正面给「显示提示」
-  function face(text, lang, card, hintFor) {
+  // 卡片的一面 (side: 'term' / 'def'; 图片在解释那面)。hintFor 是背面的答案, 只有正面给「显示提示」
+  function face(card, side, hintFor) {
+    const text = card[side];
+    const image = side === 'def' ? card.image : '';
     const starred = set.starred.includes(card.id);
     const hintEl = h('div', { class: 'hint-text', hidden: !(hint && hintFor) }, hintFor ? hintOf(hintFor) : '');
     const tools = h(
@@ -356,21 +364,7 @@ export function renderCards({ store }, id) {
       h(
         'span',
         { class: 'row' },
-        canSpeak() && text.trim()
-          ? h(
-              'button',
-              {
-                class: 'icon-btn',
-                title: '朗读 (S)',
-                'aria-label': '朗读',
-                onclick: (e) => {
-                  e.stopPropagation();
-                  speak(text, lang);
-                },
-              },
-              '🔊',
-            )
-          : null,
+        sayButton(card, side, set, { title: '朗读 (S)' }),
         h(
           'button',
           {
@@ -392,8 +386,17 @@ export function renderCards({ store }, id) {
         ),
       ),
     );
-    const size = text.length > 200 ? ' tiny' : text.length > 60 ? ' small' : '';
-    return [tools, h('div', { class: `face-text${size}` }, text || h('span', { class: 'muted' }, '(空)')), hintEl];
+    const size = text.length > 200 || (image && text.length > 60) ? ' tiny' : text.length > 60 || image ? ' small' : '';
+    return [
+      tools,
+      h(
+        'div',
+        { class: `face-text${size}${image ? ' with-image' : ''}` },
+        cardImage(image, 'face-img'),
+        text.trim() ? rich(text) : image ? null : h('span', { class: 'muted' }, '(空)'),
+      ),
+      hintEl,
+    ];
   }
 
   function toggleHint() {
@@ -537,9 +540,7 @@ export function renderCards({ store }, id) {
       e.preventDefault();
       undo();
     } else if (key === 's' || key === 'S') {
-      const card = deck[index];
-      const showingDef = flipped !== (prefs.front === 'def');
-      speak(showingDef ? card.def : card.term, showingDef ? set.defLang : set.termLang);
+      sayCard(deck[index], showingSide(), set);
     } else if (key === 'h' || key === 'H') {
       toggleHint();
     } else if (key === 'p' || key === 'P') {
@@ -573,7 +574,7 @@ export function renderCards({ store }, id) {
       dialog?.close();
       document.removeEventListener('keydown', onKey);
       if (document.fullscreenElement) document.exitFullscreen?.();
-      if (canSpeak()) window.speechSynthesis.cancel();
+      stopSpeaking();
     },
   };
 }

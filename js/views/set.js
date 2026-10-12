@@ -3,7 +3,8 @@
 import { h, toast, download } from '../dom.js';
 import { formatCards } from '../parse.js';
 import { pickDistinct, formatTime } from '../games.js';
-import { speak, canSpeak } from '../speech.js';
+import { stripMarks } from '../rich.js';
+import { rich, cardImage, sayButton } from '../cardview.js';
 
 export function renderSet({ store, go }, id) {
   const set = store.getSet(id);
@@ -56,17 +57,12 @@ export function renderSet({ store, go }, id) {
             return h(
               'li',
               { class: 'card-row' },
-              h(
-                'div',
-                { class: 'card-side term' },
-                h('span', { class: 'text' }, card.term),
-                speakBtn(card.term, set.termLang),
-              ),
+              h('div', { class: 'card-side term' }, rich(card.term, { class: 'text' }), sayButton(card, 'term', set)),
               h(
                 'div',
                 { class: 'card-side def' },
-                h('span', { class: 'text' }, card.def),
-                speakBtn(card.def, set.defLang),
+                h('span', { class: 'def-body' }, rich(card.def, { class: 'text' }), cardImage(card.image, 'card-thumb')),
+                sayButton(card, 'def', set),
               ),
               h(
                 'div',
@@ -108,7 +104,8 @@ export function renderSet({ store, go }, id) {
         class: 'btn',
         disabled: total === 0,
         onclick: async () => {
-          const text = formatCards(set.cards);
+          // 格式记号去掉, 粘回 Quizlet 才干净
+          const text = formatCards(set.cards.map((c) => ({ term: stripMarks(c.term), def: stripMarks(c.def) })));
           try {
             await navigator.clipboard.writeText(text);
             toast('复制好了 (Tab 和换行隔开, 能直接粘回 Quizlet)');
@@ -204,22 +201,5 @@ function mode(name, hint, href, enabled, disabledHint = '先加卡片') {
     { class: 'mode', href },
     h('span', { class: 'mode-name' }, name),
     h('span', { class: 'muted small' }, hint),
-  );
-}
-
-export function speakBtn(text, lang) {
-  if (!canSpeak() || !text.trim()) return null;
-  return h(
-    'button',
-    {
-      class: 'icon-btn',
-      title: '朗读',
-      'aria-label': '朗读',
-      onclick: (e) => {
-        e.stopPropagation();
-        speak(text, lang);
-      },
-    },
-    '🔊',
   );
 }

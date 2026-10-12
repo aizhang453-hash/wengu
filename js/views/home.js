@@ -1,6 +1,7 @@
 // 首页: 所有卡片集, 还有备份
 
 import { h, toast, download, today } from '../dom.js';
+import { exportBackup, importBackup } from '../backup.js';
 
 export function renderHome({ store, go }) {
   const sets = store.allSets();
@@ -45,7 +46,7 @@ export function renderHome({ store, go }) {
       fileInput.value = '';
       if (!file) return;
       try {
-        const { added, replaced } = store.importBackup(await file.text());
+        const { added, replaced } = await importBackup(store, await file.text());
         if (added + replaced === 0) {
           toast('这个文件里没找到卡片集');
           return;
@@ -65,7 +66,7 @@ export function renderHome({ store, go }) {
     h(
       'p',
       { class: 'muted' },
-      '卡片都存在这个浏览器里, 不上传。换电脑、换浏览器或者清浏览器数据之前, 先导出备份, 到那边再导入。',
+      '卡片 (连图片、录音) 都存在这个浏览器里, 不上传。换电脑、换浏览器或者清浏览器数据之前, 先导出备份, 到那边再导入。',
     ),
     h(
       'div',
@@ -75,7 +76,7 @@ export function renderHome({ store, go }) {
         {
           class: 'btn',
           disabled: sets.length === 0,
-          onclick: () => download(`温故备份-${today()}.json`, store.exportBackup()),
+          onclick: async () => download(`温故备份-${today()}.json`, await exportBackup(store)),
         },
         '导出备份',
       ),
