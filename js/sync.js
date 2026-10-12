@@ -39,6 +39,44 @@ export function saveConfig(config, storage = globalThis.localStorage) {
   }
 }
 
+// ---- 密钥哪天过期 ----
+// GitHub 的回答里会带着 (github-authentication-token-expiration), 浏览器读得到就用它;
+// 读不到就从连上那天按一年算 (建密钥的链接默认一年), 也可以自己改。还剩两周时提醒去换。
+export const EXPIRY_HEADER = 'github-authentication-token-expiration';
+const DAY = 24 * 60 * 60 * 1000;
+export const GUESS_DAYS = 366;
+export const WARN_DAYS = 14;
+
+// "2026-10-12 08:15:04 UTC" / "2026-10-12 08:15:04 +0000" → 毫秒; 看不懂返回 null
+export function parseExpiry(text) {
+  const m = String(text ?? '')
+    .trim()
+    .match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)\s*(UTC|GMT|Z|[+-]\d{2}:?\d{2})?$/i);
+  if (!m) return null;
+  let zone = (m[3] ?? 'Z').toUpperCase();
+  if (zone === 'UTC' || zone === 'GMT') zone = 'Z';
+  else if (/^[+-]\d{4}$/.test(zone)) zone = `${zone.slice(0, 3)}:${zone.slice(3)}`;
+  const t = Date.parse(`${m[1]}T${m[2]}${zone}`);
+  return Number.isFinite(t) ? t : null;
+}
+
+// 连上 (或换密钥) 时记的过期日期: GitHub 告诉了就用, 不然按一年算
+export function expiryFor({ fromGitHub = null, hint = null, now = Date.now() } = {}) {
+  if (fromGitHub) return { expiresAt: fromGitHub, expirySource: 'github' };
+  if (hint?.expirySource === 'never') return { expiresAt: null, expirySource: 'never' };
+  if (hint?.expiresAt) return { expiresAt: hint.expiresAt, expirySource: hint.expirySource ?? 'guess' };
+  return { expiresAt: now + GUESS_DAYS * DAY, expirySource: 'guess' };
+}
+
+// { at, days (还有几天, 按日历算, 0 是今天), source, warn (该提醒了), expired }; 不知道 / 不会过期返回 null
+export function expiryInfo(config, now = Date.now()) {
+  if (!config?.expiresAt || config.expirySource === 'never') return null;
+  const midnight = (t) => new Date(t).setHours(0, 0, 0, 0);
+  const days = Math.round((midnight(config.expiresAt) - midnight(now)) / DAY);
+  const expired = config.expiresAt <= now;
+  return { at: config.expiresAt, days: Math.max(0, days), source: config.expirySource ?? 'guess', warn: days <= WARN_DAYS, expired };
+}
+
 // 「用户名/仓库名」或者 https://github.com/用户名/仓库名
 export function parseRepo(text) {
   const m = String(text ?? '')
@@ -93,6 +131,8 @@ export class GitHubRepo {
     } catch {
       throw new SyncError('连不上 GitHub, 看看网络', 'network');
     }
+    const expiry = parseExpiry(res.headers?.get?.(EXPIRY_HEADER));
+    if (expiry) this.expiresAt = expiry;
     if (res.status === 401) throw new SyncError('密钥不对, 或者过期了', 'auth');
     if (res.status === 403) {
       if (res.headers.get('x-ratelimit-remaining') === '0') throw new SyncError('同步太频繁了, 过一会儿再试', 'rate');
@@ -229,8 +269,8 @@ export class SyncManager {
     return loadConfig(this.storage);
   }
 
-  setStatus(status, message = '') {
-    this.state = { ...this.state, status, message };
+  setStatus(status, message = '', kind = '') {
+    this.state = { ...this.state, status, message, kind };
     this.onStatus(this.state);
     for (const fn of this.listeners) fn(this.state);
   }
@@ -276,14 +316,17 @@ export class SyncManager {
     this.setStatus('syncing');
     this.running = (async () => {
       try {
-        const result = await syncOnce({ store: this.store, repo: new GitHubRepo(c), onApplied: this.onApplied });
+        const repo = new GitHubRepo(c);
+        const result = await syncOnce({ store: this.store, repo, onApplied: this.onApplied });
         const lastSyncAt = Date.now();
-        saveConfig({ ...this.config, lastSyncAt }, this.storage);
+        // GitHub 告诉了密钥哪天过期 (换过密钥、在 GitHub 上续过期) 就记下来
+        const expiry = repo.expiresAt && repo.expiresAt !== this.config?.expiresAt ? { expiresAt: repo.expiresAt, expirySource: 'github' } : {};
+        saveConfig({ ...this.config, lastSyncAt, ...expiry }, this.storage);
         this.state.lastSyncAt = lastSyncAt;
         this.setStatus('ok');
         return result;
       } catch (e) {
-        this.setStatus('error', e instanceof SyncError ? e.message : '同步出错了');
+        this.setStatus('error', e instanceof SyncError ? e.message : '同步出错了', e instanceof SyncError ? e.kind : 'other');
         return null;
       } finally {
         this.running = null;

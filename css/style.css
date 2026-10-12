@@ -3999,3 +3999,59 @@ button.pin {
   border-radius: var(--radius);
   text-align: center;
 }
+
+/* ---- 同步密钥快过期 ---- */
+.sync-expiry {
+  margin: 10px 0 14px;
+}
+
+.expiry-warn {
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius);
+  background: var(--bad-soft);
+  color: var(--text);
+}
+
+.expiry-warn strong {
+  color: var(--bad);
+}
+
+.expiry-edit {
+  margin-top: 6px;
+  font-size: 0.9rem;
+}
+
+.expiry-edit summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.expiry-edit .row {
+  align-items: center;
+}
+
+.expiry-edit .input[type='date'] {
+  width: auto;
+}
+
+.expiry-notice {
+  display: block;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--bad);
+  border-radius: var(--radius);
+  background: var(--bad-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.expiry-notice strong {
+  color: var(--bad);
+}
+
+.renew .sync-steps .row .input {
+  flex: 1 1 220px;
+  width: auto;
+}

@@ -41,7 +41,7 @@ import { renderReview } from './views/review.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
-import { SyncManager } from './sync.js';
+import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 
 const store = new Store();
 let lastSaveError = 0;
@@ -166,10 +166,13 @@ const syncer = new SyncManager(store, {
   onStatus: ({ status, message }) => {
     if (!badge) return;
     badge.hidden = status === 'off';
-    badge.className = `sync-badge ${status}`;
-    const text = { syncing: '同步中', ok: '已同步', error: '同步出错', idle: '同步' }[status] ?? '';
-    badge.replaceChildren(h('span', { class: 'sync-icon', 'aria-hidden': 'true' }, icon(status === 'error' ? 'alert' : status === 'syncing' ? 'refresh' : 'cloud', 18)), h('span', { class: 'sync-text' }, text));
-    badge.title = status === 'error' ? `同步出错: ${message}` : `多设备同步: ${text}`;
+    // 密钥还剩两周以内就过期: 顶上一直提醒 (出错时还是先说出错)
+    const expiry = status !== 'off' && status !== 'error' ? expiryInfo(loadConfig()) : null;
+    const warn = Boolean(expiry?.warn);
+    badge.className = `sync-badge ${warn ? 'error' : status}`;
+    const text = warn ? '密钥快过期' : ({ syncing: '同步中', ok: '已同步', error: '同步出错', idle: '同步' }[status] ?? '');
+    badge.replaceChildren(h('span', { class: 'sync-icon', 'aria-hidden': 'true' }, icon(status === 'error' || warn ? 'alert' : status === 'syncing' ? 'refresh' : 'cloud', 18)), h('span', { class: 'sync-text' }, text));
+    badge.title = status === 'error' ? `同步出错: ${message}` : warn ? (expiry.expired ? '同步用的密钥可能已经过期了, 点这里换' : expiry.days === 0 ? '同步用的密钥今天过期, 点这里换' : `同步用的密钥还有 ${expiry.days} 天过期, 点这里换`) : `多设备同步: ${text}`;
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
   onApplied: () => {
