@@ -3,7 +3,8 @@
 
 import { stripMarks } from './rich.js';
 import { mediaURL } from './media.js';
-import { primeAudio } from './unlock.js';
+import { toast } from './dom.js';
+import { isIOS, holdAudio, releaseAudio, noteSpeech } from './unlock.js';
 
 export const LANGS = [
   ['auto', '自动'],
@@ -42,19 +43,22 @@ export function canSpeak() {
 
 let playing = null; // 正在放的录音
 let current = null; // 正在念的那一句 (留着引用: iOS 上不留, 可能念到一半就被回收、没声了)
+let watchdog = 0;
 
 function stopAll() {
   playing?.pause();
   playing = null;
   current = null;
+  clearTimeout(watchdog);
   if (canSpeak()) window.speechSynthesis.cancel();
+  releaseAudio(0);
 }
 
-// iPhone、iPad (所有浏览器都是 Safari 的内核) 和电脑上的 Safari
+// iPhone、iPad 和电脑上的 Safari
 function isAppleWebKit() {
   if (typeof navigator === 'undefined') return false;
+  if (isIOS()) return true;
   const ua = navigator.userAgent;
-  if (/iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return true;
   return /safari/i.test(ua) && !/chrome|chromium|crios|fxios|edg|android/i.test(ua);
 }
 
@@ -70,16 +74,21 @@ function pickVoice(synth, code) {
   return (exact.find(([v]) => v.localService) ?? exact[0] ?? near.find(([v]) => v.localService) ?? near[0])?.[0] ?? null;
 }
 
-// rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」)
-export function speak(raw, lang = 'auto', { rate = 1 } = {}) {
-  const text = stripMarks(raw);
-  if (!canSpeak() || !text.trim()) return;
-  primeAudio(); // iPhone 静音开关开着也要有声
-  playing?.pause();
-  playing = null;
+// 念不出来时说一声, 不然一点动静都没有, 不知道怎么回事
+const PROBLEMS = {
+  'not-allowed': '浏览器不让朗读, 再点一下 🔊 试试',
+  'language-unavailable': '这台设备上没有这种语言的声音',
+  'voice-unavailable': '这台设备上没有这种语言的声音',
+  'synthesis-unavailable': '这台设备上的朗读用不了',
+};
+function problem(code) {
+  if (code === 'interrupted' || code === 'canceled') return; // 自己停的
+  toast(code ? (PROBLEMS[code] ?? `朗读出错了 (${code})`) : '朗读没反应, 再点一下 🔊 试试');
+}
+
+function say(text, code, rate, retried) {
   const synth = window.speechSynthesis;
   const u = new SpeechSynthesisUtterance(text);
-  const code = lang === 'auto' ? guessLang(text) : lang;
   u.lang = code;
   u.rate = rate;
   try {
@@ -88,21 +97,56 @@ export function speak(raw, lang = 'auto', { rate = 1 } = {}) {
   } catch {
     // 选不了就用默认的声音
   }
-  u.onend = u.onerror = () => {
-    if (current === u) current = null;
+  let started = false;
+  u.onstart = () => (started = true);
+  u.onend = () => {
+    if (current !== u) return;
+    current = null;
+    clearTimeout(watchdog);
+    releaseAudio();
   };
-  const busy = current && (synth.speaking || synth.pending);
+  u.onerror = (e) => {
+    if (current !== u) return;
+    current = null;
+    clearTimeout(watchdog);
+    releaseAudio();
+    problem(e.error);
+  };
+  // 正在念别的 (上一句, 或者卡住了): 先停, 隔一下再念 (停了马上念, iOS 上会没声)。
+  // 没在念就直接念 (要在点的那一下里念, iOS 才让出声)
+  const busy = synth.speaking || synth.pending;
   current = u;
   const go = () => {
     if (current !== u) return; // 这期间又点了别的
     synth.resume?.(); // iOS 有时会把朗读卡在「暂停」
     synth.speak(u);
+    // 过了好一会儿还没开始念: 卡住了, 停掉重念一次; 还不行就说一声
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      if (current !== u || started) return;
+      if (retried) {
+        current = null;
+        synth.cancel();
+        releaseAudio(0);
+        problem();
+      } else say(text, code, rate, true);
+    }, 3000);
   };
-  // 正在念上一句: 先停, 隔一下再念 (停了马上念, iOS 上会没声)。没在念就直接念 (要在点的那一下里念, iOS 才让出声)
   if (busy) {
     synth.cancel();
     setTimeout(go, 80);
   } else go();
+}
+
+// rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」)
+export function speak(raw, lang = 'auto', { rate = 1 } = {}) {
+  const text = stripMarks(raw);
+  if (!canSpeak() || !text.trim()) return;
+  noteSpeech();
+  holdAudio(); // iPhone: 念的时候一直放着无声音频, 静音开关开着也能听到
+  playing?.pause();
+  playing = null;
+  say(text, lang === 'auto' ? guessLang(text) : lang, rate);
 }
 
 // 念卡片的一面 (side 是 'term' 或 'def'): 有录音放录音, 没有就朗读

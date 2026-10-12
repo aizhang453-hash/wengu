@@ -91,8 +91,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // no-cache: 每次都问一下网站有没有新的 (没变只回一句「没变」, 很快)。
+  // 不加的话浏览器可能直接用自己存的, 刚更新完的十分钟里还拿到旧版本
   event.respondWith(
-    fetch(req)
+    fetch(new Request(req, { cache: 'no-cache' }))
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

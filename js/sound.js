@@ -1,5 +1,5 @@
 // 答对、答错的音效, 用浏览器自己合成, 不用下载声音文件
-import { primeAudio } from './unlock.js';
+import { holdAudio } from './unlock.js';
 
 let ctx = null;
 
@@ -18,7 +18,7 @@ function tone(freq, start, length, { type = 'sine', volume = 0.12 } = {}) {
 
 export function playSound(kind) {
   try {
-    primeAudio(); // iPhone 静音开关开着也要有声
+    holdAudio(1500); // iPhone 静音开关开着也要有声
     ctx ??= new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
     if (kind === 'right') {
