@@ -1,0 +1,13 @@
+#separator:tab
+#html:true
+#guid column:1
+#notetype column:2
+#deck column:3
+#tags column:7
+L)tP_^]]6<	Basic	Vocab::Unit 1	apple [sound:apple.mp3]	苹果		
+EAZi?*Jz_D	Basic	Vocab::Unit 1	<b>cat</b>	"猫<br><img src=""cat.png"">"		
+j:L9Ns?B[q	Basic	Vocab::Unit 1	salt &amp; pepper	盐和胡椒&nbsp;(调料)<div>第二行</div>		
+Ag8qV}`ZYy	Basic	Vocab::Unit 1	run	<i>to move</i> quickly, <u>esp.</u> on foot		
+hE0R$asW=C	Vocab3	Vocab::Unit 2	ephemeral	短暂的	Fame is ephemeral.	
+w]0UrO|NH6	Vocab3	Vocab::Unit 2	ubiquitous	无处不在的		
+NtOM%DNH9d	Cloze	Vocab::Unit 2	The capital of {{c1::France}} is {{c2::Paris::city}}.	Europe		

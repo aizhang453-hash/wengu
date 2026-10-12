@@ -166,7 +166,7 @@ export function renderHome({ store, go }) {
           ? h(
               'div',
               { class: 'row' },
-              h('a', { class: 'btn', href: '#/import' }, '从 Quizlet 导入'),
+              h('a', { class: 'btn', href: '#/import', title: 'Quizlet 的文字、Excel、CSV、Anki 卡组' }, '导入'),
               h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建'),
             )
           : null,
@@ -188,7 +188,7 @@ function welcome() {
       'div',
       { class: 'row' },
       h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建卡片集'),
-      h('a', { class: 'btn', href: '#/import' }, '从 Quizlet 搬过来'),
+      h('a', { class: 'btn', href: '#/import' }, '导入 (Quizlet、Excel、Anki)'),
     ),
     h(
       'details',
@@ -199,8 +199,9 @@ function welcome() {
         {},
         h('li', {}, '在 Quizlet 上打开你的卡片集, 点「…」(更多), 再点「导出」'),
         h('li', {}, '「词和解释之间」选 Tab, 「卡片之间」选换行 (默认就是这样), 点「复制文字」'),
-        h('li', {}, '回到这里点「从 Quizlet 搬过来」, 粘贴进去, 点「加进来」, 再保存'),
+        h('li', {}, '回到这里点「导入」, 粘贴进去, 点「加进来」, 再保存'),
       ),
+      h('p', { class: 'muted small' }, '用 Excel 或者 Anki 的: 点「导入」里的「选文件」, 选 .xlsx、.csv 或者 Anki 卡组 (.apkg)。'),
     ),
   );
 }

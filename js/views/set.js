@@ -7,6 +7,7 @@ import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { printSet } from '../print.js';
 import { openShareDialog } from './share.js';
+import { openExportDialog } from './export.js';
 import { newFolder } from './folder.js';
 import { dueCards } from '../srs.js';
 
@@ -114,6 +115,7 @@ export function renderSet({ store, go }, id) {
       },
       '复制成文字',
     ),
+    h('button', { class: 'btn', disabled: total === 0, onclick: () => openExportDialog(set) }, '导出文件'),
     h('button', { class: 'btn', disabled: total === 0, onclick: () => openShareDialog(set) }, '分享'),
     h('button', { class: 'btn', disabled: total === 0, onclick: () => printSet(set) }, '打印'),
     h('button', { class: 'btn', onclick: () => pickFolders() }, '📁 加到文件夹'),

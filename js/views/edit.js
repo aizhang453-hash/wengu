@@ -9,6 +9,7 @@ import { MARKS, toggleMark } from '../rich.js';
 import { putMedia, mediaURL, shrinkImage, cleanMedia } from '../media.js';
 import { canRecord, record } from '../recorder.js';
 import { cardImage } from '../cardview.js';
+import { fileImportPanel } from './fileimport.js';
 
 const FORMATS = [
   ['bold', 'B', '加粗 (Ctrl+B)'],
@@ -77,7 +78,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     toggleMark(e.target, marker);
   }
 
-  function addRow(card = makeCard(), { focus = false } = {}) {
+  function addRow(card = makeCard(), { focus = false, grow = true } = {}) {
     const termEl = h('textarea', {
       class: 'input grow',
       rows: 1,
@@ -234,8 +235,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     rows.push(row);
     rowsEl.append(row.li);
     row.drawMedia();
-    autoGrow(termEl);
-    autoGrow(defEl);
+    if (grow) autoGrowAll([termEl, defEl]);
     if (focus) termEl.focus();
     return row;
   }
@@ -299,7 +299,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     }
   }
 
-  for (const card of draft.cards) addRow(card);
+  for (const card of draft.cards) addRow(card, { grow: false });
   // 新建时先给几行空的
   while (rows.length < (existing ? 1 : 3)) addRow();
 
@@ -334,29 +334,70 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       onclick: () => {
         const cards = currentImport();
         if (!cards.length) return;
-        // 后面空着的行先去掉, 再加
-        while (rows.length && isBlank(rows.at(-1))) {
-          rows.pop().li.remove();
-        }
-        for (const c of cards) addRow(makeCard(c.term, c.def));
         pasteEl.value = '';
         preview();
-        markDirty();
-        importBox.open = false;
-        toast(`加进来 ${cards.length} 张卡片, 记得保存`);
-        rows.at(-cards.length)?.termEl.scrollIntoView({ block: 'center' });
+        addImported(cards);
       },
     },
     '加进来',
   );
+
+  // 导入的卡片加到最后 (cards: [{ term, def, image?, termAudio?, defAudio? }])
+  function addImported(cards, title = '') {
+    // 后面空着的行先去掉, 再加
+    while (rows.length && isBlank(rows.at(-1))) {
+      rows.pop().li.remove();
+    }
+    for (const c of cards) addRow(makeCard(c.term, c.def, { image: c.image || '', termAudio: c.termAudio || '', defAudio: c.defAudio || '' }), { grow: false });
+    autoGrowAll(rows.slice(-cards.length).flatMap((r) => [r.termEl, r.defEl]));
+    if (title && !titleInput.value.trim()) titleInput.value = title;
+    markDirty();
+    importBox.open = false;
+    toast(`加进来 ${cards.length} 张卡片, 记得保存`);
+    rows.at(-cards.length)?.termEl.scrollIntoView({ block: 'center' });
+  }
+
+  const fileImport = fileImportPanel({
+    onText: (text, title) => {
+      pasteEl.value = text;
+      sepTouched = false;
+      pick(termSepGroup, guessTermSep(text));
+      pick(cardSepGroup, guessCardSep(text));
+      preview();
+      if (title && !titleInput.value.trim()) (titleInput.value = title), markDirty();
+      pasteEl.focus();
+    },
+    onCards: (cards, title) => addImported(cards, title),
+    onSets: (list) => {
+      try {
+        for (const g of list) store.putSet({ title: g.title || '未命名卡片集', cards: g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio })) });
+      } catch {
+        toast('存不下了: 浏览器给的空间满了');
+        return;
+      }
+      toast(`建好了 ${list.length} 个卡片集`);
+      if (!existing && rows.every(isBlank)) dirty = false;
+      go('#/');
+    },
+  });
   const importBox = h(
     'details',
-    { class: 'import-box', open: openImport },
-    h('summary', {}, '从 Quizlet 导入 (粘贴文字)'),
+    {
+      class: 'import-box',
+      open: openImport,
+      ondragover: (e) => {
+        importBox.open = true;
+        fileImport.drop.dragover(e);
+      },
+      ondragleave: fileImport.drop.dragleave,
+      ondrop: fileImport.drop.drop,
+    },
+    h('summary', {}, '导入 (Quizlet 的文字、Excel、CSV、Anki)'),
+    fileImport.el,
     h(
       'p',
       { class: 'muted small' },
-      '在 Quizlet 上打开卡片集, 点「…」→「导出」→「复制文字」, 再粘贴到下面。Excel、Word 里一列词一列解释的表格, 复制过来也行。',
+      '或者粘贴文字: 在 Quizlet 上打开卡片集, 点「…」→「导出」→「复制文字」, 再粘贴到下面。Excel、Word 里一列词一列解释的表格, 复制过来也行。',
     ),
     pasteEl,
     h('div', { class: 'sep-groups' }, termSepGroup.el, cardSepGroup.el),
@@ -504,9 +545,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       [r.termEl.value, r.defEl.value] = [r.defEl.value, r.termEl.value];
       [r.termAudio, r.defAudio] = [r.defAudio, r.termAudio];
       r.drawMedia();
-      autoGrow(r.termEl);
-      autoGrow(r.defEl);
     }
+    autoGrowAll(rows.flatMap((r) => [r.termEl, r.defEl]));
     [termLang.value, defLang.value] = [defLang.value, termLang.value];
     markDirty();
   }
@@ -543,7 +583,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   );
 
   // 放进页面以后才量得出高度
-  requestAnimationFrame(() => rows.forEach((r) => (autoGrow(r.termEl), autoGrow(r.defEl))));
+  requestAnimationFrame(() => autoGrowAll(rows.flatMap((r) => [r.termEl, r.defEl])));
 
   return {
     title: existing ? `编辑 ${existing.title}` : '新建卡片集',
@@ -561,4 +601,13 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
 function autoGrow(el) {
   el.style.height = 'auto';
   if (el.scrollHeight) el.style.height = `${el.scrollHeight + 2}px`;
+}
+
+// 很多个一起量: 先全部改、再全部量、再全部设, 浏览器只排一次版 (一个一个量, 几千张卡片会卡死)
+function autoGrowAll(els) {
+  for (const el of els) el.style.height = 'auto';
+  const heights = els.map((el) => el.scrollHeight);
+  els.forEach((el, i) => {
+    if (heights[i]) el.style.height = `${heights[i] + 2}px`;
+  });
 }

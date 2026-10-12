@@ -1,0 +1,205 @@
+// 编辑页「导入」里的选文件: Excel、CSV、Anki。选好以后挑哪一列是词、哪一列是解释, 看看前几张, 再加进来。
+
+import { h, fill, toast } from '../dom.js';
+import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, FileError } from '../cardfile.js';
+import { AnkiError, mediaType } from '../anki.js';
+import { SQLiteError } from '../sqlite.js';
+import { putMedia, shrinkImage } from '../media.js';
+import { stripMarks } from '../rich.js';
+
+export const ACCEPT = '.xlsx,.xlsm,.csv,.tsv,.txt,.apkg,.colpkg';
+
+// onText(text, title): 普通文字, 放进粘贴框
+// onCards(cards, title): 加进正在编辑的卡片集 (cards 已经是 { term, def, image, termAudio, defAudio }, 图片声音存好了)
+// onSets([{ title, cards }]): 每个工作表 / 牌组建一个卡片集
+export function fileImportPanel({ onText, onCards, onSets }) {
+  const input = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: () => input.files[0] && load(input.files[0]) });
+  const panel = h('div', { class: 'file-panel', hidden: true });
+  const pickBtn = h('button', { class: 'btn', type: 'button', onclick: () => input.click() }, '选文件');
+  const el = h(
+    'div',
+    { class: 'file-pick' },
+    h('div', { class: 'file-pick-row' }, pickBtn, h('span', { class: 'muted small' }, 'Excel (.xlsx)、CSV、Anki 卡组 (.apkg) 或者 .txt, 也可以直接拖进来')),
+    input,
+    panel,
+  );
+
+  async function load(file) {
+    input.value = '';
+    pickBtn.disabled = true;
+    pickBtn.textContent = '读取中……';
+    try {
+      const data = await readCardFile(file);
+      if (data.kind === 'text') {
+        panel.hidden = true;
+        onText(data.text, data.title);
+      } else {
+        showTable(file.name, data);
+      }
+    } catch (e) {
+      const known = e instanceof FileError || e instanceof AnkiError;
+      toast(known ? e.message : e instanceof SQLiteError ? '这个 Anki 卡组坏了, 读不了' : '读不了这个文件, 是不是坏了?');
+      if (!known) console.warn(e);
+    } finally {
+      pickBtn.disabled = false;
+      pickBtn.textContent = '选文件';
+    }
+  }
+
+  function showTable(fileName, data) {
+    const { sheets, html, label, media } = data;
+    const fieldsNamed = sheets.some((s) => s.columns.length);
+    const sheetSelect =
+      sheets.length > 1
+        ? h(
+            'select',
+            { class: 'input', 'aria-label': label, onchange: () => (resetColumns(), draw()) },
+            h('option', { value: '-1' }, `全部 ${sheets.length} 个${label}合在一起`),
+            sheets.map((s, i) => h('option', { value: String(i) }, `${s.name} (${s.rows.length})`)),
+          )
+        : null;
+    if (sheetSelect) sheetSelect.value = '0';
+    const headerBox = h('input', { type: 'checkbox', onchange: () => (resetColumns(false), draw()) });
+    const termSel = h('select', { class: 'input', 'aria-label': '词那一列', onchange: () => draw() });
+    const defSel = h('select', { class: 'input', 'aria-label': '解释那一列', onchange: () => draw() });
+    const extraSel = h('select', { class: 'input', 'aria-label': '解释后面再接上', onchange: () => draw() });
+    const previewEl = h('div', { class: 'preview' });
+    const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => finish(false) }, '加进来');
+    const eachBtn = sheets.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => finish(true) }, `每个${label}建一个卡片集`) : null;
+
+    const chosen = () => (sheetSelect && sheetSelect.value !== '-1' ? [sheets[Number(sheetSelect.value)]] : sheetSelect ? sheets : [sheets[0]]);
+
+    function resetColumns(guess = true) {
+      const first = chosen()[0];
+      if (guess && !fieldsNamed) headerBox.checked = guessHeader(first.rows);
+      const header = !fieldsNamed && headerBox.checked;
+      const labels = columnLabels(first, header, html);
+      const width = Math.max(labels.length, ...chosen().map((s) => Math.max(s.columns.length, ...s.rows.map((r) => r.length))));
+      const options = (withNone) => [
+        withNone ? h('option', { value: '-1' }, '不要') : null,
+        Array.from({ length: Math.max(width, 2) }, (_, c) => h('option', { value: String(c) }, labels[c] ?? `第 ${c + 1} 列`)),
+      ];
+      fill(termSel, ...options(false));
+      fill(defSel, ...options(false));
+      fill(extraSel, ...options(true));
+      const g = guessColumns(first.rows, header);
+      termSel.value = String(g.term);
+      defSel.value = String(g.def);
+      extraSel.value = '-1';
+    }
+
+    function cardsOf(sheet) {
+      return buildCards(sheet.rows, { term: Number(termSel.value), def: Number(defSel.value), extra: Number(extraSel.value), header: !fieldsNamed && headerBox.checked, html });
+    }
+
+    function draw() {
+      const cards = chosen().flatMap(cardsOf);
+      addBtn.disabled = cards.length === 0;
+      addBtn.textContent = `加进来 (${cards.length} 张)`;
+      if (!cards.length) {
+        fill(previewEl, h('p', { class: 'muted' }, '这样选没有卡片, 换一列试试。'));
+        return;
+      }
+      const images = cards.filter((c) => c.image).length;
+      const sounds = cards.filter((c) => c.termAudio || c.defAudio).length;
+      const noDef = cards.filter((c) => !c.def).length;
+      const extras = [images ? `${images} 张带图片` : '', sounds ? `${sounds} 张带声音` : '', noDef ? `${noDef} 张没有解释` : ''].filter(Boolean);
+      fill(
+        previewEl,
+        h('p', {}, `${cards.length} 张卡片${extras.length ? ` (${extras.join(', ')})` : ''}。前几张:`),
+        h(
+          'table',
+          { class: 'preview-table' },
+          h('tbody', {}, cards.slice(0, 3).map((c) => h('tr', {}, h('td', {}, stripMarks(c.term) + (c.termAudio ? ' 🔊' : '')), h('td', {}, stripMarks(c.def) + (c.image ? ' 🖼' : '') + (c.defAudio ? ' 🔊' : ''))))),
+        ),
+      );
+    }
+
+    // 图片声音存进浏览器, 卡片上换成 id
+    async function withMedia(cards, progress) {
+      if (!media) return { cards: cards.map((c) => ({ ...c, image: '', termAudio: '', defAudio: '' })), failed: 0 };
+      const saved = new Map();
+      const names = [...new Set(cards.flatMap((c) => [c.image, c.termAudio, c.defAudio]).filter(Boolean))];
+      let done = 0;
+      let failed = 0;
+      for (const name of names) {
+        progress(`存图片和声音 ${++done}/${names.length}……`);
+        try {
+          const blob = await media.get(name);
+          const type = mediaType(name);
+          if (!blob || !type) throw new Error('没有');
+          saved.set(name, await putMedia(type.startsWith('image/') && type !== 'image/svg+xml' ? await shrinkImage(blob) : blob));
+        } catch {
+          failed++;
+        }
+      }
+      const pick = (name, kind) => {
+        const id = saved.get(name);
+        return id && mediaType(name).startsWith(kind) ? id : '';
+      };
+      return { cards: cards.map((c) => ({ ...c, image: pick(c.image, 'image/'), termAudio: pick(c.termAudio, 'audio/'), defAudio: pick(c.defAudio, 'audio/') })), failed };
+    }
+
+    async function finish(each) {
+      const groups = each ? sheets.map((s) => ({ title: s.name.split('::').pop().trim() || data.title, cards: cardsOf(s) })).filter((g) => g.cards.length) : [{ title: sheetSelect && sheetSelect.value !== '-1' ? chosen()[0].name.split('::').pop().trim() : data.title, cards: chosen().flatMap(cardsOf) }];
+      const btn = each ? eachBtn : addBtn;
+      const label0 = btn.textContent;
+      addBtn.disabled = true;
+      if (eachBtn) eachBtn.disabled = true;
+      try {
+        const all = groups.flatMap((g) => g.cards);
+        const { cards, failed } = await withMedia(all, (t) => (btn.textContent = t));
+        let k = 0;
+        const done = groups.map((g) => ({ title: g.title, cards: cards.slice(k, (k += g.cards.length)) }));
+        if (failed) toast(`${failed} 个图片 / 声音拿不到, 跳过了`);
+        panel.hidden = true;
+        if (each) onSets(done);
+        else onCards(done[0].cards, done[0].title);
+      } catch (e) {
+        console.warn(e);
+        toast('存不进去, 可能浏览器空间满了');
+      } finally {
+        btn.textContent = label0;
+        addBtn.disabled = false;
+        if (eachBtn) eachBtn.disabled = false;
+      }
+    }
+
+    resetColumns();
+    fill(
+      panel,
+      h('div', { class: 'file-head' }, h('strong', {}, `📄 ${fileName}`), h('button', { class: 'btn small', type: 'button', onclick: () => (panel.hidden = true) }, '不用这个文件')),
+      h(
+        'div',
+        { class: 'file-options' },
+        sheetSelect ? h('label', {}, label, sheetSelect) : null,
+        h('label', {}, '词', termSel),
+        h('label', {}, '解释', defSel),
+        h('label', {}, '解释后面再接上', extraSel),
+        fieldsNamed ? null : h('label', { class: 'check' }, headerBox, ' 第一行是标题, 不要'),
+      ),
+      previewEl,
+      h('div', { class: 'row' }, addBtn, eachBtn),
+    );
+    panel.hidden = false;
+    draw();
+  }
+
+  // 拖文件进来
+  const drop = {
+    dragover: (e) => {
+      if (![...(e.dataTransfer?.types ?? [])].includes('Files')) return;
+      e.preventDefault();
+      el.closest('.import-box')?.classList.add('dragging');
+    },
+    dragleave: () => el.closest('.import-box')?.classList.remove('dragging'),
+    drop: (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      el.closest('.import-box')?.classList.remove('dragging');
+      if (!file) return;
+      e.preventDefault();
+      load(file);
+    },
+  };
+  return { el, drop, load };
+}
