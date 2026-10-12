@@ -2,6 +2,7 @@
 
 import { h, toast, download } from '../dom.js';
 import { formatCards } from '../parse.js';
+import { pickDistinct, formatTime } from '../games.js';
 import { speak, canSpeak } from '../speech.js';
 
 export function renderSet({ store, go }, id) {
@@ -86,7 +87,15 @@ export function renderSet({ store, go }, id) {
     mode('单词卡', '翻面背, 标记会不会', `${base}/cards`, total > 0),
     mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
     mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
-    mode('配对', '把词和解释连起来, 计时', null, false),
+  );
+
+  // 游戏 (Quizlet 的「通过有趣的游戏掌握所学内容」)
+  const canPlay = pickDistinct(set.cards, 2).length >= 2;
+  const games = h(
+    'div',
+    { class: 'modes games' },
+    mode('🧩 配对', set.best.match ? `最好 ${formatTime(set.best.match)}` : '把词和解释配起来, 比谁快', `${base}/match`, canPlay, '至少要两张不一样的卡片'),
+    mode('☄️ 打陨石', set.best.blast ? `最高 ${set.best.blast} 分` : '打中写着对的答案的陨石', `${base}/blast`, canPlay, '至少要两张不一样的卡片'),
   );
 
   const actions = h(
@@ -150,6 +159,8 @@ export function renderSet({ store, go }, id) {
       set.description ? h('p', { class: 'description' }, set.description) : null,
       h('p', { class: 'muted' }, progressLine(set)),
       modes,
+      h('h2', { class: 'games-title' }, '用游戏来记'),
+      games,
       actions,
       h(
         'div',
@@ -179,13 +190,13 @@ function levelBadge(level) {
   return null;
 }
 
-function mode(name, hint, href, enabled) {
+function mode(name, hint, href, enabled, disabledHint = '先加卡片') {
   if (!enabled) {
     return h(
       'div',
       { class: 'mode disabled', 'aria-disabled': 'true' },
       h('span', { class: 'mode-name' }, name),
-      h('span', { class: 'muted small' }, href === null ? '下一块做' : '先加卡片'),
+      h('span', { class: 'muted small' }, disabledHint),
     );
   }
   return h(
