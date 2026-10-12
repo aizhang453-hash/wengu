@@ -16,9 +16,7 @@ function listJs(dir) {
 test('断网要存的文件: 每个 js 都在, 写的文件都真的有', () => {
   const sw = readFileSync(join(root, 'sw.js'), 'utf8');
   const files = [...sw.matchAll(/^\s+'([^']+)',$/gm)].map((m) => m[1]);
-  const onlineOnly = ['js/vendor/anthropic-sdk.js']; // 联网才用得上, 不先存
-  for (const js of listJs('js')) if (!onlineOnly.includes(js)) assert.ok(files.includes(js), `sw.js 里少了 ${js}`);
-  for (const js of onlineOnly) assert.ok(!files.includes(js), `${js} 不用先存`);
+  for (const js of listJs('js')) assert.ok(files.includes(js), `sw.js 里少了 ${js}`);
   for (const f of files) {
     if (f === './') continue;
     assert.ok(statSync(join(root, f)).isFile(), `sw.js 里的 ${f} 不存在`);

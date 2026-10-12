@@ -12,9 +12,7 @@ const listJs = (dir) =>
       return name.endsWith('.js') ? [rel] : [];
     });
 
-// 只有联网才用得上的不先存 (AI 的 SDK 两百多 KB, 第一次用 AI 时自动存下来)
-export const ONLINE_ONLY = ['js/vendor/anthropic-sdk.js'];
-const files = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'css/style.css', ...listJs('js').filter((f) => !ONLINE_ONLY.includes(f))];
+const files = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'css/style.css', ...listJs('js')];
 const sw = readFileSync(join(root, 'sw.js'), 'utf8');
 const next = sw.replace(/const FILES = \[[\s\S]*?\];/, `const FILES = [\n${files.map((f) => `  '${f}',`).join('\n')}\n];`);
 writeFileSync(join(root, 'sw.js'), next);

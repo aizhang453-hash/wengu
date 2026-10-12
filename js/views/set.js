@@ -7,7 +7,6 @@ import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { diagramSection } from './diagram.js';
-import { aiReady } from '../ai.js';
 import { pinnedCards } from '../diagram.js';
 import { printSet } from '../print.js';
 import { openShareDialog } from './share.js';
@@ -96,7 +95,6 @@ export function renderSet({ store, go }, id) {
     mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
     mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
     pinnedCards(set).length >= 2 ? mode('标注图', '这是哪个? 在图上找出来', `${base}/diagram`, true) : null,
-    aiReady() && total >= 3 ? mode('✨ AI 练习题', '考理解和运用的选择题', `${base}/quiz`, true) : null,
   );
 
   // 游戏 (Quizlet 的「通过有趣的游戏掌握所学内容」)

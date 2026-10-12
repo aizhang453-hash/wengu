@@ -5,7 +5,6 @@
 import { h, shuffled, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { diagramFigure } from './diagram.js';
-import { explainButton } from './ai.js';
 import { pinOf } from '../diagram.js';
 import { canSpeak, sayCard, stopSpeaking } from '../speech.js';
 import { stripMarks } from '../rich.js';
@@ -375,7 +374,6 @@ export function renderCards({ store }, id) {
         { class: 'row' },
         sayButton(card, side, set, { title: '朗读 (S)' }),
         editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: () => draw({ speakIt: false }) })),
-        hintFor === null ? explainButton(card, set) : null, // 只在答案那面, 不然一点就看到答案了
         h(
           'button',
           {

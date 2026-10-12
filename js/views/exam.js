@@ -4,7 +4,6 @@ import { h, toast, fill, openDialog, switchRow, icon } from '../dom.js';
 import { stopSpeaking } from '../speech.js';
 import { TYPE_NAMES, otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
-import { judgeButton } from './ai.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
 import { stripMarks } from '../rich.js';
@@ -631,17 +630,22 @@ export function renderExam({ store }, id) {
           answerLine(q),
         );
         if (typed) {
-          const doAmend = () => {
-            if (r.correct) return;
-            r.correct = true;
-            store.amendAnswer(set.id, q.card.id);
-            box.className = 'exam-q reviewed right';
-            head.firstChild.replaceWith(mark(true));
-            amend.remove();
-            onAmend();
-          };
-          const amend = h('button', { class: 'btn small', onclick: doAmend }, '我答对了');
-          parts.push(h('div', { class: 'row' }, amend, judgeButton({ prompt: q.prompt, answer: q.answer, typed, onCorrect: doAmend })));
+          const amend = h(
+            'button',
+            {
+              class: 'btn small',
+              onclick: () => {
+                r.correct = true;
+                store.amendAnswer(set.id, q.card.id);
+                box.className = 'exam-q reviewed right';
+                head.firstChild.replaceWith(mark(true));
+                amend.remove();
+                onAmend();
+              },
+            },
+            '我答对了',
+          );
+          parts.push(amend);
         }
       }
     }

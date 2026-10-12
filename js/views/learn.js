@@ -6,8 +6,6 @@ import { speak, canSpeak, canSay, sayCard, stopSpeaking } from '../speech.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
-import { judgeButton, openExplainDialog } from './ai.js';
-import { aiReady } from '../ai.js';
 import { grade } from '../grade.js';
 import { playSound } from '../sound.js';
 import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../learn.js';
@@ -491,8 +489,6 @@ export function renderLearn({ store }, id) {
       return;
     }
     const cont = h('button', { class: 'btn primary', onclick: proceed }, '继续');
-    // AI 讲讲 (设置了 API 密钥才有)
-    const explain = aiReady() ? h('button', { class: 'btn', type: 'button', onclick: () => openExplainDialog(q.card, set) }, '✨ AI 讲讲') : null;
     const answerLine = h(
       'div',
       { class: 'answer-line' },
@@ -502,7 +498,7 @@ export function renderLearn({ store }, id) {
     );
     if (close) {
       fb.className = 'feedback close';
-      fill(fb, h('strong', {}, '差一点, 算你对'), h('div', { class: 'muted small' }, `你写的: ${typed}`), answerLine, h('div', { class: 'row' }, cont, explain));
+      fb.replaceChildren(h('strong', {}, '差一点, 算你对'), h('div', { class: 'muted small' }, `你写的: ${typed}`), answerLine, h('div', { class: 'row' }, cont));
       cont.focus();
       return;
     }
@@ -511,34 +507,26 @@ export function renderLearn({ store }, id) {
     if (isTyping(q) && typed) parts.push(h('div', { class: 'typed' }, h('span', { class: 'muted small' }, '你写的'), h('div', { class: 'strike' }, typed)));
     if (q.type !== 'mc') parts.push(answerLine);
     const row = h('div', { class: 'row' }, cont);
-    // 判错了改成对的 (「我答对了」或者 AI 说算对)
-    const markRight = () => {
-      const level = session.override();
-      if (level === null) return false;
-      store.setLevels(set.id, { [q.card.id]: level });
-      if (pending) pending.correct = true;
-      drawProgress();
-      return true;
-    };
-    let aiJudge = null;
     if (isTyping(q) && typed) {
-      const overrideBtn = h('button', { class: 'btn', title: '判错了? 算我对', onclick: () => markRight() && proceed() }, '我答对了');
-      row.append(overrideBtn);
-      aiJudge = judgeButton({
-        prompt: q.type === 'listen' ? `听写这个词 (它的解释: ${q.prompt})` : q.prompt,
-        answer: q.answer,
-        typed,
-        onCorrect: () => {
-          if (!markRight()) return;
-          overrideBtn.remove();
-          fb.className = 'feedback close';
-          fb.querySelector('strong').textContent = 'AI 说算你对';
-          cont.disabled = false;
-          cont.focus();
-        },
-      });
+      row.append(
+        h(
+          'button',
+          {
+            class: 'btn',
+            title: '判错了? 算我对',
+            onclick: () => {
+              const level = session.override();
+              if (level === null) return;
+              store.setLevels(set.id, { [q.card.id]: level });
+              if (pending) pending.correct = true;
+              drawProgress();
+              proceed();
+            },
+          },
+          '我答对了',
+        ),
+      );
     }
-    if (explain) row.append(explain);
     // 更正选项「答错了把正确答案打一遍」: 打对了才能继续
     if (prefs.retype && isTyping(q)) {
       cont.disabled = true;
@@ -563,13 +551,14 @@ export function renderLearn({ store }, id) {
           }
         },
       });
-      parts.push(retype, row, aiJudge);
-      fill(fb, ...parts);
+      parts.push(retype);
+      parts.push(row);
+      fb.replaceChildren(...parts);
       retype.focus();
       return;
     }
-    parts.push(row, aiJudge);
-    fill(fb, ...parts);
+    parts.push(row);
+    fb.replaceChildren(...parts);
     cont.focus();
   }
 
