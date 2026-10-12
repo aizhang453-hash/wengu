@@ -1082,6 +1082,31 @@ select.input {
   margin-bottom: 18px;
 }
 
+.q-prompt-tools {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.edit-card-btn {
+  color: var(--muted);
+}
+
+.edit-card-btn:hover,
+.edit-card-btn:focus-visible {
+  color: var(--accent);
+}
+
+.review-head .edit-card-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.match-review .edit-card-btn {
+  margin-left: auto;
+}
+
 .q-text {
   font-size: clamp(1.3rem, 4vw, 1.7rem);
   line-height: 1.4;

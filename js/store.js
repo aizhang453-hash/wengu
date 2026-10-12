@@ -344,6 +344,18 @@ export class Store {
     return this.data.folders.filter((f) => f.setIds.includes(setId));
   }
 
+  // 学着学着改一张卡片的字。算改了卡片集 (动 updatedAt, 同步时听这边的); 合起来学的时候改回卡片原来的卡片集
+  updateCard(setId, cardId, { term, def }) {
+    const set = this.ownerOf(setId, cardId);
+    const card = set?.cards.find((c) => c.id === cardId);
+    if (!card) return null;
+    if (typeof term === 'string') card.term = term;
+    if (typeof def === 'string') card.def = def;
+    set.updatedAt = Date.now();
+    if (!this.save()) throw new Error('存不下了');
+    return card;
+  }
+
   // 记「会了 / 还不会」, 不算改了卡片集, 所以不动 updatedAt
   setKnown(setId, cardId, known) {
     const set = this.ownerOf(setId, cardId);

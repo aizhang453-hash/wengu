@@ -5,6 +5,7 @@ import { formatCards } from '../parse.js';
 import { gameModes } from './gamelist.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
+import { editButton, editCardDialog } from './cardedit.js';
 import { printSet } from '../print.js';
 import { openShareDialog } from './share.js';
 import { openExportDialog } from './export.js';
@@ -73,6 +74,7 @@ export function renderSet({ store, go }, id) {
                 'div',
                 { class: 'card-row-tools' },
                 levelBadge(set.learn[card.id]),
+                editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: drawList })),
                 star,
               ),
             );

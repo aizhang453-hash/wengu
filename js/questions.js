@@ -71,6 +71,15 @@ export function makeQuestion(type, card, pool, { answerWith = 'def', rng = Math.
   return { ...base, type: 'written' };
 }
 
+// 学着学着改了卡片: 题目里的字跟着换 (选择题对的那个选项、判断题给的对答案也换)
+export function refreshQuestion(q) {
+  q.prompt = q.card[otherSide(q.side)];
+  q.answer = q.card[q.side];
+  if (Array.isArray(q.options) && q.correctIndex >= 0) q.options[q.correctIndex] = q.answer;
+  if (q.type === 'tf' && q.isTrue) q.shown = q.answer;
+  return q;
+}
+
 // 测试里的配对题: 一组几张卡片, 每个题目从同一堆答案里选
 export function makeMatchGroup(cards, { answerWith = 'def', rng = Math.random } = {}) {
   const side = pickSide(answerWith === 'both' ? 'def' : answerWith, rng);

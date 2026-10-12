@@ -47,6 +47,7 @@ const FILES = [
   'js/vendor/qrcode.js',
   'js/views/blast.js',
   'js/views/blocks.js',
+  'js/views/cardedit.js',
   'js/views/cards.js',
   'js/views/edit.js',
   'js/views/exam.js',

@@ -2,7 +2,8 @@
 
 import { h, toast, fill, openDialog, switchRow, icon } from '../dom.js';
 import { stopSpeaking } from '../speech.js';
-import { TYPE_NAMES, otherSide } from '../questions.js';
+import { TYPE_NAMES, otherSide, refreshQuestion } from '../questions.js';
+import { editButton, editCardDialog } from './cardedit.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
 import { stripMarks } from '../rich.js';
@@ -524,7 +525,13 @@ export function renderExam({ store }, id) {
     return h('span', { class: `mark ${correct ? 'good' : 'bad'}`, 'aria-label': correct ? '对' : '错' }, correct ? '✓' : '✗');
   }
 
+  // 改了卡片以后整块重画
   function reviewBlock(type, q, answers, byQid, onAmend) {
+    const el = buildReview(type, q, answers, byQid, onAmend, () => el.replaceWith(reviewBlock(type, q, answers, byQid, onAmend)));
+    return el;
+  }
+
+  function buildReview(type, q, answers, byQid, onAmend, redraw) {
     if (type === 'match') {
       return h(
         'div',
@@ -552,6 +559,21 @@ export function renderExam({ store }, id) {
                       h('strong', {}, rich(item.answer)),
                     ],
               ),
+              editButton(() =>
+                editCardDialog({
+                  store,
+                  setId: set.id,
+                  card: item.card,
+                  onSaved: () => {
+                    const old = item.answer;
+                    item.prompt = item.card[otherSide(q.side)];
+                    item.answer = item.card[q.side];
+                    const i = q.options.indexOf(old);
+                    if (i >= 0) q.options[i] = item.answer;
+                    redraw();
+                  },
+                }),
+              ),
             );
           }),
         ),
@@ -561,7 +583,13 @@ export function renderExam({ store }, id) {
     const r = byQid[q.qid];
     const given = answers[q.qid];
     const box = h('div', { class: `exam-q reviewed ${r.correct ? 'right' : 'wrong'}` });
-    const head = h('div', { class: 'review-head' }, mark(r.correct), h('div', { class: 'review-prompt' }, promptBlock(q, num(q.qid))));
+    const head = h(
+      'div',
+      { class: 'review-head' },
+      mark(r.correct),
+      h('div', { class: 'review-prompt' }, promptBlock(q, num(q.qid))),
+      editButton(() => editCardDialog({ store, setId: set.id, card: q.card, onSaved: () => (refreshQuestion(q), redraw()) })),
+    );
     const parts = [head];
 
     if (type === 'tf') {

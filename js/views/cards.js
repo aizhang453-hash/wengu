@@ -3,6 +3,7 @@
 // 背到一半关掉, 下次打开接着背。
 
 import { h, shuffled, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
+import { editButton, editCardDialog } from './cardedit.js';
 import { canSpeak, sayCard, stopSpeaking } from '../speech.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
@@ -369,6 +370,7 @@ export function renderCards({ store }, id) {
         'span',
         { class: 'row' },
         sayButton(card, side, set, { title: '朗读 (S)' }),
+        editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: () => draw({ speakIt: false }) })),
         h(
           'button',
           {

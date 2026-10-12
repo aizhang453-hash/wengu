@@ -4,6 +4,7 @@ import { h, dialogOpen } from '../dom.js';
 import { stopSpeaking, sayCard } from '../speech.js';
 import { playSound } from '../sound.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
+import { editButton, editCardDialog } from './cardedit.js';
 import { dueCards, dueTomorrow } from '../srs.js';
 import { shuffle } from '../questions.js';
 
@@ -77,7 +78,23 @@ export function renderReview({ store }, setId = null) {
           'div',
           { class: 'q-prompt' },
           h('div', {}, front === 'def' ? cardImage(card.image, 'q-img') : null, h('div', { class: 'q-text' }, rich(card[front]))),
-          sayButton(card, front, set),
+          h(
+            'div',
+            { class: 'q-prompt-tools' },
+            sayButton(card, front, set),
+            editButton(() =>
+              editCardDialog({
+                store,
+                setId: set.id,
+                card,
+                onSaved: () => {
+                  const wasFlipped = flipped;
+                  draw();
+                  if (wasFlipped) reveal();
+                },
+              }),
+            ),
+          ),
         ),
         answer,
         h('div', { class: 'row center' }, flipBtn),

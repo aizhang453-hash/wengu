@@ -1,10 +1,11 @@
 // 学习模式 (照 Quizlet 的 Learn): 先选目标 (备考 / 全部记住),
 // 再一轮一轮做题 (选择、判断、打字、单词卡), 直到全部掌握。
 
-import { h, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
+import { h, fill, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { speak, canSpeak, sayCard, stopSpeaking } from '../speech.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
-import { otherSide } from '../questions.js';
+import { otherSide, refreshQuestion } from '../questions.js';
+import { editButton, editCardDialog } from './cardedit.js';
 import { grade } from '../grade.js';
 import { playSound } from '../sound.js';
 import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../learn.js';
@@ -248,6 +249,34 @@ export function renderLearn({ store }, id) {
       : null;
   }
 
+  // 学着学着改卡片: 改完题目里的字跟着换; 答对了自动跳下一题的, 先停下来
+  function editCard(q) {
+    if (phase === 'feedback') {
+      clearTimeout(autoTimer);
+      const fb = stage.firstChild?.feedback;
+      if (fb && !fb.querySelector('button')) fb.append(h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: proceed }, '继续')));
+    }
+    editCardDialog({
+      store,
+      setId: set.id,
+      card: q.card,
+      onSaved: () => {
+        refreshQuestion(q);
+        const el = stage.firstChild;
+        if (!el?.body || el.question !== q) return;
+        if (phase === 'question') {
+          stage.replaceChildren(questionView(q));
+          stage.querySelector('[data-autofocus]')?.focus();
+        } else if (phase === 'feedback') {
+          const text = el.querySelector('.q-prompt .q-text');
+          if (text) fill(text, q.prompt.trim() ? rich(q.prompt) : imageWithPrompt(q) ? null : h('span', { class: 'muted' }, '(空)'));
+          const answer = el.querySelector('.answer-text');
+          if (answer) fill(answer, q.answer ? rich(q.answer) : '(空)', imageWithAnswer(q) ? cardImage(q.card.image, 'q-img small') : null);
+        }
+      },
+    });
+  }
+
   // 图片跟着解释走; 设置里「图片放在题目里」时, 题目里总有图片 (当提示)
   const imageWithPrompt = (q) => q.card.image && (q.side === 'term' || prefs.imageInPrompt);
   const imageWithAnswer = (q) => q.card.image && q.side === 'def' && !prefs.imageInPrompt;
@@ -273,7 +302,7 @@ export function renderLearn({ store }, id) {
         imageWithPrompt(q) ? cardImage(q.card.image, 'q-img') : null,
         h('div', { class: 'q-text' }, q.prompt.trim() ? rich(q.prompt) : imageWithPrompt(q) ? null : h('span', { class: 'muted' }, '(空)')),
       ),
-      sayButton(q.card, otherSide(q.side), set),
+      h('div', { class: 'q-prompt-tools' }, sayButton(q.card, otherSide(q.side), set), editButton(() => editCard(q))),
     );
 
     let body;
@@ -401,6 +430,7 @@ export function renderLearn({ store }, id) {
     const el = h('div', { class: `question q-${q.type}` }, h('div', { class: 'q-label muted small' }, label), prompt, body, feedback);
     el.body = body;
     el.feedback = feedback;
+    el.question = q;
     return el;
   }
 
