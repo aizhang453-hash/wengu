@@ -533,15 +533,16 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     },
     onCards: (cards, title) => addImported(cards, title),
     onSets: (list) => {
+      const made = [];
       try {
-        for (const g of list) store.putSet({ title: g.title || '未命名卡片集', cards: g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio })) });
+        for (const g of list) made.push(store.putSet({ title: g.title || '未命名卡片集', cards: g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio })) }));
       } catch {
-        toast('存不下了: 浏览器给的空间满了');
-        return;
+        toast(made.length ? `建好了 ${made.length} 个, 后面的存不下了: 浏览器给的空间满了` : '存不下了: 浏览器给的空间满了');
+        if (!made.length) return;
       }
-      toast(`建好了 ${list.length} 个卡片集`);
+      if (made.length === list.length) toast(`建好了 ${made.length} 个卡片集`);
       if (!existing && rows.every(isBlank)) dirty = false;
-      go('#/');
+      go(made.length === 1 ? `#/set/${encodeURIComponent(made[0].id)}` : '#/');
     },
   });
   const importBox = h(

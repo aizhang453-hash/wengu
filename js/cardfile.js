@@ -91,9 +91,16 @@ export function guessHeader(rows) {
 const DEF_WORDS = /^(definitions?|meanings?|back|answers?|translations?|解释|释义|意思|含义|定义|翻译|中文|背面|答案)$/i;
 const TERM_WORDS = /^(terms?|words?|vocab(ulary)?|front|questions?|prompts?|词|单词|词语|生词|词汇|术语|英文|正面|问题)$/i;
 
+// 表格最宽的那一行有几列。不用 Math.max(...几十万行), 行太多会出错
+export function widthOf(rows) {
+  let w = 0;
+  for (const r of rows) if (r.length > w) w = r.length;
+  return w;
+}
+
 // 猜哪一列是词、哪一列是解释: 有标题按标题, 没有就用前两列有字的
 export function guessColumns(rows, header) {
-  const width = Math.max(0, ...rows.map((r) => r.length));
+  const width = widthOf(rows);
   const filled = [];
   for (let c = 0; c < width; c++) if (rows.some((r) => String(r[c] ?? '').trim())) filled.push(c);
   let term = filled[0] ?? 0;
@@ -112,7 +119,7 @@ export function guessColumns(rows, header) {
 // 每一列在选择框里叫什么: 字段名 / 标题, 或者「A 列: 第一格的字」
 export function columnLabels(sheet, header, html) {
   const rows = sheet.rows;
-  const width = Math.max(sheet.columns.length, ...rows.map((r) => r.length));
+  const width = Math.max(sheet.columns.length, widthOf(rows));
   const sample = (c) => {
     const row = rows.slice(header ? 1 : 0).find((r) => String(r[c] ?? '').trim());
     const s = row ? (html ? htmlToText(row[c]) : String(row[c])).replace(/\s+/g, ' ') : '';
@@ -166,7 +173,12 @@ export function exportFile(set, format) {
   const rows = [['词', '解释'], ...set.cards.map((c) => [stripMarks(c.term), stripMarks(c.def)])];
   const name = safeName(set.title);
   if (format === 'xlsx') {
-    const longest = (i) => Math.min(60, Math.max(10, ...rows.map((r) => Math.max(...r[i].split('\n').map((l) => [...l].reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e80 ? 2 : 1), 0)))) + 2));
+    // 列宽: 最长的一行有多宽 (中文算两个), 10 到 60 之间
+    const longest = (i) => {
+      let w = 0;
+      for (const r of rows) for (const line of r[i].split('\n')) w = Math.max(w, [...line].reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e80 ? 2 : 1), 0));
+      return Math.min(60, Math.max(10, w + 2));
+    };
     const data = writeXlsx([{ name: set.title, rows, header: true, widths: [longest(0), longest(1)] }]);
     return { blob: new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename: `${name}.xlsx` };
   }

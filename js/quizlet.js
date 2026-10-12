@@ -9,7 +9,8 @@
 // 返回 { title, termLang, defLang, cards: [{ term, def, imageUrl }] }
 export function grab(doc, win) {
   var best = [];
-  var info = { title: '', termLang: '', defLang: '' };
+  var info = { termLang: '', defLang: '' };
+  var metas = [];
   var seen = new Set();
   var https = function (u) {
     u = String(u || '');
@@ -70,10 +71,8 @@ export function grab(doc, win) {
     try { vals = Array.isArray(o) ? o : Object.keys(o).map(function (k) { return o[k]; }); } catch { return; }
     if (Array.isArray(o) && o.length && o[0] && Array.isArray(o[0].cardSides)) consider(fromSides(o));
     else if (vals.length && vals.every(isTerm)) consider(fromTerms(vals));
-    if (!Array.isArray(o) && typeof o.title === 'string' && o.title && (o.wordLang || o.defLang || o.numTerms != null) && !info.title) {
-      info.title = o.title;
-      info.termLang = info.termLang || o.wordLang || '';
-      info.defLang = info.defLang || o.defLang || '';
+    if (!Array.isArray(o) && typeof o.title === 'string' && o.title && (o.wordLang || o.defLang || o.numTerms != null)) {
+      metas.push({ title: o.title, termLang: o.wordLang || '', defLang: o.defLang || '', numTerms: o.numTerms });
     }
     for (var i = 0; i < vals.length; i++) walk(vals[i], depth + 1);
   };
@@ -105,11 +104,12 @@ export function grab(doc, win) {
     }
     consider(cards);
   }
-  if (!info.title) {
-    var h1 = doc.querySelector('h1');
-    info.title = (h1 && String(h1.innerText || h1.textContent || '').trim()) || String(doc.title || '').replace(/\s*[|\-–]\s*Quizlet.*$/i, '').replace(/\s*Flashcards\s*$/i, '').trim();
-  }
-  return { title: info.title, termLang: info.termLang, defLang: info.defLang, cards: best };
+  var h1 = doc.querySelector('h1');
+  var h1Text = h1 ? String(h1.innerText || h1.textContent || '').trim() : '';
+  var pageTitle = String(doc.title || '').replace(/\s*[|\-–]\s*Quizlet.*$/i, '').replace(/\s*Flashcards\s*$/i, '').trim();
+  var meta = metas.find(function (m) { return m.numTerms === best.length; }) || metas.find(function (m) { return h1Text && m.title === h1Text; }) || null;
+  var title = meta ? meta.title : h1Text || pageTitle || (metas[0] ? metas[0].title : '');
+  return { title: title, termLang: info.termLang || (meta ? meta.termLang : ''), defLang: info.defLang || (meta ? meta.defLang : ''), cards: best };
 }
 
 // 压缩成分享链接 (跟 share.js 一样的格式), 打开温故

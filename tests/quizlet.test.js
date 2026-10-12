@@ -73,6 +73,16 @@ test('Quizlet 新的网页数据: cardSides 里的字和图片; 标题从网页�
   ]);
 });
 
+test('Quizlet: 网页里还有「相关卡片集」的标题时, 用词数对得上的那个', () => {
+  const related = { props: { pageProps: { related: [{ title: '别人的卡片集', wordLang: 'en', defLang: 'fr', numTerms: 50 }], dehydratedReduxStateKey: JSON.stringify({ setPage: { set: { title: '我的卡片集', wordLang: 'es', defLang: 'en', numTerms: 2 }, termIdToTermsMap: { a: { word: 'uno', definition: 'one', rank: 0 }, b: { word: 'dos', definition: 'two', rank: 1 } } } }) } } };
+  const r = grab(fakeDoc({ nextData: related, title: '我的卡片集 Flashcards | Quizlet' }), {});
+  assert.deepEqual([r.title, r.termLang, r.defLang, r.cards.length], ['我的卡片集', 'es', 'en', 2]);
+  // 词数都对不上: 用网页标题
+  const odd = structuredClone(related);
+  odd.props.pageProps.dehydratedReduxStateKey = odd.props.pageProps.dehydratedReduxStateKey.replace('"numTerms":2', '"numTerms":9');
+  assert.equal(grab(fakeDoc({ nextData: odd, title: '我的卡片集 Flashcards | Quizlet' }), {}).title, '我的卡片集');
+});
+
 test('Quizlet: 找不到就是空的', () => {
   assert.deepEqual(grab(fakeDoc({ title: 'Quizlet' }), {}).cards, []);
   assert.deepEqual(grab(fakeDoc({ nextData: { props: { pageProps: { x: '{bad json "word"' } } } }), {}).cards, []);

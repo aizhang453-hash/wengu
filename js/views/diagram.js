@@ -1,10 +1,21 @@
 // 标注图的页面部分: 显示图和点、编辑页里标点、卡片集页上的图、练习 (#/set/<id>/diagram)
 
 import { h, fill, dialogOpen } from '../dom.js';
-import { cardImage, rich, sayButton } from '../cardview.js';
+import { rich, sayButton } from '../cardview.js';
+import { mediaURL } from '../media.js';
 import { pinnedCards, nearestPin, diagramQuestions } from '../diagram.js';
 import { stripMarks } from '../rich.js';
 import { playSound } from '../sound.js';
+
+// 标注图的图。这台设备上还没有 (比如刚同步、图片还没下载完) 就换成一句话, 不然点会挤在一起
+function diagramImage(id, box) {
+  const img = h('img', { class: 'diagram-img', alt: '标注图', decoding: 'async' });
+  mediaURL(id).then((url) => {
+    if (url) img.src = url;
+    else box.replaceWith(h('p', { class: 'diagram-missing muted' }, '🖼 这张图还不在这台设备上 (可能还没同步过来), 过一会儿再打开看看。'));
+  });
+  return img;
+}
 
 // 图上点的位置 (0~1)
 function relPos(e, box) {
@@ -18,7 +29,8 @@ function relPos(e, box) {
 // 返回的元素上有 mark(cardId, 'right' | 'wrong') 给点上色
 export function diagramFigure(set, { highlight = null, labels = 'number', onPick = null, size = '' } = {}) {
   const pins = pinnedCards(set);
-  const box = h('div', { class: `diagram-box${onPick ? ' pickable' : ''}` }, cardImage(set.diagram.image, 'diagram-img'));
+  const box = h('div', { class: `diagram-box${onPick ? ' pickable' : ''}` });
+  box.append(diagramImage(set.diagram.image, box));
   const pinEls = new Map();
   for (const p of pins) {
     const el = h(
@@ -83,7 +95,7 @@ export function diagramEditor({ diagram, rows, addCard, focusCard, onChange }) {
   function draw() {
     const valid = new Set(rows().map((r) => r.id));
     diagram.pins = diagram.pins.filter((p) => valid.has(p.cardId));
-    fill(box, cardImage(diagram.image, 'diagram-img'), diagram.pins.map((p, i) => pinEl(p, i + 1)));
+    fill(box, diagramImage(diagram.image, box), diagram.pins.map((p, i) => pinEl(p, i + 1)));
     box.classList.toggle('placing', Boolean(placing));
     hint.textContent = placing
       ? '在图上点一下, 放这张卡片的点 (按 Esc 取消)'
@@ -121,7 +133,10 @@ export function diagramEditor({ diagram, rows, addCard, focusCard, onChange }) {
       if (moved) onChange();
       else focusCard(p.cardId);
     });
-    pin.addEventListener('click', (e) => e.stopPropagation());
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (e.detail === 0) focusCard(p.cardId); // 键盘 (回车、空格) 选中这个点
+    });
     return pin;
   }
 

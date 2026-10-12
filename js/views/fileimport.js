@@ -1,13 +1,14 @@
 // 编辑页「导入」里的选文件: Excel、CSV、Anki。选好以后挑哪一列是词、哪一列是解释, 看看前几张, 再加进来。
 
 import { h, fill, toast } from '../dom.js';
-import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, FileError } from '../cardfile.js';
+import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, widthOf, FileError } from '../cardfile.js';
 import { AnkiError, mediaType } from '../anki.js';
 import { SQLiteError } from '../sqlite.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { stripMarks } from '../rich.js';
 
 export const ACCEPT = '.xlsx,.xlsm,.csv,.tsv,.txt,.apkg,.colpkg';
+const BIG = 2000; // 卡片多过这么多张, 加进编辑页会很慢, 建议直接建成卡片集
 
 // onText(text, title): 普通文字, 放进粘贴框
 // onCards(cards, title): 加进正在编辑的卡片集 (cards 已经是 { term, def, image, termAudio, defAudio }, 图片声音存好了)
@@ -64,8 +65,9 @@ export function fileImportPanel({ onText, onCards, onSets }) {
     const defSel = h('select', { class: 'input', 'aria-label': '解释那一列', onchange: () => draw() });
     const extraSel = h('select', { class: 'input', 'aria-label': '解释后面再接上', onchange: () => draw() });
     const previewEl = h('div', { class: 'preview' });
-    const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => finish(false) }, '加进来');
-    const eachBtn = sheets.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => finish(true) }, `每个${label}建一个卡片集`) : null;
+    const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => finish('add') }, '加进来');
+    const directBtn = h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => finish('direct') }, '直接建成卡片集');
+    const eachBtn = sheets.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => finish('each') }, `每个${label}建一个卡片集`) : null;
 
     const chosen = () => (sheetSelect && sheetSelect.value !== '-1' ? [sheets[Number(sheetSelect.value)]] : sheetSelect ? sheets : [sheets[0]]);
 
@@ -74,7 +76,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       if (guess && !fieldsNamed) headerBox.checked = guessHeader(first.rows);
       const header = !fieldsNamed && headerBox.checked;
       const labels = columnLabels(first, header, html);
-      const width = Math.max(labels.length, ...chosen().map((s) => Math.max(s.columns.length, ...s.rows.map((r) => r.length))));
+      const width = chosen().reduce((w, s) => Math.max(w, s.columns.length, widthOf(s.rows)), labels.length);
       const options = (withNone) => [
         withNone ? h('option', { value: '-1' }, '不要') : null,
         Array.from({ length: Math.max(width, 2) }, (_, c) => h('option', { value: String(c) }, labels[c] ?? `第 ${c + 1} 列`)),
@@ -96,6 +98,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const cards = chosen().flatMap(cardsOf);
       addBtn.disabled = cards.length === 0;
       addBtn.textContent = `加进来 (${cards.length} 张)`;
+      directBtn.hidden = cards.length <= BIG;
       if (!cards.length) {
         fill(previewEl, h('p', { class: 'muted' }, '这样选没有卡片, 换一列试试。'));
         return;
@@ -107,6 +110,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       fill(
         previewEl,
         h('p', {}, `${cards.length} 张卡片${extras.length ? ` (${extras.join(', ')})` : ''}。前几张:`),
+        cards.length > BIG ? h('p', { class: 'muted small' }, '卡片很多, 加进编辑页会很慢, 建议点「直接建成卡片集」(建好以后也能编辑)。') : null,
         h(
           'table',
           { class: 'preview-table' },
@@ -140,12 +144,13 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       return { cards: cards.map((c) => ({ ...c, image: pick(c.image, 'image/'), termAudio: pick(c.termAudio, 'audio/'), defAudio: pick(c.defAudio, 'audio/') })), failed };
     }
 
-    async function finish(each) {
+    // mode: 'add' 加进编辑页, 'direct' 直接建成一个卡片集, 'each' 每个工作表 / 牌组建一个
+    async function finish(mode) {
+      const each = mode === 'each';
       const groups = each ? sheets.map((s) => ({ title: s.name.split('::').pop().trim() || data.title, cards: cardsOf(s) })).filter((g) => g.cards.length) : [{ title: sheetSelect && sheetSelect.value !== '-1' ? chosen()[0].name.split('::').pop().trim() : data.title, cards: chosen().flatMap(cardsOf) }];
-      const btn = each ? eachBtn : addBtn;
+      const btn = { add: addBtn, direct: directBtn, each: eachBtn }[mode];
       const label0 = btn.textContent;
-      addBtn.disabled = true;
-      if (eachBtn) eachBtn.disabled = true;
+      for (const b of [addBtn, directBtn, eachBtn]) if (b) b.disabled = true;
       try {
         const all = groups.flatMap((g) => g.cards);
         const { cards, failed } = await withMedia(all, (t) => (btn.textContent = t));
@@ -153,15 +158,14 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         const done = groups.map((g) => ({ title: g.title, cards: cards.slice(k, (k += g.cards.length)) }));
         if (failed) toast(`${failed} 个图片 / 声音拿不到, 跳过了`);
         panel.hidden = true;
-        if (each) onSets(done);
-        else onCards(done[0].cards, done[0].title);
+        if (mode === 'add') onCards(done[0].cards, done[0].title);
+        else onSets(done);
       } catch (e) {
         console.warn(e);
         toast('存不进去, 可能浏览器空间满了');
       } finally {
         btn.textContent = label0;
-        addBtn.disabled = false;
-        if (eachBtn) eachBtn.disabled = false;
+        for (const b of [addBtn, directBtn, eachBtn]) if (b) b.disabled = false;
       }
     }
 
@@ -179,7 +183,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         fieldsNamed ? null : h('label', { class: 'check' }, headerBox, ' 第一行是标题, 不要'),
       ),
       previewEl,
-      h('div', { class: 'row' }, addBtn, eachBtn),
+      h('div', { class: 'row' }, addBtn, directBtn, eachBtn),
     );
     panel.hidden = false;
     draw();

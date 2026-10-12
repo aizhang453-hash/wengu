@@ -487,6 +487,12 @@ a.mode:hover {
   background: var(--surface);
 }
 
+/* 卡片很多时, 屏幕外的先不排版, 滚到了再排 (几千张的卡片集打开快很多) */
+.card-list > .card-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 66px;
+}
+
 .card-side {
   display: flex;
   align-items: flex-start;
@@ -3985,4 +3991,11 @@ button.pin {
   height: 22px;
   border: 3px solid var(--accent);
   background: #fff;
+}
+
+.diagram-missing {
+  padding: 24px 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
 }
