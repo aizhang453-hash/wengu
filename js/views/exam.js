@@ -1,10 +1,11 @@
 // 测试模式: 设置 → 答卷 → 交卷打分, 看错题, 只考错的
 
-import { h, toast, fill } from '../dom.js';
+import { h, toast, fill, openDialog, switchRow, icon } from '../dom.js';
 import { stopSpeaking } from '../speech.js';
 import { TYPE_NAMES, otherSide } from '../questions.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
+import { stripMarks } from '../rich.js';
 
 const PREFS_KEY = 'wengu:exam-prefs';
 const LETTERS = 'ABCDEFGHIJ';
@@ -58,93 +59,96 @@ export function renderExam({ store }, id) {
   let timer = null;
   let inProgress = null; // 答卷时: () => 答了几题
 
-  // ---- 设置 ----
-  function showSetup() {
-    clearInterval(timer);
-    inProgress = null;
+  // ---- 设置 (跟 Quizlet 一样是个弹出窗口; 打开测试时先按上次的设置出一套垫在后面) ----
+  let dialog = null;
+  function openSetup() {
     const starredCount = set.starred.length;
-    const poolSize = () => (prefs.starredOnly && starredCount ? starredCount : set.cards.length);
+    const draft = structuredClone(prefs);
+    const poolSize = () => (draft.starredOnly && starredCount ? starredCount : set.cards.length);
+    const maxText = h('span', { class: 'muted' });
     const countInput = h('input', {
       class: 'input count',
       type: 'number',
       min: 1,
-      max: poolSize(),
-      value: String(Math.min(prefs.count, poolSize())),
       'aria-label': '题数',
     });
-    const ofText = h('span', { class: 'muted' }, `/ 共 ${poolSize()} 张`);
     const refreshMax = () => {
       countInput.max = poolSize();
-      ofText.textContent = `/ 共 ${poolSize()} 张`;
-      if (Number(countInput.value) > poolSize()) countInput.value = String(poolSize());
+      maxText.textContent = ` (最多 ${poolSize()})`;
+      countInput.value = String(Math.min(Number(countInput.value) || draft.count, poolSize()));
     };
+    countInput.value = String(Math.min(draft.count, poolSize()));
+    refreshMax();
 
-    const typeBoxes = Object.fromEntries(
-      ['tf', 'mc', 'match', 'written'].map((t) => [t, h('input', { type: 'checkbox', checked: prefs.types[t] })]),
+    const answerSelect = h(
+      'select',
+      { class: 'input', 'aria-label': '回答', onchange: (e) => (draft.answerWith = e.target.value) },
+      [
+        ['term', '词'],
+        ['def', '解释'],
+        ['both', '两者都有'],
+      ].map(([v, label]) => h('option', { value: v, selected: draft.answerWith === v }, label)),
     );
-    const answerRadios = [
-      ['def', '解释'],
-      ['term', '词'],
-      ['both', '都有'],
-    ].map(([v, label]) => [v, h('input', { type: 'radio', name: 'examAnswerWith', value: v, checked: prefs.answerWith === v }), label]);
-    const smartBox = h('input', { type: 'checkbox', checked: prefs.smart });
-    const starBox = h('input', {
-      type: 'checkbox',
-      checked: prefs.starredOnly,
-      onchange: () => {
-        prefs.starredOnly = starBox.checked;
-        refreshMax();
-      },
-    });
+
+    const typeRows = [
+      ['tf', '判断对错'],
+      ['mc', '多项选择'],
+      ['match', '配对'],
+      ['written', '书面问题 (打字)'],
+    ].map(([t, label]) =>
+      switchRow({
+        label,
+        checked: draft.types[t],
+        onchange: (v, input) => {
+          draft.types[t] = v;
+          if (!Object.values(draft.types).some(Boolean)) {
+            draft.types[t] = true;
+            input.checked = true;
+            toast('至少开一种题型');
+          }
+        },
+      }),
+    );
 
     const start = () => {
-      const types = Object.fromEntries(Object.entries(typeBoxes).map(([t, b]) => [t, b.checked]));
-      if (!Object.values(types).some(Boolean)) {
-        toast('至少选一种题型');
-        return;
-      }
-      const count = Math.max(1, Math.min(poolSize(), Math.floor(Number(countInput.value)) || 1));
-      Object.assign(prefs, {
-        count,
-        types,
-        answerWith: answerRadios.find(([, r]) => r.checked)?.[0] ?? 'def',
-        smart: smartBox.checked,
-        starredOnly: starBox.checked,
-      });
+      draft.count = Math.max(1, Math.min(poolSize(), Math.floor(Number(countInput.value)) || 1));
+      Object.assign(prefs, draft);
       savePrefs(prefs);
+      dialog?.close();
       startExam(poolCards());
     };
 
-    root.replaceChildren(
-      h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`),
-      h('h1', {}, '测试'),
-      h(
-        'div',
-        { class: 'panel exam-setup' },
-        h('label', { class: 'setup-row' }, h('span', { class: 'setup-label' }, '题数'), countInput, ofText),
-        h(
-          'div',
-          { class: 'setup-row' },
-          h('span', { class: 'setup-label' }, '用什么回答'),
-          answerRadios.map(([, r, label]) => h('label', { class: 'toggle' }, r, ` ${label}`)),
-        ),
-        h(
-          'div',
-          { class: 'setup-row' },
-          h('span', { class: 'setup-label' }, '题型'),
-          Object.entries(typeBoxes).map(([t, b]) => h('label', { class: 'toggle' }, b, ` ${TYPE_NAMES[t]}`)),
-        ),
-        h(
-          'div',
-          { class: 'setup-row' },
-          h('span', { class: 'setup-label' }, '其他'),
-          h('label', { class: 'toggle', title: '括号里的可以不写、打错一两个字母也算对' }, smartBox, ' 智能判分 (容错)'),
-          starredCount ? h('label', { class: 'toggle' }, starBox, ` 只考星标 (${starredCount})`) : null,
-        ),
-        h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: start }, '开始测试')),
-      ),
-    );
-    window.scrollTo(0, 0);
+    dialog = openDialog({
+      title: '设置你的测试',
+      body: [
+        h('p', { class: 'muted dialog-sub' }, set.title || '未命名卡片集'),
+        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '问题', maxText)), countInput),
+        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '回答')), answerSelect),
+        ...typeRows,
+        switchRow({
+          label: '智能判分',
+          desc: '书面问题里括号里的可以不写、打错一两个字母也算对',
+          checked: draft.smart,
+          onchange: (v) => (draft.smart = v),
+        }),
+        starredCount
+          ? switchRow({
+              label: `只考星标 (${starredCount})`,
+              checked: draft.starredOnly,
+              onchange: (v) => {
+                draft.starredOnly = v;
+                refreshMax();
+              },
+            })
+          : null,
+      ].filter(Boolean),
+      footer: [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: start }, '开始测试')],
+      onClose: () => {
+        dialog = null;
+      },
+    });
+    countInput.focus();
+    countInput.select();
   }
 
   function poolCards() {
@@ -156,17 +160,27 @@ export function renderExam({ store }, id) {
   }
 
   // ---- 答卷 ----
+  let total = 0;
   function startExam(cards, count = prefs.count) {
     const exam = buildExam(cards, { ...prefs, count: Math.min(count, cards.length) }, set.cards);
+    total = exam.total;
     const answers = {};
     const started = Date.now();
-    const status = h('span', { class: 'counter' });
+    const progress = h('strong', { class: 'exam-count' });
+    const clockEl = h('span', { class: 'muted small' });
+    const navItems = new Map(); // 题号 → 左边列表里的按钮
+
     const updateStatus = () => {
-      status.textContent = `已答 ${countAnswered(exam, answers)} / ${exam.total} · ${clock(Date.now() - started)}`;
+      progress.textContent = `${countAnswered(exam, answers)} / ${exam.total}`;
+      clockEl.textContent = `用时 ${clock(Date.now() - started)}`;
     };
-    const set_ = (qid, value) => {
+    const setAnswer = (qid, value, { advance = false } = {}) => {
       answers[qid] = value;
+      const done = !(value === null || value === undefined || (typeof value === 'string' && !value.trim()));
+      navItems.get(num(qid))?.classList.toggle('done', done);
       updateStatus();
+      // 选了就跳到下一题 (跟 Quizlet 一样)
+      if (advance && done) setTimeout(() => goTo(num(qid) + 1), 250);
     };
 
     const sections = exam.sections.map((section) =>
@@ -174,8 +188,38 @@ export function renderExam({ store }, id) {
         'div',
         { class: 'exam-section' },
         h('h2', {}, `${TYPE_NAMES[section.type]} (${section.type === 'match' ? section.questions.reduce((n, g) => n + g.items.length, 0) : section.questions.length})`),
-        section.questions.map((q) => questionInput(section.type, q, set_)),
+        section.questions.map((q) => questionInput(section.type, q, setAnswer)),
       ),
+    );
+
+    const nav = h(
+      'nav',
+      { class: 'exam-nav', 'aria-label': '题目列表' },
+      exam.sections.map((section) => [
+        h('div', { class: 'nav-type muted small' }, TYPE_NAMES[section.type]),
+        h(
+          'div',
+          { class: 'nav-nums' },
+          section.questions
+            .flatMap((q) => (section.type === 'match' ? q.items : [q]))
+            .map((q) => {
+              const n = num(q.qid);
+              const b = h('button', { class: 'nav-num', title: `第 ${n} 题`, onclick: () => goTo(n) }, String(n));
+              navItems.set(n, b);
+              return b;
+            }),
+        ),
+      ]),
+    );
+    const navToggle = h(
+      'button',
+      {
+        class: 'icon-btn tool nav-toggle',
+        title: '题目列表',
+        'aria-label': '题目列表',
+        onclick: () => root.classList.toggle('nav-open'),
+      },
+      icon('list'),
     );
 
     const submit = () => {
@@ -183,13 +227,43 @@ export function renderExam({ store }, id) {
       if (left > 0 && !confirm(`还有 ${left} 题没答, 确定交卷?`)) return;
       clearInterval(timer);
       inProgress = null;
+      root.classList.remove('nav-open');
       showResult(exam, answers, Date.now() - started, cards);
     };
 
-    root.replaceChildren(
-      h('div', { class: 'cards-head sticky-head' }, h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`), status),
-      ...sections,
-      h('div', { class: 'row center exam-submit' }, h('button', { class: 'btn primary big-choice', onclick: submit }, '交卷')),
+    fill(
+      root,
+      h(
+        'div',
+        { class: 'exam-top' },
+        h('div', { class: 'row' }, navToggle, h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`)),
+        h('div', { class: 'exam-top-mid' }, progress, clockEl),
+        h(
+          'div',
+          { class: 'row exam-top-tools' },
+          h('button', { class: 'btn small', onclick: printExam }, '打印测试'),
+          h(
+            'button',
+            {
+              class: 'icon-btn tool',
+              title: '重新设置测试',
+              'aria-label': '重新设置测试',
+              onclick: () => {
+                if (countAnswered(exam, answers) && !confirm('重新设置会换一套卷子, 已经答的就没了。继续?')) return;
+                openSetup();
+              },
+            },
+            icon('gear'),
+          ),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'exam-body' },
+        nav,
+        h('div', { class: 'exam-questions' }, ...sections, h('div', { class: 'row center exam-submit' }, h('button', { class: 'btn primary big-choice', onclick: submit }, '交卷'))),
+      ),
+      answerKey(exam),
     );
     updateStatus();
     clearInterval(timer);
@@ -198,21 +272,89 @@ export function renderExam({ store }, id) {
     window.scrollTo(0, 0);
   }
 
-  // 题目: 解释那面当题目时带上图片
-  function promptBlock(q, n) {
-    const image = q.side === 'term' ? q.card.image : '';
+  // 跳到第 n 题 (没有了就跳到交卷)
+  function goTo(n) {
+    const el = root.querySelector(`[data-qn="${n}"]`) ?? root.querySelector('.exam-submit');
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = el.matches('input, select') ? el : el.querySelector('input[type=text], select');
+    input?.focus({ preventScroll: true });
+    root.classList.remove('nav-open');
+  }
+
+  // ---- 打印 ----
+  function printExam() {
+    const go = (withKey) => {
+      d.close();
+      document.body.classList.add('print-exam');
+      document.body.classList.toggle('print-key', withKey);
+      const done = () => {
+        document.body.classList.remove('print-exam', 'print-key');
+        window.removeEventListener('afterprint', done);
+      };
+      window.addEventListener('afterprint', done);
+      setTimeout(() => {
+        window.print();
+        // 有的浏览器不发 afterprint
+        setTimeout(done, 1000);
+      }, 50);
+    };
+    const d = openDialog({
+      title: '打印测试',
+      body: [h('p', {}, '把这套卷子打出来, 拿笔做。要不要在最后附上答案?')],
+      footer: [
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn', onclick: () => go(false) }, '只打印题目'),
+        h('button', { class: 'btn primary', onclick: () => go(true) }, '题目 + 答案'),
+      ],
+    });
+  }
+
+  // 答案 (平时藏着, 打印「题目 + 答案」时才出来)
+  function answerKey(exam) {
+    const items = [];
+    for (const section of exam.sections) {
+      for (const q of section.questions) {
+        if (section.type === 'match') {
+          for (const item of q.items) items.push([num(item.qid), `${LETTERS[q.options.indexOf(item.answer)]}. ${stripMarks(item.answer)}`]);
+        } else if (section.type === 'tf') {
+          items.push([num(q.qid), q.isTrue ? '对' : `错 (应该是: ${stripMarks(q.answer)})`]);
+        } else if (section.type === 'mc') {
+          items.push([num(q.qid), `${LETTERS[q.correctIndex]}. ${stripMarks(q.answer)}`]);
+        } else {
+          items.push([num(q.qid), stripMarks(q.answer)]);
+        }
+      }
+    }
     return h(
       'div',
-      { class: 'exam-prompt' },
-      h('span', { class: 'qnum' }, String(n)),
+      { class: 'answer-key' },
+      h('h2', {}, '答案'),
       h(
+        'ol',
+        {},
+        items.sort((a, b) => a[0] - b[0]).map(([n, text]) => h('li', { value: String(n) }, text)),
+      ),
+    );
+  }
+
+  // 题目: 左上角写给的是词还是解释, 右上角第几题; 解释那面当题目时带上图片
+  function promptBlock(q, n) {
+    const image = q.side === 'term' ? q.card.image : '';
+    return [
+      h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, q.side === 'def' ? '词' : '解释'), h('span', { class: 'muted small q-of' }, `${n}/${total}`)),
+      h(
+        'div',
+        { class: 'exam-prompt' },
+        h(
         'div',
         { class: 'q-text small' },
         cardImage(image, 'q-img small'),
         q.prompt.trim() ? rich(q.prompt) : image ? null : h('span', { class: 'muted' }, '(空)'),
+        ),
+        sayButton(q.card, otherSide(q.side), set),
       ),
-      sayButton(q.card, otherSide(q.side), set),
-    );
+    ];
   }
 
   const num = (qid) => Number(qid.slice(1));
@@ -225,7 +367,7 @@ export function renderExam({ store }, id) {
           {
             class: 'input',
             'aria-label': `第 ${num(item.qid)} 题的答案`,
-            onchange: (e) => setAnswer(item.qid, e.target.value === '' ? null : Number(e.target.value)),
+            onchange: (e) => setAnswer(item.qid, e.target.value === '' ? null : Number(e.target.value), { advance: true }),
           },
           h('option', { value: '' }, '—'),
           q.options.map((_, i) => h('option', { value: String(i) }, LETTERS[i])),
@@ -234,7 +376,7 @@ export function renderExam({ store }, id) {
       return h(
         'div',
         { class: 'exam-q match-group' },
-        h('p', { class: 'muted small' }, `给每一题选对的${q.side === 'def' ? '解释' : '词'}`),
+        h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, `给每一题选对的${q.side === 'def' ? '解释' : '词'}`), h('span', { class: 'muted small q-of' }, `${num(q.items[0].qid)}–${num(q.items.at(-1).qid)}/${total}`)),
         h(
           'div',
           { class: 'match-cols' },
@@ -242,7 +384,7 @@ export function renderExam({ store }, id) {
             'ol',
             { class: 'match-prompts' },
             q.items.map((item, i) =>
-              h('li', {}, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'), selects[i]),
+              h('li', { dataset: { qn: String(num(item.qid)) } }, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'), selects[i]),
             ),
           ),
           h(
@@ -269,7 +411,7 @@ export function renderExam({ store }, id) {
               }
               buttons[v ? 0 : 1].classList.add('picked');
               buttons[v ? 0 : 1].setAttribute('aria-pressed', 'true');
-              setAnswer(q.qid, v);
+              setAnswer(q.qid, v, { advance: true });
             },
           },
           v ? '✓ 对' : '✗ 错',
@@ -277,7 +419,7 @@ export function renderExam({ store }, id) {
       );
       return h(
         'div',
-        { class: 'exam-q' },
+        { class: 'exam-q', dataset: { qn: String(num(q.qid)) } },
         promptBlock(q, num(q.qid)),
         h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, `${answerName}对吗?`), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)')),
         h('div', { class: 'options-grid two' }, buttons),
@@ -297,18 +439,18 @@ export function renderExam({ store }, id) {
               }
               buttons[i].classList.add('picked');
               buttons[i].setAttribute('aria-pressed', 'true');
-              setAnswer(q.qid, i);
+              setAnswer(q.qid, i, { advance: true });
             },
           },
           h('span', { class: 'key' }, LETTERS[i]),
           h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
         ),
       );
-      return h('div', { class: 'exam-q' }, promptBlock(q, num(q.qid)), h('div', { class: 'options-grid' }, buttons));
+      return h('div', { class: 'exam-q', dataset: { qn: String(num(q.qid)) } }, promptBlock(q, num(q.qid)), h('div', { class: 'options-grid' }, buttons));
     }
     return h(
       'div',
-      { class: 'exam-q' },
+      { class: 'exam-q', dataset: { qn: String(num(q.qid)) } },
       promptBlock(q, num(q.qid)),
       h('input', {
         class: 'input',
@@ -323,8 +465,7 @@ export function renderExam({ store }, id) {
           // 回车跳到下一题
           if (e.key === 'Enter' && !e.isComposing) {
             e.preventDefault();
-            const all = [...root.querySelectorAll('.exam-q input[type=text]')];
-            all[all.indexOf(e.target) + 1]?.focus();
+            goTo(num(q.qid) + 1);
           }
         },
       }),
@@ -356,7 +497,7 @@ export function renderExam({ store }, id) {
         actions,
         missed.length ? h('button', { class: 'btn primary', onclick: () => startExam(missed, missed.length) }, `只考错的 ${missed.length} 题`) : null,
         h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: () => startExam(cards) }, '再考一次 (换题)'),
-        h('button', { class: 'btn', onclick: showSetup }, '改设置'),
+        h('button', { class: 'btn', onclick: openSetup }, '改设置'),
         h('a', { class: 'btn', href: base }, '回到卡片集'),
       );
     }
@@ -420,7 +561,7 @@ export function renderExam({ store }, id) {
     const r = byQid[q.qid];
     const given = answers[q.qid];
     const box = h('div', { class: `exam-q reviewed ${r.correct ? 'right' : 'wrong'}` });
-    const head = h('div', { class: 'review-head' }, mark(r.correct), promptBlock(q, num(q.qid)));
+    const head = h('div', { class: 'review-head' }, mark(r.correct), h('div', { class: 'review-prompt' }, promptBlock(q, num(q.qid))));
     const parts = [head];
 
     if (type === 'tf') {
@@ -495,7 +636,9 @@ export function renderExam({ store }, id) {
     );
   }
 
-  showSetup();
+  // 跟 Quizlet 一样: 先按上次的设置出一套卷子, 设置窗口盖在上面
+  startExam(poolCards());
+  openSetup();
 
   return {
     title: `测试 · ${set.title}`,
@@ -504,6 +647,7 @@ export function renderExam({ store }, id) {
     canLeave: () => !inProgress?.() || confirm('卷子还没交, 确定要走吗?'),
     cleanup: () => {
       clearInterval(timer);
+      dialog?.close();
       stopSpeaking();
     },
   };
