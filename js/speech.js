@@ -3,6 +3,7 @@
 
 import { stripMarks } from './rich.js';
 import { mediaURL } from './media.js';
+import { primeAudio } from './unlock.js';
 
 export const LANGS = [
   ['auto', '自动'],
@@ -39,31 +40,69 @@ export function canSpeak() {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
-let playing = null;
+let playing = null; // 正在放的录音
+let current = null; // 正在念的那一句 (留着引用: iOS 上不留, 可能念到一半就被回收、没声了)
 
 function stopAll() {
   playing?.pause();
   playing = null;
+  current = null;
   if (canSpeak()) window.speechSynthesis.cancel();
+}
+
+// iPhone、iPad (所有浏览器都是 Safari 的内核) 和电脑上的 Safari
+function isAppleWebKit() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  if (/iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return true;
+  return /safari/i.test(ua) && !/chrome|chromium|crios|fxios|edg|android/i.test(ua);
+}
+
+// 选哪个声音。苹果的: 不选, 只告诉它语言, 用系统默认的声音
+// (列表里有些声音其实用不了, 比如没下载的、Siri 的, 选上了一点声音都没有)。
+// 别的浏览器: 有的光设语言不够, 要选一个; 先挑本机就有的 (安卓写成 en_US)
+function pickVoice(synth, code) {
+  if (isAppleWebKit()) return null;
+  const base = code.split('-')[0];
+  const voices = synth.getVoices().map((v) => [v, v.lang.replace('_', '-')]);
+  const exact = voices.filter(([, l]) => l === code);
+  const near = voices.filter(([, l]) => l.split('-')[0] === base);
+  return (exact.find(([v]) => v.localService) ?? exact[0] ?? near.find(([v]) => v.localService) ?? near[0])?.[0] ?? null;
 }
 
 // rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」)
 export function speak(raw, lang = 'auto', { rate = 1 } = {}) {
   const text = stripMarks(raw);
   if (!canSpeak() || !text.trim()) return;
-  stopAll();
+  primeAudio(); // iPhone 静音开关开着也要有声
+  playing?.pause();
+  playing = null;
   const synth = window.speechSynthesis;
   const u = new SpeechSynthesisUtterance(text);
   const code = lang === 'auto' ? guessLang(text) : lang;
   u.lang = code;
   u.rate = rate;
-  // 有这个语言的声音就用它 (有的浏览器光设 lang 不够; 安卓写成 en_US)
-  const base = code.split('-')[0];
-  const voices = synth.getVoices().map((v) => [v, v.lang.replace('_', '-')]);
-  const voice =
-    voices.find(([, l]) => l === code)?.[0] ?? voices.find(([, l]) => l.startsWith(base))?.[0];
-  if (voice) u.voice = voice;
-  synth.speak(u);
+  try {
+    const voice = pickVoice(synth, code);
+    if (voice) u.voice = voice;
+  } catch {
+    // 选不了就用默认的声音
+  }
+  u.onend = u.onerror = () => {
+    if (current === u) current = null;
+  };
+  const busy = current && (synth.speaking || synth.pending);
+  current = u;
+  const go = () => {
+    if (current !== u) return; // 这期间又点了别的
+    synth.resume?.(); // iOS 有时会把朗读卡在「暂停」
+    synth.speak(u);
+  };
+  // 正在念上一句: 先停, 隔一下再念 (停了马上念, iOS 上会没声)。没在念就直接念 (要在点的那一下里念, iOS 才让出声)
+  if (busy) {
+    synth.cancel();
+    setTimeout(go, 80);
+  } else go();
 }
 
 // 念卡片的一面 (side 是 'term' 或 'def'): 有录音放录音, 没有就朗读

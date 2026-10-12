@@ -42,6 +42,7 @@ import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
+import { installAudioUnlock } from './unlock.js';
 
 const store = new Store();
 let lastSaveError = 0;
@@ -222,5 +223,6 @@ try {
   // 删不掉就算了
 }
 
+installAudioUnlock(); // iPhone: 第一次点屏幕时把声音解锁
 render();
 syncer.start();
