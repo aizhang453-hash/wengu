@@ -201,6 +201,7 @@ function welcome() {
         h('li', {}, '「词和解释之间」选 Tab, 「卡片之间」选换行 (默认就是这样), 点「复制文字」'),
         h('li', {}, '回到这里点「导入」, 粘贴进去, 点「加进来」, 再保存'),
       ),
+      h('p', { class: 'muted small' }, '更省事: 装一个 ', h('a', { href: '#/quizlet' }, '「一键搬」书签'), ', 在 Quizlet 的卡片集页面上点一下就搬过来。'),
       h('p', { class: 'muted small' }, '用 Excel 或者 Anki 的: 点「导入」里的「选文件」, 选 .xlsx、.csv 或者 Anki 卡组 (.apkg)。'),
     ),
   );

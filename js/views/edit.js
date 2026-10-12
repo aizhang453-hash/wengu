@@ -398,6 +398,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       'p',
       { class: 'muted small' },
       '或者粘贴文字: 在 Quizlet 上打开卡片集, 点「…」→「导出」→「复制文字」, 再粘贴到下面。Excel、Word 里一列词一列解释的表格, 复制过来也行。',
+      ' ',
+      h('a', { href: '#/quizlet' }, '别人的卡片集也想搬? 用「一键搬」书签 →'),
     ),
     pasteEl,
     h('div', { class: 'sep-groups' }, termSepGroup.el, cardSepGroup.el),

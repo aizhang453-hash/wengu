@@ -3696,6 +3696,32 @@ a.card-row.search-hit:hover {
   margin: 20px auto;
 }
 
+/* ---- 从 Quizlet 一键搬 ---- */
+.quizlet-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.quizlet-page .steps li,
+.quizlet-page .notes li {
+  margin: 8px 0;
+  line-height: 1.7;
+}
+
+.quizlet-page kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.85em;
+}
+
+.bookmarklet {
+  cursor: grab;
+}
+
 /* ---- 分享 ---- */
 .share-page {
   max-width: 820px;

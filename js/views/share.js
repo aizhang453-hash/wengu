@@ -6,6 +6,7 @@ import { qrSvg } from '../qr.js';
 import { makeCard } from '../store.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { rich } from '../cardview.js';
+import { normalizeLang } from '../speech.js';
 
 export async function openShareDialog(set) {
   const code = await encodeShare(set);
@@ -82,7 +83,7 @@ export function renderShareImport({ store, go }, code) {
             cards.push(makeCard(c.term, c.def, { image }));
           }
           try {
-            const set = store.putSet({ title: data.title || '分享的卡片集', description: data.description, termLang: data.termLang, defLang: data.defLang, cards });
+            const set = store.putSet({ title: data.title || '分享的卡片集', description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), cards });
             toast(imageFailed ? `导入好了 (${imageFailed} 张图片拿不到)` : '导入好了');
             go(`#/set/${encodeURIComponent(set.id)}`);
           } catch {
@@ -96,7 +97,7 @@ export function renderShareImport({ store, go }, code) {
     fill(root, 
       h('h1', {}, data.title || '分享的卡片集'),
       data.description ? h('p', { class: 'description' }, data.description) : null,
-      h('p', { class: 'muted' }, `别人分享给你的卡片集, ${data.cards.length} 张卡片${withImages ? `, ${withImages} 张带图片` : ''}。导入以后就是你自己的, 可以随便改。`),
+      h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '从 Quizlet 读到的卡片集' : '别人分享给你的卡片集'}, ${data.cards.length} 张卡片${withImages ? `, ${withImages} 张带图片` : ''}。导入以后就是你自己的, 可以随便改。`),
       h('div', { class: 'row' }, btn, h('a', { class: 'btn', href: '#/' }, '不要')),
       h('h2', {}, '前面几张'),
       h(

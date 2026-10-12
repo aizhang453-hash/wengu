@@ -4,6 +4,7 @@
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
 //   #/share/<..>          打开别人分享的卡片集
+//   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
@@ -37,6 +38,7 @@ import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
+import { renderQuizlet } from './views/quizlet.js';
 import { SyncManager } from './sync.js';
 
 const store = new Store();
@@ -61,6 +63,7 @@ function parse(hash) {
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
+  if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
@@ -117,6 +120,7 @@ function render() {
   else if (route.page === 'review') view = renderReview(ctx, route.id);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
+  else if (route.page === 'quizlet') view = renderQuizlet(ctx);
   else view = missing();
 
   view.page = route.page;

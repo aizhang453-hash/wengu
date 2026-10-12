@@ -18,6 +18,7 @@ test('分享: 编码再解码, 文字都在 (本机的图片不带)', async () =
   assert.equal(back.title, set.title);
   assert.equal(back.description, '第一单元');
   assert.equal(back.termLang, 'en-US');
+  assert.equal(back.from, '');
   assert.equal(back.cards.length, 50);
   assert.deepEqual(back.cards[7], { term: 'word7', def: '意思 7, 还有逗号' });
 });

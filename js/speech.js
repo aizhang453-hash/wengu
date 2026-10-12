@@ -17,6 +17,14 @@ export const LANGS = [
   ['ru-RU', '俄语'],
 ];
 
+// 别处来的语言代码 (Quizlet 的 en、es、zh-TW……) 换成上面有的; 没有的当「自动」
+export function normalizeLang(code) {
+  const c = String(code ?? '').trim();
+  if (LANGS.some(([k]) => k === c)) return c;
+  const base = c.split(/[-_]/)[0].toLowerCase();
+  return LANGS.find(([k]) => k !== 'auto' && k.split('-')[0] === base)?.[0] ?? 'auto';
+}
+
 // 「自动」时看字猜: 有假名是日语, 有谚文是韩语, 有汉字是中文,
 // 有西里尔字母是俄语, 别的当英语
 export function guessLang(text) {

@@ -36,7 +36,8 @@ export async function encodeShare(set) {
   return `j${toB64url(bytes)}`;
 }
 
-// 返回 { title, description, termLang, defLang, cards: [{ term, def, imageUrl? }] }; 坏了返回 null
+// 返回 { title, description, termLang, defLang, from, cards: [{ term, def, imageUrl? }] }; 坏了返回 null
+// from: 'quizlet' 是「一键搬」书签从 Quizlet 读来的, 不然是空的
 export async function decodeShare(text) {
   try {
     const kind = text[0];
@@ -51,6 +52,7 @@ export async function decodeShare(text) {
       description: str(p.d),
       termLang: str(p.l?.[0]) || 'auto',
       defLang: str(p.l?.[1]) || 'auto',
+      from: p.f === 'quizlet' ? 'quizlet' : '',
       cards: p.c
         .filter(Array.isArray)
         .map(([term, def, imageUrl]) => ({ term: str(term), def: str(def), ...(/^https:\/\//.test(str(imageUrl)) ? { imageUrl } : {}) }))
