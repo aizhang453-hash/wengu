@@ -2,7 +2,7 @@
 
 import { h, toast, download, openDialog, switchRow } from '../dom.js';
 import { formatCards } from '../parse.js';
-import { pickDistinct, formatTime } from '../games.js';
+import { gameModes } from './gamelist.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { printSet } from '../print.js';
@@ -89,13 +89,7 @@ export function renderSet({ store, go }, id) {
   );
 
   // 游戏 (Quizlet 的「通过有趣的游戏掌握所学内容」)
-  const canPlay = pickDistinct(set.cards, 2).length >= 2;
-  const games = h(
-    'div',
-    { class: 'modes games' },
-    mode('🧩 配对', set.best.match ? `最好 ${formatTime(set.best.match)}` : '把词和解释配起来, 比谁快', `${base}/match`, canPlay, '至少要两张不一样的卡片'),
-    mode('☄️ 打陨石', set.best.blast ? `最高 ${set.best.blast} 分` : '打中写着对的答案的陨石', `${base}/blast`, canPlay, '至少要两张不一样的卡片'),
-  );
+  const games = gameModes(set, base);
 
   const actions = h(
     'div',

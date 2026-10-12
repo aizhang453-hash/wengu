@@ -30,7 +30,7 @@ export const FOLDER_PREFIX = 'folder:';
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
 //   stats: { 卡片 id: { right, wrong, interval, ease, due } }  答对答错几次, 下次哪天复习 (srs.js)
-//   best: { match: 毫秒, blast: 分 }       游戏最好成绩
+//   best: { match: 毫秒, blast / blocks / gems: 分, wordle: 最长连胜 }  游戏最好成绩
 //   createdAt, updatedAt }
 export function makeSet(fields = {}) {
   const now = Date.now();
@@ -112,7 +112,7 @@ function cleanSet(raw) {
 
 function cleanBest(raw) {
   const best = {};
-  for (const key of ['match', 'blast']) {
+  for (const key of ['match', 'blast', 'blocks', 'gems', 'wordle']) {
     const v = Number(raw?.[key]);
     if (Number.isFinite(v) && v > 0) best[key] = v;
   }
@@ -393,7 +393,7 @@ export class Store {
     this.save();
   }
 
-  // 游戏成绩: 配对比谁快 (越小越好), 打陨石比分高 (越大越好)。破纪录返回 true
+  // 游戏成绩: 配对比谁快 (越小越好), 别的越大越好。破纪录返回 true
   recordBest(setId, game, value) {
     // 合起来学时, 成绩记在文件夹上
     const folderId = String(setId).startsWith(FOLDER_PREFIX) ? String(setId).slice(FOLDER_PREFIX.length) : null;

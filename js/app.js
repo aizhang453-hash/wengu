@@ -12,6 +12,9 @@
 //   #/set/<id>/test       测试
 //   #/set/<id>/match      配对游戏
 //   #/set/<id>/blast      打陨石游戏
+//   #/set/<id>/blocks     方块游戏
+//   #/set/<id>/gems       宝石游戏
+//   #/set/<id>/wordle     Wordle
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
@@ -24,6 +27,9 @@ import { renderLearn } from './views/learn.js';
 import { renderExam } from './views/exam.js';
 import { renderMatch } from './views/match.js';
 import { renderBlast } from './views/blast.js';
+import { renderBlocks } from './views/blocks.js';
+import { renderGems } from './views/gems.js';
+import { renderWordle } from './views/wordle.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
@@ -60,6 +66,9 @@ function parse(hash) {
     if (sub === 'test') return { page: 'test', id: parts[1] };
     if (sub === 'match') return { page: 'match', id: parts[1] };
     if (sub === 'blast') return { page: 'blast', id: parts[1] };
+    if (sub === 'blocks') return { page: 'blocks', id: parts[1] };
+    if (sub === 'gems') return { page: 'gems', id: parts[1] };
+    if (sub === 'wordle') return { page: 'wordle', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -93,6 +102,9 @@ function render() {
   else if (route.page === 'test') view = renderExam(ctx, route.id);
   else if (route.page === 'match') view = renderMatch(ctx, route.id);
   else if (route.page === 'blast') view = renderBlast(ctx, route.id);
+  else if (route.page === 'blocks') view = renderBlocks(ctx, route.id);
+  else if (route.page === 'gems') view = renderGems(ctx, route.id);
+  else if (route.page === 'wordle') view = renderWordle(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);

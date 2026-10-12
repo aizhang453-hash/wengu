@@ -2,7 +2,7 @@
 
 import { h, toast, openDialog, askText, switchRow } from '../dom.js';
 import { FOLDER_PREFIX, makeFolder } from '../store.js';
-import { pickDistinct, formatTime } from '../games.js';
+import { gameModes } from './gamelist.js';
 import { dueCards } from '../srs.js';
 
 export function renderFolder({ store, go }, id) {
@@ -23,7 +23,6 @@ export function renderFolder({ store, go }, id) {
     enabled
       ? h('a', { class: 'mode', href }, h('span', { class: 'mode-name' }, name), h('span', { class: 'muted small' }, hint))
       : h('div', { class: 'mode disabled', 'aria-disabled': 'true' }, h('span', { class: 'mode-name' }, name), h('span', { class: 'muted small' }, '先放卡片集进来'));
-  const canPlay = pickDistinct(combo.cards, 2).length >= 2;
 
   function addSets() {
     const others = store.allSets();
@@ -108,9 +107,9 @@ export function renderFolder({ store, go }, id) {
         mode('单词卡', '翻面背, 标记会不会', `${base}/cards`, total > 0),
         mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
         mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
-        mode('🧩 配对', folder.best.match ? `最好 ${formatTime(folder.best.match)}` : '把词和解释配起来', `${base}/match`, canPlay),
-        mode('☄️ 打陨石', folder.best.blast ? `最高 ${folder.best.blast} 分` : '打中对的答案', `${base}/blast`, canPlay),
       ),
+      h('h2', { class: 'games-title' }, '用游戏来记'),
+      gameModes(combo, base),
       h(
         'div',
         { class: 'row' },

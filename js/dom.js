@@ -79,15 +79,15 @@ export function today() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// 弹出窗口 (设置用)。点外面、按 Esc、点 ✕ 都会关。返回 { el, close }
-export function openDialog({ title, body, footer = null, onClose = null }) {
+// 弹出窗口 (设置用)。点外面、按 Esc、点 ✕ 都会关; closable: false 时只能用里面的按钮关。返回 { el, close }
+export function openDialog({ title, body, footer = null, onClose = null, closable = true }) {
   const dialog = h(
     'dialog',
     { class: 'dialog', 'aria-label': title },
     h(
       'div',
       { class: 'dialog-inner' },
-      h('div', { class: 'dialog-head' }, h('h2', {}, title), h('button', { class: 'icon-btn', 'aria-label': '关闭', onclick: () => close() }, '✕')),
+      h('div', { class: 'dialog-head' }, h('h2', {}, title), closable ? h('button', { class: 'icon-btn', 'aria-label': '关闭', onclick: () => close() }, '✕') : null),
       h('div', { class: 'dialog-body' }, body),
       footer ? h('div', { class: 'dialog-foot' }, footer) : null,
     ),
@@ -101,8 +101,9 @@ export function openDialog({ title, body, footer = null, onClose = null }) {
   });
   // 点到窗口外面的灰色地方
   dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) close();
+    if (closable && e.target === dialog) close();
   });
+  if (!closable) dialog.addEventListener('cancel', (e) => e.preventDefault()); // 不让 Esc 关
   document.body.append(dialog);
   dialog.showModal();
   return { el: dialog, close };
