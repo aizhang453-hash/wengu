@@ -4,6 +4,8 @@
 
 import { h, shuffled, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { editButton, editCardDialog } from './cardedit.js';
+import { diagramFigure } from './diagram.js';
+import { pinOf } from '../diagram.js';
 import { canSpeak, sayCard, stopSpeaking } from '../speech.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
@@ -345,7 +347,8 @@ export function renderCards({ store }, id) {
   // 卡片的一面 (side: 'term' / 'def'; 图片在解释那面)。hintFor 是背面的答案, 只有正面给「显示提示」
   function face(card, side, hintFor) {
     const text = card[side];
-    const image = side === 'def' ? card.image : '';
+    const pinned = side === 'def' && Boolean(pinOf(set, card.id)); // 标注图上的点, 在解释那面显示
+    const image = side === 'def' ? card.image || (pinned ? 'diagram' : '') : '';
     const starred = set.starred.includes(card.id);
     const hintEl = h('div', { class: 'hint-text', hidden: !(hint && hintFor) }, hintFor ? hintOf(hintFor) : '');
     const tools = h(
@@ -398,7 +401,8 @@ export function renderCards({ store }, id) {
       h(
         'div',
         { class: `face-text${size}${image ? ' with-image' : ''}` },
-        cardImage(image, 'face-img'),
+        card.image && side === 'def' ? cardImage(card.image, 'face-img') : null,
+        pinned ? diagramFigure(set, { highlight: card.id, labels: 'none', size: 'small' }) : null,
         text.trim() ? rich(text) : image ? null : h('span', { class: 'muted' }, '(空)'),
       ),
       hintEl,

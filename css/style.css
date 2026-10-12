@@ -3812,3 +3812,177 @@ a.card-row.search-hit:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- 标注图 ---- */
+.diagram {
+  text-align: center;
+}
+
+.diagram-box {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  vertical-align: top;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.diagram-img {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 640px);
+  height: auto;
+  border-radius: var(--radius);
+  pointer-events: none;
+}
+
+.diagram.small .diagram-img {
+  max-height: 170px;
+}
+
+.diagram-box.pickable,
+.diagram-box.editing {
+  cursor: crosshair;
+}
+
+.diagram-box.placing {
+  outline: 3px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--radius);
+}
+
+.pin {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  color: #fff;
+  font: 700 0.8rem/1 system-ui, sans-serif;
+  transform: translate(-50%, -50%);
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+button.pin {
+  cursor: pointer;
+}
+
+.diagram-box.editing .pin {
+  cursor: grab;
+  touch-action: none;
+}
+
+.diagram.small .pin {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.pin.on {
+  z-index: 2;
+  background: #f5b400;
+  transform: translate(-50%, -50%) scale(1.35);
+  animation: pin-pulse 1.4s ease-in-out infinite;
+}
+
+.pin.dim {
+  opacity: 0.45;
+}
+
+.pin.right {
+  z-index: 2;
+  background: var(--good);
+}
+
+.pin.wrong {
+  z-index: 2;
+  background: var(--bad);
+}
+
+.pin-label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+@keyframes pin-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgb(245 180 0 / 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin.on {
+    animation: none;
+  }
+}
+
+.diagram-section {
+  margin: 24px 0;
+}
+
+.diagram-caption {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.diagram-q .diagram {
+  margin: 8px 0 14px;
+}
+
+.diagram-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.diagram-quick .input {
+  flex: 1 1 180px;
+  width: auto;
+}
+
+.import-box .diagram-quick .btn {
+  margin-top: 0;
+}
+
+.edit-diagram {
+  margin-top: 6px;
+}
+
+.pin-badge {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.diagram-q .diagram-img {
+  max-height: min(46vh, 440px);
+}
+
+.diagram.locate .pin:not(.right):not(.wrong) {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--accent);
+  background: #fff;
+}

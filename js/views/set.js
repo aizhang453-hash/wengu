@@ -6,6 +6,8 @@ import { gameModes } from './gamelist.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
+import { diagramSection } from './diagram.js';
+import { pinnedCards } from '../diagram.js';
 import { printSet } from '../print.js';
 import { openShareDialog } from './share.js';
 import { openExportDialog } from './export.js';
@@ -41,6 +43,7 @@ export function renderSet({ store, go }, id) {
 
   function drawList() {
     const starred = new Set(set.starred);
+    const pinNumber = new Map(pinnedCards(set).map((p) => [p.cardId, p.number]));
     filterStar.textContent = `★ 星标 (${starred.size})`;
     const cards = onlyStarred ? set.cards.filter((c) => starred.has(c.id)) : set.cards;
     listEl.replaceChildren(
@@ -73,6 +76,7 @@ export function renderSet({ store, go }, id) {
               h(
                 'div',
                 { class: 'card-row-tools' },
+                pinNumber.has(card.id) ? h('span', { class: 'pin-badge', title: '标注图上的点' }, `📍${pinNumber.get(card.id)}`) : null,
                 levelBadge(set.learn[card.id]),
                 editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: drawList })),
                 star,
@@ -90,6 +94,7 @@ export function renderSet({ store, go }, id) {
     mode('单词卡', '翻面背, 标记会不会', `${base}/cards`, total > 0),
     mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
     mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
+    pinnedCards(set).length >= 2 ? mode('标注图', '这是哪个? 在图上找出来', `${base}/diagram`, true) : null,
   );
 
   // 游戏 (Quizlet 的「通过有趣的游戏掌握所学内容」)
@@ -215,6 +220,7 @@ export function renderSet({ store, go }, id) {
       h('h2', { class: 'games-title' }, '用游戏来记'),
       games,
       actions,
+      set.virtual ? null : diagramSection(set),
       h(
         'div',
         { class: 'list-head' },

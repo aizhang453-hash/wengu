@@ -68,10 +68,15 @@ export function mediaIdsOf(card) {
   return [card.image, card.termAudio, card.defAudio].filter(Boolean);
 }
 
+// 一个卡片集用到的: 卡片上的, 加上标注图的图
+export function setMediaIds(set) {
+  return [...set.cards.flatMap(mediaIdsOf), set.diagram?.image].filter(Boolean);
+}
+
 // 没有卡片用的图片、录音删掉, 省地方
 export async function cleanMedia(store) {
   try {
-    const used = new Set(store.data.sets.flatMap((set) => set.cards.flatMap(mediaIdsOf)));
+    const used = new Set(store.data.sets.flatMap(setMediaIds));
     const d = await db();
     const old = await new Promise((resolve, reject) => {
       const out = [];

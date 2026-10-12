@@ -10,6 +10,7 @@ import { putMedia, mediaURL, shrinkImage, cleanMedia } from '../media.js';
 import { canRecord, record } from '../recorder.js';
 import { cardImage } from '../cardview.js';
 import { fileImportPanel } from './fileimport.js';
+import { diagramEditor } from './diagram.js';
 
 const FORMATS = [
   ['bold', 'B', '加粗 (Ctrl+B)'],
@@ -106,6 +107,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       },
     });
     const row = { id: card.id, termEl, defEl, image: card.image ?? '', termAudio: card.termAudio ?? '', defAudio: card.defAudio ?? '', li: null };
+    row.pinSlot = h('span', { class: 'pin-slot' });
 
     // 图片 (解释那面)
     const imageSlot = h('span', { class: 'media-slot' });
@@ -165,7 +167,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         { class: 'side-tools' },
         micBtns[side],
         audioSlots[side],
-        side === 'def' ? [imageBtn, fileInput, imageSlot] : null,
+        side === 'def' ? [imageBtn, fileInput, imageSlot] : row.pinSlot,
         h(
           'span',
           { class: 'fmt' },
@@ -226,6 +228,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
             rows.splice(rows.indexOf(row), 1);
             row.li.remove();
             if (rows.length === 0) addRow();
+            diagramChanged();
             markDirty();
           },
         },
@@ -235,6 +238,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     rows.push(row);
     rowsEl.append(row.li);
     row.drawMedia();
+    drawPin(row);
     if (grow) autoGrowAll([termEl, defEl]);
     if (focus) termEl.focus();
     return row;
@@ -299,9 +303,169 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     }
   }
 
+  // ---- 标注图 (可以不用): 一张图, 图上的点各是一张卡片 ----
+  let editor = null; // 有图的时候是 diagramEditor
+  const quick = h('div', { class: 'diagram-quick', hidden: true });
+  const diagramBody = h('div', {});
+  const diagramFile = h('input', {
+    type: 'file',
+    accept: 'image/*',
+    hidden: true,
+    onchange: async () => {
+      const file = diagramFile.files?.[0];
+      diagramFile.value = '';
+      if (!file) return;
+      try {
+        const image = await putMedia(await shrinkImage(file, 1600));
+        if (draft.diagram) draft.diagram.image = image;
+        else draft.diagram = { image, pins: [] };
+      } catch {
+        toast('图片存不进去, 可能浏览器空间满了');
+        return;
+      }
+      buildDiagram();
+      markDirty();
+    },
+  });
+  const diagramBox = h('details', { class: 'import-box diagram-edit-box', open: Boolean(draft.diagram) }, h('summary', {}, '标注图 (可以不用)'), diagramBody);
+
+  function drawPin(row) {
+    if (!editor) {
+      fill(row.pinSlot);
+      return;
+    }
+    const n = editor.numberOf(row.id);
+    fill(
+      row.pinSlot,
+      n
+        ? h(
+            'span',
+            { class: 'media-chip pin-chip' },
+            h('button', { class: 'chip-play', type: 'button', title: '在图上看', onclick: () => (diagramBox.scrollIntoView({ block: 'center', behavior: 'smooth' }), showQuick(row.id)) }, `📍 ${n}`),
+            h('button', { class: 'chip-x', type: 'button', title: '从图上去掉这个点', 'aria-label': '从图上去掉这个点', onclick: () => editor.unpin(row.id) }, '✕'),
+          )
+        : h('button', { class: 'tool-btn', type: 'button', title: '在标注图上放一个点', onclick: () => editor.place(row.id) }, '📍 标到图上'),
+    );
+  }
+
+  function diagramChanged() {
+    editor?.redraw();
+    rows.forEach(drawPin);
+  }
+
+  // 刚放的点 (或者点了一个点): 图下面直接写它叫什么, 不用往下翻
+  function showQuick(id) {
+    const r = rows.find((x) => x.id === id);
+    if (!r || !editor) return;
+    const n = editor.numberOf(id);
+    const done = () => {
+      quick.hidden = true;
+      editor.redraw();
+    };
+    const t = h('input', {
+      class: 'input',
+      value: r.termEl.value,
+      placeholder: '这个点是什么 (词)',
+      'aria-label': `第 ${n} 个点: 词`,
+      oninput: () => {
+        r.termEl.value = t.value;
+        autoGrow(r.termEl);
+        markDirty();
+      },
+      onkeydown: (e) => {
+        if (e.key === 'Enter' && !e.isComposing) {
+          e.preventDefault();
+          d.focus();
+        }
+      },
+    });
+    const d = h('input', {
+      class: 'input',
+      value: r.defEl.value,
+      placeholder: '解释 (可以不写)',
+      'aria-label': `第 ${n} 个点: 解释`,
+      oninput: () => {
+        r.defEl.value = d.value;
+        autoGrow(r.defEl);
+        markDirty();
+      },
+      onkeydown: (e) => {
+        if (e.key === 'Enter' && !e.isComposing) {
+          e.preventDefault();
+          done();
+        }
+      },
+    });
+    fill(quick, h('strong', { class: 'quick-num' }, `📍 ${n}`), t, d, h('button', { class: 'btn small', type: 'button', onclick: done }, '好了'));
+    quick.hidden = false;
+    t.focus();
+  }
+
+  function buildDiagram() {
+    quick.hidden = true;
+    if (!draft.diagram) {
+      editor = null;
+      fill(
+        diagramBody,
+        h('p', { class: 'muted small' }, '地图、人体、零件图……传一张图, 在图上标出要考的地方, 每个点是一张卡片。练习时会问「这是哪个?」, 也会让你在图上找出来。'),
+        h('button', { class: 'btn', type: 'button', onclick: () => diagramFile.click() }, '加一张图'),
+        diagramFile,
+      );
+      rows.forEach(drawPin);
+      return;
+    }
+    editor = diagramEditor({
+      diagram: draft.diagram,
+      rows: () => rows.map((r) => ({ id: r.id, label: r.termEl.value.trim() })),
+      addCard: () => {
+        // 先用空着的行, 没有再加一行
+        const free = rows.find((r) => isBlank(r) && !editor.numberOf(r.id)) ?? addRow(makeCard(), { grow: true });
+        return free.id;
+      },
+      focusCard: showQuick,
+      onChange: () => {
+        rows.forEach(drawPin);
+        markDirty();
+      },
+    });
+    fill(
+      diagramBody,
+      editor.el,
+      quick,
+      h(
+        'div',
+        { class: 'row' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => diagramFile.click() }, '换一张图'),
+        h(
+          'button',
+          {
+            class: 'btn small danger',
+            type: 'button',
+            onclick: () => {
+              if (!confirm('不要标注图了? 图上的点去掉, 卡片还在。')) return;
+              draft.diagram = null;
+              buildDiagram();
+              markDirty();
+            },
+          },
+          '不要标注图',
+        ),
+        diagramFile,
+      ),
+    );
+    rows.forEach(drawPin);
+  }
+
+  // Esc 取消「标到图上」
+  const onEsc = (e) => {
+    if (e.key === 'Escape' && editor?.cancelPlacing()) e.preventDefault();
+  };
+  document.addEventListener('keydown', onEsc);
+
   for (const card of draft.cards) addRow(card, { grow: false });
   // 新建时先给几行空的
   while (rows.length < (existing ? 1 : 3)) addRow();
+  buildDiagram();
 
   // ---- 导入 ----
   let sepTouched = false;
@@ -575,6 +739,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       h('button', { class: 'btn small', onclick: swapAll, title: '所有卡片的词和解释对调' }, '⇄ 词和解释对调'),
     ),
     importBox,
+    diagramBox,
     rowsEl,
     h(
       'button',
@@ -594,6 +759,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     isDirty: () => dirty,
     canLeave: () => !dirty || confirm('改的东西还没保存, 确定要走吗?'),
     cleanup: () => {
+      document.removeEventListener('keydown', onEsc);
       recording?.stop();
       player?.pause();
     },

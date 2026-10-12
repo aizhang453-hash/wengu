@@ -1,11 +1,11 @@
 // 备份文件: 卡片集 + 图片 + 录音, 一个 .json 文件
 
-import { getMedia, putMedia, mediaIdsOf, blobToDataURL, dataURLToBlob } from './media.js';
+import { getMedia, putMedia, setMediaIds, blobToDataURL, dataURLToBlob } from './media.js';
 
 export async function exportBackup(store) {
   const data = JSON.parse(store.exportBackup());
   const media = {};
-  const ids = new Set(store.data.sets.flatMap((s) => s.cards.flatMap(mediaIdsOf)));
+  const ids = new Set(store.data.sets.flatMap(setMediaIds));
   for (const id of ids) {
     try {
       const blob = await getMedia(id);

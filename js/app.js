@@ -18,6 +18,7 @@
 //   #/set/<id>/blocks     方块游戏
 //   #/set/<id>/gems       宝石游戏
 //   #/set/<id>/wordle     Wordle
+//   #/set/<id>/diagram    标注图练习
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
@@ -33,6 +34,7 @@ import { renderBlast } from './views/blast.js';
 import { renderBlocks } from './views/blocks.js';
 import { renderGems } from './views/gems.js';
 import { renderWordle } from './views/wordle.js';
+import { renderDiagramPractice } from './views/diagram.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
@@ -79,6 +81,7 @@ function parse(hash) {
     if (sub === 'blocks') return { page: 'blocks', id: parts[1] };
     if (sub === 'gems') return { page: 'gems', id: parts[1] };
     if (sub === 'wordle') return { page: 'wordle', id: parts[1] };
+    if (sub === 'diagram') return { page: 'diagram', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -115,6 +118,7 @@ function render() {
   else if (route.page === 'blocks') view = renderBlocks(ctx, route.id);
   else if (route.page === 'gems') view = renderGems(ctx, route.id);
   else if (route.page === 'wordle') view = renderWordle(ctx, route.id);
+  else if (route.page === 'diagram') view = renderDiagramPractice(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);

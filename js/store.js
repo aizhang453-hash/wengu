@@ -1,4 +1,5 @@
 import { schedule, dayKey } from './srs.js';
+import { cleanDiagram } from './diagram.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -49,6 +50,7 @@ export function makeSet(fields = {}) {
     learn: {},
     stats: {},
     best: {},
+    diagram: null, // 标注图 (diagram.js)
     createdAt: now,
     updatedAt: now,
     progressAt: 0,
@@ -110,6 +112,7 @@ function cleanSet(raw) {
       return out;
     }),
     best,
+    diagram: cleanDiagram(raw.diagram, ids),
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
     progressAt: Number(raw.progressAt) || 0,
