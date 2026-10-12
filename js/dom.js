@@ -164,3 +164,28 @@ export function icon(name, size = 20) {
   svg.innerHTML = ICONS[name] ?? ''; // 只用上面写死的图形, 没有用户的字
   return svg;
 }
+
+// 弹出窗口问一句话 (比如文件夹叫什么)。确定时调 onOk(字)
+export function askText({ title, label, value = '', placeholder = '', okText = '确定', onOk }) {
+  const input = h('input', { class: 'input', value, placeholder, maxlength: 100, 'aria-label': label });
+  const ok = () => {
+    const text = input.value.trim();
+    if (!text) return input.focus();
+    d.close();
+    onOk(text);
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      ok();
+    }
+  });
+  const d = openDialog({
+    title,
+    body: [h('label', { class: 'ask-label' }, label), input],
+    footer: [h('span', { class: 'spacer' }), h('button', { class: 'btn', onclick: () => d.close() }, '取消'), h('button', { class: 'btn primary', onclick: ok }, okText)],
+  });
+  input.focus();
+  input.select();
+  return d;
+}

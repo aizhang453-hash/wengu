@@ -2,6 +2,7 @@
 
 import { h, toast, download, today } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
+import { newFolder } from './folder.js';
 
 export function renderHome({ store, go }) {
   const sets = store.allSets();
@@ -36,6 +37,34 @@ export function renderHome({ store, go }) {
         }),
       )
     : welcome();
+
+  // 文件夹
+  const folders = store.allFolders();
+  const folderSection = h(
+    'section',
+    { class: 'folders' },
+    h('div', { class: 'list-head' }, h('h2', {}, `文件夹${folders.length ? ` (${folders.length})` : ''}`), h('button', { class: 'btn small', onclick: () => newFolder(store, (f) => go(`#/folder/${encodeURIComponent(f.id)}`)) }, '＋ 新建文件夹')),
+    folders.length
+      ? h(
+          'ul',
+          { class: 'set-grid' },
+          folders.map((f) => {
+            const n = f.setIds.length;
+            const cards = f.setIds.reduce((sum, sid) => sum + (store.getSet(sid)?.cards.length ?? 0), 0);
+            return h(
+              'li',
+              {},
+              h(
+                'a',
+                { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(f.id)}` },
+                h('span', { class: 'set-tile-title' }, `📁 ${f.name || '未命名文件夹'}`),
+                h('span', { class: 'muted' }, `${n} 个卡片集 · ${cards} 张卡片`),
+              ),
+            );
+          }),
+        )
+      : h('p', { class: 'muted small' }, '把几个卡片集放进一个文件夹, 就能合起来一起学 (比如期末要考的几课)。'),
+  );
 
   const fileInput = h('input', {
     type: 'file',
@@ -104,6 +133,7 @@ export function renderHome({ store, go }) {
           : null,
       ),
       list,
+      sets.length ? folderSection : null,
       backup,
     ),
   };

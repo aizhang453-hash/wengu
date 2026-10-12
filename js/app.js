@@ -3,6 +3,7 @@
 //   #/new                 新建卡片集
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
+//   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
 //   #/set/<id>            一个卡片集
 //   #/set/<id>/edit       编辑
 //   #/set/<id>/cards      单词卡
@@ -23,6 +24,7 @@ import { renderExam } from './views/exam.js';
 import { renderMatch } from './views/match.js';
 import { renderBlast } from './views/blast.js';
 import { renderSearch } from './views/search.js';
+import { renderFolder } from './views/folder.js';
 
 const store = new Store();
 const main = document.getElementById('main');
@@ -36,6 +38,9 @@ function parse(hash) {
   if (parts[0] === 'new') return { page: 'edit', id: null };
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
+  if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
+  // 合起来学的「卡片集页」就是文件夹页
+  if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
   if (parts[0] === 'set' && parts[1]) {
     const sub = parts[2] ?? '';
     if (sub === '') return { page: 'set', id: parts[1] };
@@ -77,6 +82,7 @@ function render() {
   else if (route.page === 'match') view = renderMatch(ctx, route.id);
   else if (route.page === 'blast') view = renderBlast(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
+  else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else view = missing();
 
   view.page = route.page;
@@ -117,7 +123,7 @@ document.getElementById('search-form')?.addEventListener('submit', (e) => {
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  if (current?.page === 'home' || current?.page === 'set') {
+  if (current?.page === 'home' || current?.page === 'set' || current?.page === 'folder') {
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);

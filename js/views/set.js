@@ -1,11 +1,12 @@
 // 一个卡片集: 选学习方式, 看所有卡片
 
-import { h, toast, download } from '../dom.js';
+import { h, toast, download, openDialog, switchRow } from '../dom.js';
 import { formatCards } from '../parse.js';
 import { pickDistinct, formatTime } from '../games.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { printSet } from '../print.js';
+import { newFolder } from './folder.js';
 
 export function renderSet({ store, go }, id) {
   const set = store.getSet(id);
@@ -118,6 +119,7 @@ export function renderSet({ store, go }, id) {
       '复制成文字',
     ),
     h('button', { class: 'btn', disabled: total === 0, onclick: () => printSet(set) }, '打印'),
+    h('button', { class: 'btn', onclick: () => pickFolders() }, '📁 加到文件夹'),
     h(
       'button',
       {
@@ -146,6 +148,44 @@ export function renderSet({ store, go }, id) {
     ),
   );
 
+  // 放进哪些文件夹 (可以放进好几个)
+  function pickFolders() {
+    const folders = store.allFolders();
+    const d = openDialog({
+      title: '加到文件夹',
+      body: [
+        folders.length
+          ? folders.map((f) =>
+              switchRow({
+                label: `📁 ${f.name || '未命名文件夹'}`,
+                desc: `${f.setIds.length} 个卡片集`,
+                checked: f.setIds.includes(set.id),
+                onchange: (v) => store.setInFolder(f.id, set.id, v),
+              }),
+            )
+          : h('p', { class: 'muted' }, '还没有文件夹。'),
+        h(
+          'button',
+          {
+            class: 'btn small',
+            onclick: () => {
+              d.close();
+              newFolder(store, (f) => {
+                store.setInFolder(f.id, set.id, true);
+                toast(`放进「${f.name}」了`);
+                go(base);
+              });
+            },
+          },
+          '＋ 新建文件夹',
+        ),
+      ],
+      onClose: () => go(base),
+    });
+  }
+
+  const inFolders = store.foldersOf(set.id);
+
   drawList();
 
   return {
@@ -157,6 +197,14 @@ export function renderSet({ store, go }, id) {
       h('h1', {}, set.title || '未命名卡片集'),
       set.description ? h('p', { class: 'description' }, set.description) : null,
       h('p', { class: 'muted' }, progressLine(set)),
+      inFolders.length
+        ? h(
+            'p',
+            { class: 'in-folders small' },
+            '在文件夹: ',
+            inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, `📁 ${f.name || '未命名文件夹'}`)]),
+          )
+        : null,
       modes,
       h('h2', { class: 'games-title' }, '用游戏来记'),
       games,

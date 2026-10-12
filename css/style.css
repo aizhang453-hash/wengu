@@ -2928,6 +2928,37 @@ a.card-row.search-hit:hover {
   }
 }
 
+/* ---- 文件夹 ---- */
+.folders {
+  margin-top: 28px;
+}
+
+.folder-tile {
+  background: var(--surface-2);
+}
+
+.folder-item {
+  position: relative;
+}
+
+.remove-from-folder {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.in-folders {
+  margin: -4px 0 8px;
+  color: var(--muted);
+}
+
+.ask-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 /* ---- 空页面 ---- */
 .empty {
   padding: 48px 0;

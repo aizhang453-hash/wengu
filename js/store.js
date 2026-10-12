@@ -9,8 +9,16 @@ export function newId() {
 }
 
 function emptyData() {
-  return { version: 1, sets: [] };
+  return { version: 1, sets: [], folders: [] };
 }
+
+// 文件夹: { id, name, setIds: [卡片集 id...], best: {}, createdAt, updatedAt }
+export function makeFolder(name = '') {
+  const now = Date.now();
+  return { id: newId(), name, setIds: [], best: {}, createdAt: now, updatedAt: now };
+}
+
+export const FOLDER_PREFIX = 'folder:';
 
 // 一个卡片集:
 // { id, title, description, termLang, defLang,
@@ -76,11 +84,7 @@ function cleanSet(raw) {
     }
     return out;
   };
-  const best = {};
-  for (const key of ['match', 'blast']) {
-    const v = Number(raw.best?.[key]);
-    if (Number.isFinite(v) && v > 0) best[key] = v;
-  }
+  const best = cleanBest(raw.best);
   return makeSet({
     id: typeof raw.id === 'string' && raw.id ? raw.id : newId(),
     title: String(raw.title ?? ''),
@@ -100,12 +104,41 @@ function cleanSet(raw) {
   });
 }
 
+function cleanBest(raw) {
+  const best = {};
+  for (const key of ['match', 'blast']) {
+    const v = Number(raw?.[key]);
+    if (Number.isFinite(v) && v > 0) best[key] = v;
+  }
+  return best;
+}
+
+function cleanFolder(raw, setIds) {
+  if (!raw || typeof raw !== 'object') return null;
+  const now = Date.now();
+  return {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : newId(),
+    name: String(raw.name ?? ''),
+    setIds: Array.isArray(raw.setIds) ? [...new Set(raw.setIds.filter((id) => setIds.has(id)))] : [],
+    best: cleanBest(raw.best),
+    createdAt: Number(raw.createdAt) || now,
+    updatedAt: Number(raw.updatedAt) || now,
+  };
+}
+
 export function cleanData(raw) {
   const data = emptyData();
   if (raw && Array.isArray(raw.sets)) {
     for (const s of raw.sets) {
       const set = cleanSet(s);
       if (set) data.sets.push(set);
+    }
+  }
+  if (raw && Array.isArray(raw.folders)) {
+    const ids = new Set(data.sets.map((s) => s.id));
+    for (const f of raw.folders) {
+      const folder = cleanFolder(f, ids);
+      if (folder) data.folders.push(folder);
     }
   }
   return data;
@@ -142,8 +175,68 @@ export class Store {
     return [...this.data.sets].sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
+  // id 是「folder:文件夹 id」时, 返回把文件夹里的卡片集合起来的临时卡片集
   getSet(id) {
+    if (typeof id === 'string' && id.startsWith(FOLDER_PREFIX)) return this.folderSet(id.slice(FOLDER_PREFIX.length));
     return this.data.sets.find((s) => s.id === id) ?? null;
+  }
+
+  // 合起来的卡片集: 卡片是各卡片集的; 会了 / 星标 / 学习程度每次读都从各卡片集现算,
+  // 写的时候 (setKnown 这些) 记回卡片原来的卡片集
+  folderSet(folderId) {
+    const folder = this.getFolder(folderId);
+    if (!folder) return null;
+    const members = () => folder.setIds.map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean);
+    const sets = members();
+    const same = (key) => {
+      const values = [...new Set(sets.map((s) => s[key]))];
+      return values.length === 1 ? values[0] : 'auto';
+    };
+    return {
+      id: FOLDER_PREFIX + folder.id,
+      folderId: folder.id,
+      virtual: true,
+      title: folder.name || '未命名文件夹',
+      description: '',
+      termLang: same('termLang'),
+      defLang: same('defLang'),
+      cards: sets.flatMap((s) => s.cards),
+      get known() {
+        return members().flatMap((s) => s.known);
+      },
+      get starred() {
+        return members().flatMap((s) => s.starred);
+      },
+      get learn() {
+        return Object.assign({}, ...members().map((s) => s.learn));
+      },
+      get stats() {
+        return Object.assign({}, ...members().map((s) => s.stats));
+      },
+      get best() {
+        return folder.best;
+      },
+    };
+  }
+
+  // 这张卡片的进度该记到哪个卡片集 (合起来学的时候是卡片原来的卡片集)
+  ownerOf(setId, cardId) {
+    const set = this.data.sets.find((s) => s.id === setId);
+    if (set) return set;
+    if (typeof setId === 'string' && setId.startsWith(FOLDER_PREFIX)) {
+      return this.data.sets.find((s) => s.cards.some((c) => c.id === cardId)) ?? null;
+    }
+    return null;
+  }
+
+  // 卡片集本身, 或者文件夹里的那几个
+  setsOf(setId) {
+    if (typeof setId === 'string' && setId.startsWith(FOLDER_PREFIX)) {
+      const folder = this.getFolder(setId.slice(FOLDER_PREFIX.length));
+      return folder ? folder.setIds.map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean) : [];
+    }
+    const set = this.data.sets.find((s) => s.id === setId);
+    return set ? [set] : [];
   }
 
   // 新建或整个替换一个卡片集; 卡片删了, 它的「会了」「星标」也跟着去掉
@@ -159,12 +252,52 @@ export class Store {
 
   deleteSet(id) {
     this.data.sets = this.data.sets.filter((s) => s.id !== id);
+    for (const f of this.data.folders) f.setIds = f.setIds.filter((sid) => sid !== id);
     this.save();
+  }
+
+  // ---- 文件夹 ----
+  allFolders() {
+    return [...this.data.folders].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  getFolder(id) {
+    return this.data.folders.find((f) => f.id === id) ?? null;
+  }
+
+  putFolder(folder) {
+    const clean = cleanFolder(folder, new Set(this.data.sets.map((s) => s.id)));
+    clean.updatedAt = Date.now();
+    const i = this.data.folders.findIndex((f) => f.id === clean.id);
+    if (i === -1) this.data.folders.push(clean);
+    else this.data.folders[i] = clean;
+    this.save();
+    return clean;
+  }
+
+  deleteFolder(id) {
+    this.data.folders = this.data.folders.filter((f) => f.id !== id);
+    this.save();
+  }
+
+  // 卡片集放进 / 拿出文件夹
+  setInFolder(folderId, setId, inside) {
+    const folder = this.getFolder(folderId);
+    if (!folder || !this.data.sets.some((s) => s.id === setId)) return;
+    const has = folder.setIds.includes(setId);
+    if (inside && !has) folder.setIds.push(setId);
+    if (!inside && has) folder.setIds = folder.setIds.filter((sid) => sid !== setId);
+    folder.updatedAt = Date.now();
+    this.save();
+  }
+
+  foldersOf(setId) {
+    return this.data.folders.filter((f) => f.setIds.includes(setId));
   }
 
   // 记「会了 / 还不会」, 不算改了卡片集, 所以不动 updatedAt
   setKnown(setId, cardId, known) {
-    const set = this.getSet(setId);
+    const set = this.ownerOf(setId, cardId);
     if (!set) return;
     const has = set.known.includes(cardId);
     if (known && !has) set.known.push(cardId);
@@ -173,33 +306,27 @@ export class Store {
   }
 
   resetKnown(setId) {
-    const set = this.getSet(setId);
-    if (!set) return;
-    set.known = [];
+    for (const set of this.setsOf(setId)) set.known = [];
     this.save();
   }
 
   // 学习模式的程度, 一次存好几张: { 卡片 id: 0|1|2 }
   setLevels(setId, levels) {
-    const set = this.getSet(setId);
-    if (!set) return;
-    const ids = new Set(set.cards.map((c) => c.id));
     for (const [id, level] of Object.entries(levels)) {
-      if (ids.has(id) && [0, 1, 2].includes(level)) set.learn[id] = level;
+      const set = this.ownerOf(setId, id);
+      if (set?.cards.some((c) => c.id === id) && [0, 1, 2].includes(level)) set.learn[id] = level;
     }
     this.save();
   }
 
   resetLearn(setId) {
-    const set = this.getSet(setId);
-    if (!set) return;
-    set.learn = {};
+    for (const set of this.setsOf(setId)) set.learn = {};
     this.save();
   }
 
   // 记一次答对 / 答错 (学习、测试用), 以后挑「老是错的」
   recordAnswer(setId, cardId, correct, { save = true } = {}) {
-    const set = this.getSet(setId);
+    const set = this.ownerOf(setId, cardId);
     if (!set || !set.cards.some((c) => c.id === cardId)) return;
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
     if (correct) s.right++;
@@ -209,7 +336,7 @@ export class Store {
 
   // 判错了, 用户说「我答对了」: 把记的一次错改成对
   amendAnswer(setId, cardId) {
-    const s = this.getSet(setId)?.stats[cardId];
+    const s = this.ownerOf(setId, cardId)?.stats[cardId];
     if (!s || s.wrong === 0) return;
     s.wrong--;
     s.right++;
@@ -218,7 +345,9 @@ export class Store {
 
   // 游戏成绩: 配对比谁快 (越小越好), 打陨石比分高 (越大越好)。破纪录返回 true
   recordBest(setId, game, value) {
-    const set = this.getSet(setId);
+    // 合起来学时, 成绩记在文件夹上
+    const folderId = String(setId).startsWith(FOLDER_PREFIX) ? String(setId).slice(FOLDER_PREFIX.length) : null;
+    const set = this.data.sets.find((s) => s.id === setId) ?? (folderId ? this.getFolder(folderId) : null);
     if (!set || !(value > 0)) return false;
     const old = set.best[game];
     const better = game === 'match' ? old === undefined || value < old : old === undefined || value > old;
@@ -230,7 +359,7 @@ export class Store {
   }
 
   toggleStar(setId, cardId) {
-    const set = this.getSet(setId);
+    const set = this.ownerOf(setId, cardId);
     if (!set) return false;
     const has = set.starred.includes(cardId);
     set.starred = has ? set.starred.filter((id) => id !== cardId) : [...set.starred, cardId];
@@ -257,6 +386,11 @@ export class Store {
         this.data.sets[i] = set;
         replaced++;
       }
+    }
+    for (const folder of incoming.folders) {
+      const i = this.data.folders.findIndex((f) => f.id === folder.id);
+      if (i === -1) this.data.folders.push(folder);
+      else this.data.folders[i] = folder;
     }
     this.save();
     return { added, replaced };

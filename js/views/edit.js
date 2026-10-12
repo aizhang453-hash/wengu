@@ -19,7 +19,8 @@ const FORMATS = [
 
 export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   const existing = id ? store.getSet(id) : null;
-  if (id && !existing) {
+  // 合起来学的临时卡片集不能编辑
+  if (id && (!existing || existing.virtual)) {
     return {
       title: '找不到',
       el: h(

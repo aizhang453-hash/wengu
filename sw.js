@@ -35,6 +35,7 @@ const FILES = [
   'js/views/cards.js',
   'js/views/edit.js',
   'js/views/exam.js',
+  'js/views/folder.js',
   'js/views/home.js',
   'js/views/learn.js',
   'js/views/match.js',

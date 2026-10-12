@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, makeSet, makeCard, cleanData } from '../js/store.js';
+import { Store, makeSet, makeCard, makeFolder, cleanData } from '../js/store.js';
 
 // 假的 localStorage
 function memoryStorage() {
@@ -153,4 +153,71 @@ test('别的标签页存了, reload 读到新的', () => {
   assert.equal(b.allSets().length, 0);
   b.reload();
   assert.equal(b.allSets().length, 1);
+});
+
+test('文件夹: 放进去、拿出来、删卡片集时也从文件夹里拿掉', () => {
+  const store = new Store(memoryStorage());
+  const a = store.putSet({ ...sampleSet(), title: 'A' });
+  const b = store.putSet({ ...sampleSet(), title: 'B' });
+  const f = store.putFolder({ ...makeFolder('期末'), setIds: [a.id, 'nope'] });
+  assert.deepEqual(store.getFolder(f.id).setIds, [a.id]);
+  store.setInFolder(f.id, b.id, true);
+  store.setInFolder(f.id, b.id, true);
+  assert.deepEqual(store.getFolder(f.id).setIds, [a.id, b.id]);
+  assert.deepEqual(store.foldersOf(b.id).map((x) => x.name), ['期末']);
+  store.setInFolder(f.id, a.id, false);
+  assert.deepEqual(store.getFolder(f.id).setIds, [b.id]);
+  store.deleteSet(b.id);
+  assert.deepEqual(store.getFolder(f.id).setIds, []);
+  store.deleteFolder(f.id);
+  assert.equal(store.getFolder(f.id), null);
+});
+
+test('合起来学: 卡片是各卡片集的, 进度记回原来的卡片集', () => {
+  const store = new Store(memoryStorage());
+  const a = store.putSet({ ...sampleSet(), title: 'A', termLang: 'en-US' });
+  const b = store.putSet({ ...sampleSet(), title: 'B', termLang: 'en-US' });
+  const f = store.putFolder({ ...makeFolder('期末'), setIds: [a.id, b.id] });
+  const combo = store.getSet(`folder:${f.id}`);
+  assert.equal(combo.title, '期末');
+  assert.equal(combo.cards.length, 4);
+  assert.equal(combo.termLang, 'en-US');
+
+  const [a1] = a.cards;
+  const [, b2] = b.cards;
+  store.setKnown(combo.id, a1.id, true);
+  store.toggleStar(combo.id, b2.id);
+  store.setLevels(combo.id, { [a1.id]: 2, [b2.id]: 1 });
+  store.recordAnswer(combo.id, b2.id, false);
+  assert.deepEqual(store.getSet(a.id).known, [a1.id]);
+  assert.deepEqual(store.getSet(b.id).starred, [b2.id]);
+  assert.deepEqual(store.getSet(a.id).learn, { [a1.id]: 2 });
+  assert.deepEqual(store.getSet(b.id).stats, { [b2.id]: { right: 0, wrong: 1 } });
+  // 合起来的那个每次读都是最新的
+  assert.deepEqual(combo.known, [a1.id]);
+  assert.deepEqual(combo.starred, [b2.id]);
+  assert.deepEqual(combo.learn, { [a1.id]: 2, [b2.id]: 1 });
+
+  // 清掉进度: 文件夹里的每个都清
+  store.resetLearn(combo.id);
+  store.resetKnown(combo.id);
+  assert.deepEqual(combo.learn, {});
+  assert.deepEqual(combo.known, []);
+
+  // 游戏成绩记在文件夹上
+  assert.equal(store.recordBest(combo.id, 'match', 5000), true);
+  assert.deepEqual(store.getFolder(f.id).best, { match: 5000 });
+  assert.deepEqual(combo.best, { match: 5000 });
+
+  assert.equal(store.getSet('folder:nope'), null);
+});
+
+test('备份带上文件夹', () => {
+  const from = new Store(memoryStorage());
+  const a = from.putSet(sampleSet());
+  from.putFolder({ ...makeFolder('F'), setIds: [a.id] });
+  const to = new Store(memoryStorage());
+  to.importBackup(from.exportBackup());
+  assert.equal(to.allFolders().length, 1);
+  assert.deepEqual(to.allFolders()[0].setIds, [a.id]);
 });
