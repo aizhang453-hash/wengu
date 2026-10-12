@@ -1,36 +1,71 @@
-// 学习模式: 先选择 / 判断 (认), 再打字 (写), 一轮 7 张, 直到全部掌握
+// 学习模式 (照 Quizlet 的 Learn): 先选目标 (备考 / 全部记住),
+// 再一轮一轮做题 (选择、判断、打字、单词卡), 直到全部掌握。
 
-import { h, toast } from '../dom.js';
+import { h, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { speak, canSpeak } from '../speech.js';
 import { grade } from '../grade.js';
+import { playSound } from '../sound.js';
 import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../learn.js';
 
 // 在这些框里打字时不接快捷键 (勾选框、单选框不算)
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const PREFS_KEY = 'wengu:learn-prefs';
 const PRAISE = ['答对了!', '没错!', '好样的!', '对了!', '记住了!'];
+const TYPE_LABELS = { mc: '多项选择', tf: '判断题', written: '打字 (书面问题)', flash: '单词卡' };
 
-function loadPrefs() {
+export const GOALS = {
+  cram: { name: '备考', desc: '时间紧, 先把整套过一遍: 每张答对一次就算过, 题型混着出。' },
+  memorize: { name: '全部记住', desc: '记得最牢: 每张先认出来 (选择 / 判断), 再写出来 (打字 / 单词卡), 都答对才算掌握。' },
+};
+
+function defaultPrefs() {
   const d = DEFAULT_LEARN_OPTIONS;
-  try {
-    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-    return {
-      types: { ...d.types, ...p.types },
-      answerWith: ['def', 'term', 'both'].includes(p.answerWith) ? p.answerWith : d.answerWith,
-      smart: p.smart ?? d.smart,
-      starredOnly: Boolean(p.starredOnly),
-    };
-  } catch {
-    return { types: { ...d.types }, answerWith: d.answerWith, smart: d.smart, starredOnly: false };
-  }
+  return {
+    types: { ...d.types },
+    answerTerm: false,
+    answerDef: true,
+    smart: d.smart,
+    retype: false,
+    shuffle: d.shuffle,
+    starredOnly: false,
+    sound: true,
+    autoSpeak: false,
+  };
 }
 
-function savePrefs(prefs) {
+function loadPrefs() {
+  const prefs = defaultPrefs();
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
+    // 老版本用 answerWith
+    if (p.answerWith) {
+      p.answerTerm = p.answerWith !== 'def';
+      p.answerDef = p.answerWith !== 'term';
+    }
+    for (const key of Object.keys(prefs)) {
+      if (key === 'types') prefs.types = { ...prefs.types, ...p.types };
+      else if (typeof p[key] === 'boolean') prefs[key] = p[key];
+    }
+  } catch {
+    // 用默认的
+  }
+  if (!prefs.answerTerm && !prefs.answerDef) prefs.answerDef = true;
+  if (!Object.values(prefs.types).some(Boolean)) prefs.types.mc = true;
+  return prefs;
+}
+
+function saveJSON(key, value) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // 存不了就算了
   }
+}
+
+function answerWith(prefs) {
+  if (prefs.answerTerm && prefs.answerDef) return 'both';
+  return prefs.answerTerm ? 'term' : 'def';
 }
 
 export function renderLearn({ store }, id) {
@@ -48,135 +83,37 @@ export function renderLearn({ store }, id) {
     };
   }
 
-  const prefs = loadPrefs();
+  const goalKey = `wengu:learn-goal:${set.id}`;
+  let prefs = loadPrefs();
+  let goal = (() => {
+    try {
+      const g = JSON.parse(localStorage.getItem(goalKey) ?? 'null');
+      return g in GOALS ? g : null;
+    } catch {
+      return null;
+    }
+  })();
   let session = null;
-  let phase = 'question'; // question | feedback | round-end | done
+  let phase = 'question'; // goal | question | feedback | round-end | done
   let autoTimer = null;
   let pending = null; // 这题的结果, 进下一题时记到统计里 { cardId, correct }
+  let dialog = null;
 
-  // ---- 页面上的东西 ----
+  // ---- 进度条: 左边掌握了几张, 右边一共几张 ----
   const barMastered = h('span', { class: 'seg mastered' });
   const barLearning = h('span', { class: 'seg learning' });
-  const progressText = h('span', { class: 'counter' });
+  const leftNum = h('span', { class: 'end-num good' }, '0');
+  const rightNum = h('span', { class: 'end-num' }, '0');
   const stage = h('div', { class: 'learn-stage' });
 
   function drawProgress() {
     const c = session.counts();
     barMastered.style.width = `${(c.mastered / c.total) * 100}%`;
     barLearning.style.width = `${(c.learning / c.total) * 100}%`;
-    progressText.textContent = `掌握 ${c.mastered} / ${c.total}`;
-  }
-
-  // ---- 设置 ----
-  const typeBoxes = {};
-  const settings = h(
-    'details',
-    { class: 'settings' },
-    h('summary', {}, '⚙ 设置'),
-    h(
-      'div',
-      { class: 'settings-body' },
-      h(
-        'fieldset',
-        {},
-        h('legend', {}, '题型'),
-        ['mc', 'tf', 'written'].map((t) => {
-          const box = h('input', {
-            type: 'checkbox',
-            checked: prefs.types[t],
-            onchange: () => {
-              const next = { ...prefs.types, [t]: box.checked };
-              if (!next.mc && !next.tf && !next.written) {
-                box.checked = true;
-                toast('至少留一种题型');
-                return;
-              }
-              prefs.types = next;
-              changed();
-            },
-          });
-          typeBoxes[t] = box;
-          return h('label', { class: 'toggle' }, box, ` ${{ mc: '选择题', tf: '判断题', written: '打字' }[t]}`);
-        }),
-      ),
-      h(
-        'fieldset',
-        {},
-        h('legend', {}, '用什么回答'),
-        [
-          ['def', '解释'],
-          ['term', '词'],
-          ['both', '都有'],
-        ].map(([v, label]) =>
-          h(
-            'label',
-            { class: 'toggle' },
-            h('input', {
-              type: 'radio',
-              name: 'answerWith',
-              value: v,
-              checked: prefs.answerWith === v,
-              onchange: () => {
-                prefs.answerWith = v;
-                changed();
-              },
-            }),
-            ` ${label}`,
-          ),
-        ),
-      ),
-      h(
-        'fieldset',
-        {},
-        h('legend', {}, '其他'),
-        h(
-          'label',
-          { class: 'toggle', title: '大小写、标点从来不算错; 开着时括号里的可以不写、打错一两个字母也算对' },
-          h('input', {
-            type: 'checkbox',
-            checked: prefs.smart,
-            onchange: (e) => {
-              prefs.smart = e.target.checked;
-              savePrefs(prefs);
-              session.options.smart = prefs.smart;
-            },
-          }),
-          ' 智能判分 (容错)',
-        ),
-        set.starred.length
-          ? h(
-              'label',
-              { class: 'toggle' },
-              h('input', {
-                type: 'checkbox',
-                checked: prefs.starredOnly,
-                onchange: (e) => {
-                  prefs.starredOnly = e.target.checked;
-                  changed();
-                },
-              }),
-              ` 只学星标 (${set.starred.length})`,
-            )
-          : null,
-      ),
-      h(
-        'button',
-        {
-          class: 'btn small danger',
-          onclick: () => {
-            if (!confirm('把学习进度都清掉, 从头学?')) return;
-            store.resetLearn(set.id);
-            build();
-          },
-        },
-        '清掉学习进度',
-      ),
-    ),
-  );
-
-  function changed() {
-    savePrefs(prefs);
-    build();
+    leftNum.textContent = String(c.mastered);
+    leftNum.title = `掌握了 ${c.mastered} 张`;
+    rightNum.textContent = String(c.total);
+    rightNum.title = `一共 ${c.total} 张`;
   }
 
   // ---- 流程 ----
@@ -189,10 +126,17 @@ export function renderLearn({ store }, id) {
       const only = cards.filter((c) => starred.has(c.id));
       if (only.length) cards = only;
     }
-    session = new LearnSession(cards, set.learn, prefs);
+    session = new LearnSession(cards, set.learn, {
+      goal: goal ?? 'memorize',
+      types: prefs.types,
+      answerWith: answerWith(prefs),
+      smart: prefs.smart,
+      shuffle: prefs.shuffle,
+    });
     // 选择题的错误选项从整个卡片集里挑, 只学星标时也一样
     session.pool = set.cards;
     drawProgress();
+    if (!goal) return showGoal();
     nextRound();
   }
 
@@ -207,20 +151,25 @@ export function renderLearn({ store }, id) {
     const q = session.next();
     if (!q) return showRoundEnd();
     phase = 'question';
-    stage.replaceChildren(questionView(q));
+    const view = questionView(q);
+    stage.replaceChildren(view);
     stage.querySelector('[data-autofocus]')?.focus();
+    if (prefs.autoSpeak) speak(q.prompt, q.side === 'def' ? set.termLang : set.defLang);
   }
 
   // 这题答完了: 记下来, 给反馈
-  function answered(correct, { close = false, typed = null, chosenEl = null } = {}) {
+  function answered(correct, { close = false, typed = null } = {}) {
     if (phase !== 'question') return;
     const q = session.current;
     const level = session.answer(correct);
     store.setLevels(set.id, { [q.card.id]: level });
     pending = { cardId: q.card.id, correct };
     drawProgress();
+    if (prefs.sound) playSound(correct ? 'right' : 'wrong');
     phase = 'feedback';
-    showFeedback(q, { correct, close, typed, chosenEl });
+    // 单词卡题自己说了会不会, 不用再看反馈
+    if (q.type === 'flash') return void (autoTimer = setTimeout(proceed, 250));
+    showFeedback(q, { correct, close, typed });
   }
 
   function flush() {
@@ -234,24 +183,84 @@ export function renderLearn({ store }, id) {
     ask();
   }
 
+  // ---- 选目标 ----
+  function showGoal() {
+    phase = 'goal';
+    let picked = 'memorize';
+    const options = Object.entries(GOALS).map(([key, g]) =>
+      h(
+        'button',
+        {
+          class: `goal-option${key === picked ? ' picked' : ''}`,
+          'aria-pressed': String(key === picked),
+          onclick: () => {
+            picked = key;
+            for (const b of options) {
+              const on = b.dataset.goal === key;
+              b.classList.toggle('picked', on);
+              b.setAttribute('aria-pressed', String(on));
+            }
+          },
+          dataset: { goal: key },
+        },
+        h('span', { class: 'goal-icon', 'aria-hidden': 'true' }, key === 'cram' ? '⏱' : '🧠'),
+        h('span', { class: 'goal-name' }, g.name),
+        h('span', { class: 'muted small' }, g.desc),
+      ),
+    );
+    stage.replaceChildren(
+      h(
+        'div',
+        { class: 'question goal-card' },
+        h('p', { class: 'muted small' }, set.title || '未命名卡片集'),
+        h('h2', {}, '选一个学习目标'),
+        h('div', { class: 'goal-options' }, options),
+        h(
+          'div',
+          { class: 'row end' },
+          h(
+            'button',
+            {
+              class: 'btn primary',
+              dataset: { autofocus: '1' },
+              onclick: () => {
+                goal = picked;
+                saveJSON(goalKey, goal);
+                build();
+              },
+            },
+            '开始学习 →',
+          ),
+        ),
+      ),
+    );
+    stage.querySelector('[data-autofocus]')?.focus();
+  }
+
   // ---- 一道题 ----
+  function speakBtn(text, lang) {
+    return canSpeak() && text.trim()
+      ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: (e) => (e.stopPropagation(), speak(text, lang)) }, '🔊')
+      : null;
+  }
+
   function questionView(q) {
     const answerName = q.side === 'def' ? '解释' : '词';
+    const promptName = q.side === 'def' ? '词' : '解释';
     const promptLang = q.side === 'def' ? set.termLang : set.defLang;
     const answerLang = q.side === 'def' ? set.defLang : set.termLang;
     const label = {
-      mc: `选择题 · 选出对的${answerName}`,
-      tf: `判断题 · 这个${answerName}对吗?`,
+      mc: `选择答案 · 选出对的${answerName}`,
+      tf: `判断 · 这个${answerName}对吗?`,
       written: `打字 · 写出${answerName}`,
+      flash: `单词卡 · 先想一想${answerName}, 再翻过来`,
     }[q.type];
 
     const prompt = h(
       'div',
       { class: 'q-prompt' },
-      h('div', { class: 'q-text' }, q.prompt || h('span', { class: 'muted' }, '(空)')),
-      canSpeak() && q.prompt.trim()
-        ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(q.prompt, promptLang) }, '🔊')
-        : null,
+      h('div', {}, h('div', { class: 'q-label muted small' }, promptName), h('div', { class: 'q-text' }, q.prompt || h('span', { class: 'muted' }, '(空)'))),
+      speakBtn(q.prompt, promptLang),
     );
 
     let body;
@@ -259,37 +268,33 @@ export function renderLearn({ store }, id) {
       const buttons = q.options.map((opt, i) =>
         h(
           'button',
-          {
-            class: 'option',
-            dataset: { index: String(i) },
-            onclick: (e) => choose(i, e.currentTarget),
-          },
+          { class: 'option', onclick: () => choose(i) },
           h('span', { class: 'key' }, String(i + 1)),
           h('span', { class: 'option-text' }, opt || '(空)'),
         ),
       );
-      function choose(i, el) {
-        if (phase !== 'question') return;
+      const choose = (i) => {
+        if (phase !== 'question' || !buttons[i]) return;
         const correct = i === q.correctIndex;
         for (const b of buttons) b.disabled = true;
         buttons[q.correctIndex].classList.add('right');
-        if (!correct) el.classList.add('wrong');
-        answered(correct, { chosenEl: el });
-      }
-      body = h('div', { class: 'options-grid' }, buttons);
-      body.choose = (i) => buttons[i] && choose(i, buttons[i]);
-    } else if (q.type === 'tf') {
-      const pick = (sayTrue, el) => {
-        if (phase !== 'question') return;
-        const correct = sayTrue === q.isTrue;
-        for (const b of tfButtons) b.disabled = true;
-        el.classList.add(correct ? 'right' : 'wrong');
+        if (!correct) buttons[i].classList.add('wrong');
         answered(correct);
       };
+      body = h('div', {}, h('div', { class: 'q-label muted small' }, '选择答案'), h('div', { class: 'options-grid' }, buttons));
+      body.choose = choose;
+    } else if (q.type === 'tf') {
       const tfButtons = [
-        h('button', { class: 'option tf', onclick: (e) => pick(true, e.currentTarget) }, h('span', { class: 'key' }, '1'), '✓ 对'),
-        h('button', { class: 'option tf', onclick: (e) => pick(false, e.currentTarget) }, h('span', { class: 'key' }, '2'), '✗ 错'),
+        h('button', { class: 'option tf', onclick: () => pick(0) }, h('span', { class: 'key' }, '1'), '✓ 对'),
+        h('button', { class: 'option tf', onclick: () => pick(1) }, h('span', { class: 'key' }, '2'), '✗ 错'),
       ];
+      const pick = (i) => {
+        if (phase !== 'question' || !tfButtons[i]) return;
+        const correct = (i === 0) === q.isTrue;
+        for (const b of tfButtons) b.disabled = true;
+        tfButtons[i].classList.add(correct ? 'right' : 'wrong');
+        answered(correct);
+      };
       body = h(
         'div',
         {},
@@ -298,13 +303,43 @@ export function renderLearn({ store }, id) {
           { class: 'tf-shown' },
           h('span', { class: 'muted small' }, answerName),
           h('div', { class: 'q-text small' }, q.shown || '(空)'),
-          canSpeak() && q.shown.trim()
-            ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(q.shown, answerLang) }, '🔊')
-            : null,
+          speakBtn(q.shown, answerLang),
         ),
         h('div', { class: 'options-grid two' }, tfButtons),
       );
-      body.choose = (i) => tfButtons[i] && pick(i === 0, tfButtons[i]);
+      body.choose = pick;
+    } else if (q.type === 'flash') {
+      const answerBox = h(
+        'div',
+        { class: 'flash-answer', hidden: true },
+        h('span', { class: 'muted small' }, answerName),
+        h('div', { class: 'q-text small' }, q.answer || '(空)'),
+        speakBtn(q.answer, answerLang),
+      );
+      const judge = h(
+        'div',
+        { class: 'options-grid two', hidden: true },
+        h('button', { class: 'option tf bad-choice', onclick: () => grade_(false) }, h('span', { class: 'key' }, '1'), '✗ 还不会'),
+        h('button', { class: 'option tf good-choice', onclick: () => grade_(true) }, h('span', { class: 'key' }, '2'), '✓ 会了'),
+      );
+      const flipBtn = h('button', { class: 'btn primary', dataset: { autofocus: '1' }, onclick: () => reveal() }, '翻过来看答案');
+      let shown = false;
+      const reveal = () => {
+        if (shown || phase !== 'question') return;
+        shown = true;
+        answerBox.hidden = false;
+        judge.hidden = false;
+        flipBtn.remove();
+        if (prefs.autoSpeak) speak(q.answer, answerLang);
+      };
+      const grade_ = (correct) => {
+        if (!shown || phase !== 'question') return;
+        for (const b of judge.querySelectorAll('button')) b.disabled = true;
+        answered(correct);
+      };
+      body = h('div', { class: 'flash-q' }, answerBox, h('div', { class: 'row center' }, flipBtn), judge, h('p', { class: 'muted small center-text' }, '空格翻面 · 1 还不会 · 2 会了'));
+      body.choose = (i) => (shown ? grade_(i === 1) : null);
+      body.space = () => (shown ? null : reveal());
     } else {
       const input = h('input', {
         class: 'input big',
@@ -342,6 +377,7 @@ export function renderLearn({ store }, id) {
       body = h(
         'div',
         { class: 'written' },
+        h('div', { class: 'q-label muted small' }, '你的答案'),
         h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: submit }, '答')),
         h('button', { class: 'link-btn', onclick: giveUp }, '不知道?'),
       );
@@ -355,8 +391,7 @@ export function renderLearn({ store }, id) {
   }
 
   function showFeedback(q, { correct, close, typed }) {
-    const el = stage.firstChild;
-    const fb = el.feedback;
+    const fb = stage.firstChild.feedback;
     const answerLang = q.side === 'def' ? set.defLang : set.termLang;
     if (correct && !close) {
       fb.className = 'feedback good';
@@ -370,42 +405,71 @@ export function renderLearn({ store }, id) {
       { class: 'answer-line' },
       h('span', { class: 'muted small' }, '正确答案'),
       h('div', { class: 'answer-text' }, q.answer || '(空)'),
-      canSpeak() && q.answer.trim()
-        ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(q.answer, answerLang) }, '🔊')
-        : null,
+      canSpeak() && q.answer.trim() ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: () => speak(q.answer, answerLang) }, '🔊') : null,
     );
     if (close) {
       fb.className = 'feedback close';
       fb.replaceChildren(h('strong', {}, '差一点, 算你对'), h('div', { class: 'muted small' }, `你写的: ${typed}`), answerLine, h('div', { class: 'row' }, cont));
-    } else {
-      fb.className = 'feedback bad';
-      const parts = [h('strong', {}, q.type === 'written' && typed === '' ? '没关系, 记一下:' : '还没记住, 再看一眼')];
-      if (q.type === 'written' && typed) parts.push(h('div', { class: 'typed' }, h('span', { class: 'muted small' }, '你写的'), h('div', { class: 'strike' }, typed)));
-      if (q.type !== 'mc') parts.push(answerLine);
-      const row = h('div', { class: 'row' }, cont);
-      if (q.type === 'written' && typed) {
-        row.append(
-          h(
-            'button',
-            {
-              class: 'btn',
-              title: '判错了? 算我对',
-              onclick: () => {
-                const level = session.override();
-                if (level === null) return;
-                store.setLevels(set.id, { [q.card.id]: level });
-                if (pending) pending.correct = true;
-                drawProgress();
-                proceed();
-              },
+      cont.focus();
+      return;
+    }
+    fb.className = 'feedback bad';
+    const parts = [h('strong', {}, q.type === 'written' && typed === '' ? '没关系, 记一下:' : '还没记住, 再看一眼')];
+    if (q.type === 'written' && typed) parts.push(h('div', { class: 'typed' }, h('span', { class: 'muted small' }, '你写的'), h('div', { class: 'strike' }, typed)));
+    if (q.type !== 'mc') parts.push(answerLine);
+    const row = h('div', { class: 'row' }, cont);
+    if (q.type === 'written' && typed) {
+      row.append(
+        h(
+          'button',
+          {
+            class: 'btn',
+            title: '判错了? 算我对',
+            onclick: () => {
+              const level = session.override();
+              if (level === null) return;
+              store.setLevels(set.id, { [q.card.id]: level });
+              if (pending) pending.correct = true;
+              drawProgress();
+              proceed();
             },
-            '我答对了',
-          ),
-        );
-      }
+          },
+          '我答对了',
+        ),
+      );
+    }
+    // 更正选项「答错了把正确答案打一遍」: 打对了才能继续
+    if (prefs.retype && q.type === 'written') {
+      cont.disabled = true;
+      const retype = h('input', {
+        class: 'input',
+        type: 'text',
+        placeholder: '把正确答案打一遍',
+        autocomplete: 'off',
+        autocapitalize: 'off',
+        spellcheck: 'false',
+        'aria-label': '把正确答案打一遍',
+        oninput: () => {
+          const ok = grade(retype.value, q.answer, { smart: prefs.smart }).correct;
+          cont.disabled = !ok;
+          retype.classList.toggle('ok', ok);
+        },
+        onkeydown: (e) => {
+          if (e.key === 'Enter' && !e.isComposing) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!cont.disabled) proceed();
+          }
+        },
+      });
+      parts.push(retype);
       parts.push(row);
       fb.replaceChildren(...parts);
+      retype.focus();
+      return;
     }
+    parts.push(row);
+    fb.replaceChildren(...parts);
     cont.focus();
   }
 
@@ -454,6 +518,7 @@ export function renderLearn({ store }, id) {
   function showDone() {
     phase = 'done';
     clearTimeout(autoTimer);
+    if (prefs.sound) playSound('done');
     stage.replaceChildren(
       h(
         'div',
@@ -464,34 +529,191 @@ export function renderLearn({ store }, id) {
           'div',
           { class: 'row center' },
           h('a', { class: 'btn primary', href: `${base}/test` }, '考一下试试'),
-          h(
-            'button',
-            {
-              class: 'btn',
-              onclick: () => {
-                const reset = {};
-                for (const c of session.cards) reset[c.id] = 0;
-                store.setLevels(set.id, reset);
-                build();
-              },
-            },
-            '再学一遍',
-          ),
+          h('button', { class: 'btn', onclick: () => restart(false) }, '再学一遍'),
           h('a', { class: 'btn', href: base }, '回到卡片集'),
         ),
       ),
     );
   }
 
+  // 重新开始学习模式: 清掉进度; askGoal 时也重新选目标
+  function restart(askGoal = true) {
+    const reset = {};
+    for (const c of set.cards) reset[c.id] = 0;
+    store.setLevels(set.id, reset);
+    if (askGoal) {
+      goal = null;
+      saveJSON(goalKey, null);
+    }
+    build();
+  }
+
+  // ---- 设置 (跟 Quizlet 一样改完点「保存」才算) ----
+  function openSettings() {
+    const draft = structuredClone({ ...prefs, goal: goal ?? 'memorize' });
+    const chip = (key, icon, text, disabled = false) => {
+      const b = h(
+        'button',
+        {
+          class: `chip-toggle${draft[key] ? ' on' : ''}`,
+          'aria-pressed': String(draft[key]),
+          disabled,
+          onclick: () => {
+            draft[key] = !draft[key];
+            b.classList.toggle('on', draft[key]);
+            b.setAttribute('aria-pressed', String(draft[key]));
+          },
+        },
+        h('span', { 'aria-hidden': 'true' }, icon),
+        ` ${text}`,
+      );
+      return b;
+    };
+    // 一组开关至少开一个
+    const atLeastOne = (keys, get, set_, label) =>
+      keys.map(([k, text, desc]) =>
+        switchRow({
+          label: text,
+          desc,
+          checked: get(k),
+          onchange: (v, input) => {
+            set_(k, v);
+            if (!keys.some(([kk]) => get(kk))) {
+              set_(k, true);
+              input.checked = true;
+              toast(`${label}至少开一个`);
+            }
+          },
+        }),
+      );
+
+    const section = (title, ...rows) => h('details', { class: 'opt-section', open: true }, h('summary', {}, title), h('div', { class: 'opt-rows' }, ...rows));
+
+    const body = [
+      h(
+        'div',
+        { class: 'chip-row' },
+        chip('shuffle', icon('shuffle', 18), '随机'),
+        chip('starredOnly', '★', set.starred.length ? `学习星标 (${set.starred.length})` : '学习星标', set.starred.length === 0),
+        chip('sound', '🔊', '音效'),
+      ),
+      section(
+        '学习目标',
+        ...Object.entries(GOALS).map(([key, g]) =>
+          h(
+            'label',
+            { class: 'switch-row' },
+            h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, g.name), h('span', { class: 'switch-desc' }, g.desc)),
+            h('input', { type: 'radio', name: 'learnGoal', value: key, checked: draft.goal === key, onchange: () => (draft.goal = key) }),
+          ),
+        ),
+      ),
+      section(
+        '问题类型',
+        ...atLeastOne(
+          [
+            ['mc', TYPE_LABELS.mc, '四个里选一个'],
+            ['tf', TYPE_LABELS.tf, '给一个答案, 判断对不对'],
+            ['written', TYPE_LABELS.written, '自己把答案打出来'],
+            ['flash', TYPE_LABELS.flash, '想一想再翻过来, 自己说会不会'],
+          ],
+          (k) => draft.types[k],
+          (k, v) => (draft.types[k] = v),
+          '问题类型',
+        ),
+      ),
+      section(
+        '回答',
+        ...atLeastOne(
+          [
+            ['answerTerm', '词', '看解释, 答词'],
+            ['answerDef', '解释', '看词, 答解释'],
+          ],
+          (k) => draft[k],
+          (k, v) => (draft[k] = v),
+          '回答',
+        ),
+      ),
+      section(
+        '更正选项',
+        switchRow({
+          label: '智能判分',
+          desc: '大小写、标点从来不算错。开着时再宽一点: 括号里的可以不写、几个意思写一个就行、打错一两个字母也算对',
+          checked: draft.smart,
+          onchange: (v) => (draft.smart = v),
+        }),
+        switchRow({
+          label: '答错了把正确答案打一遍',
+          desc: '打字题答错后, 要照着正确答案打一遍才能继续, 记得更牢',
+          checked: draft.retype,
+          onchange: (v) => (draft.retype = v),
+        }),
+      ),
+      switchRow({
+        label: '自动朗读',
+        desc: canSpeak() ? '每道题一出来就把题目念出来' : '这个浏览器不能朗读',
+        checked: draft.autoSpeak,
+        disabled: !canSpeak(),
+        onchange: (v) => (draft.autoSpeak = v),
+      }),
+    ];
+
+    const footer = [
+      h(
+        'button',
+        {
+          class: 'link-btn danger-link',
+          onclick: () => {
+            if (!confirm('把学习进度都清掉, 重新选目标、从头学?')) return;
+            dialog?.close();
+            restart(true);
+          },
+        },
+        '重新开始学习模式',
+      ),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn', onclick: () => dialog?.close() }, '取消'),
+      h(
+        'button',
+        {
+          class: 'btn primary',
+          onclick: () => {
+            const { goal: newGoal, ...rest } = draft;
+            prefs = rest;
+            saveJSON(PREFS_KEY, prefs);
+            if (goal) {
+              goal = newGoal;
+              saveJSON(goalKey, goal);
+            }
+            dialog?.close();
+            build();
+          },
+        },
+        '保存',
+      ),
+    ];
+    dialog = openDialog({
+      title: '选项',
+      body,
+      footer,
+      onClose: () => {
+        dialog = null;
+      },
+    });
+  }
+
   // ---- 键盘 ----
   function onKey(e) {
-    if (e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const body = stage.firstChild?.body;
     if (phase === 'question') {
       const n = Number(e.key);
-      const body = stage.firstChild?.body;
       if (n >= 1 && n <= 4 && body?.choose) {
         e.preventDefault();
         body.choose(n - 1);
+      } else if (e.key === ' ' && body?.space && !e.target.closest?.('button')) {
+        e.preventDefault();
+        body.space();
       }
     } else if (phase === 'feedback' && (e.key === 'Enter' || e.key === ' ') && !e.target.closest?.('button')) {
       e.preventDefault();
@@ -507,15 +729,20 @@ export function renderLearn({ store }, id) {
     el: h(
       'section',
       { class: 'learn-page' },
-      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`), progressText),
-      h('span', { class: 'meter thin stacked' }, barMastered, barLearning),
+      h(
+        'div',
+        { class: 'cards-head' },
+        h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`),
+        h('button', { class: 'icon-btn tool', title: '选项', 'aria-label': '选项', onclick: () => openSettings() }, icon('gear')),
+      ),
+      h('div', { class: 'progress-ends' }, leftNum, h('span', { class: 'meter stacked' }, barMastered, barLearning), rightNum),
       stage,
-      settings,
-      h('p', { class: 'muted small keys' }, '键盘: 选择题按 1–4 · 判断题 1 对 2 错 · 打字按回车 · 回车继续'),
+      h('p', { class: 'muted small keys' }, '键盘: 选择题按 1–4 · 判断题 1 对 2 错 · 单词卡空格翻面 · 打字按回车 · 回车继续'),
     ),
     cleanup: () => {
       flush();
       clearTimeout(autoTimer);
+      dialog?.close();
       document.removeEventListener('keydown', onKey);
       if (canSpeak()) window.speechSynthesis.cancel();
     },

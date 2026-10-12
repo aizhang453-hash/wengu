@@ -7,6 +7,7 @@ export const TYPE_NAMES = {
   mc: '选择题',
   tf: '判断题',
   written: '打字',
+  flash: '单词卡',
   match: '配对',
 };
 
@@ -43,7 +44,8 @@ export function distractors(card, pool, side, n, rng = Math.random) {
   return out;
 }
 
-// 出一道题。卡片太少出不了选择题、判断题的, 改成打字
+// 出一道题。卡片太少出不了选择题、判断题的, 改成打字。
+// 'flash' 是学习模式里的单词卡题: 看题目, 自己想, 翻过来对答案, 自己说会不会
 export function makeQuestion(type, card, pool, { answerWith = 'def', rng = Math.random } = {}) {
   const side = pickSide(answerWith, rng);
   const base = {
@@ -65,6 +67,7 @@ export function makeQuestion(type, card, pool, { answerWith = 'def', rng = Math.
     const isTrue = rng() < 0.5;
     return { ...base, shown: isTrue ? card[side] : wrong, isTrue };
   }
+  if (type === 'flash') return base;
   return { ...base, type: 'written' };
 }
 

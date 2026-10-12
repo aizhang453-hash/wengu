@@ -1,28 +1,49 @@
-// 单词卡: 点一下翻面。开着「记录会不会」时, 每张标「还不会 / 会了」,
-// 一轮完了可以只复习还不会的; 关着时就是左右翻看。
+// 单词卡 (照 Quizlet 的 Flashcards): 点一下翻面。
+// 开着「跟踪进度」时, 每张标「还不会 / 会了」, 一轮完了可以只背还不会的; 关着时左右翻看, 能自动播放。
+// 背到一半关掉, 下次打开接着背。
 
-import { h, shuffled } from '../dom.js';
+import { h, shuffled, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { speak, canSpeak } from '../speech.js';
 
 // 在这些框里打字时不接快捷键 (勾选框、单选框不算)
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const PREFS_KEY = 'wengu:cards-prefs';
-const DEFAULT_PREFS = { track: true, shuffle: false, defFirst: false, starredOnly: false };
+const DEFAULT_PREFS = { track: true, shuffle: false, front: 'term', starredOnly: false, autoSpeak: false };
+const AUTOPLAY_MS = 2500;
 
 function loadPrefs() {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
+    // 老版本叫 defFirst
+    if (p.front === undefined && p.defFirst !== undefined) p.front = p.defFirst ? 'def' : 'term';
+    return { ...DEFAULT_PREFS, ...p };
   } catch {
     return { ...DEFAULT_PREFS };
   }
 }
 
-function savePrefs(prefs) {
+function saveJSON(key, value) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // 存不了就算了, 下次用默认的
+    // 存不了就算了
   }
+}
+
+// 「显示提示」: 每个词只露第一个字, 后面用下划线, 比如 apple pie → a____ p__。
+// 只有一个字的词什么都不露, 只告诉你有一个字
+export function hintOf(text) {
+  return text
+    .split(/(\s+)/)
+    .map((word) => {
+      if (/^\s*$/.test(word)) return word;
+      const chars = Array.from(word);
+      const blank = (c) => (/[\p{L}\p{N}]/u.test(c) ? '_' : c);
+      if (chars.filter((c) => /[\p{L}\p{N}]/u.test(c)).length <= 1) return chars.map(blank).join('');
+      return chars[0] + chars.slice(1).map(blank).join('');
+    })
+    .join('');
 }
 
 export function renderCards({ store }, id) {
@@ -41,34 +62,73 @@ export function renderCards({ store }, id) {
   }
 
   const prefs = loadPrefs();
+  const sessionKey = `wengu:cards-session:${set.id}`;
   let deck = []; // 这一轮的卡片
   let index = 0;
   let flipped = false;
-  let history = []; // 这一轮标过的 { card, known, wasKnown }, 用来撤销
+  let history = []; // 这一轮标过的 { id, known, wasKnown }, 用来撤销
   let finished = false;
   let busy = false; // 卡片飞出去的那一下不接新的操作
+  let hint = false;
+  let playTimer = null;
+  let dialog = null;
+
+  const byId = new Map(set.cards.map((c) => [c.id, c]));
+  const sig = () => JSON.stringify([prefs.track, prefs.shuffle, prefs.front, prefs.starredOnly]);
+
+  // ---- 记住背到哪了 ----
+  function saveSession() {
+    saveJSON(sessionKey, { sig: sig(), deck: deck.map((c) => c.id), index, history, finished });
+  }
+
+  function loadSession() {
+    try {
+      const s = JSON.parse(localStorage.getItem(sessionKey) ?? 'null');
+      if (!s || s.sig !== sig() || !Array.isArray(s.deck) || s.deck.length === 0) return false;
+      const cards = s.deck.map((cid) => byId.get(cid));
+      if (cards.some((c) => !c)) return false; // 卡片改过了, 重新开始
+      deck = cards;
+      index = Math.min(Math.max(0, Number(s.index) || 0), deck.length - 1);
+      history = Array.isArray(s.history) ? s.history.filter((x) => byId.has(x.id)) : [];
+      finished = Boolean(s.finished);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   // ---- 页面上的东西 ----
-  const counter = h('span', { class: 'counter' });
   const bar = h('span', { class: 'meter-fill' });
   const stage = h('div', { class: 'stage' });
-  const controls = h('div', { class: 'card-controls' });
-  const keysEl = h('p', { class: 'muted small keys' });
-
   const faceFront = h('div', { class: 'face front' });
   const faceBack = h('div', { class: 'face back' });
   const cardEl = h(
     'div',
-    {
-      class: 'flashcard',
-      tabindex: 0,
-      role: 'button',
-      'aria-label': '单词卡, 点一下翻面',
-    },
+    { class: 'flashcard', tabindex: 0, role: 'button', 'aria-label': '单词卡, 点一下翻面' },
     h('div', { class: 'flashcard-inner' }, faceFront, faceBack),
   );
+  const keysStrip = h('div', { class: 'keys-strip' });
+  const trackSwitch = h('input', {
+    type: 'checkbox',
+    role: 'switch',
+    class: 'switch',
+    checked: prefs.track,
+    'aria-label': '跟踪进度',
+    onchange: (e) => setPref('track', e.target.checked),
+  });
+  const center = h('div', { class: 'cc-center' });
+  const undoBtn = h('button', { class: 'icon-btn tool', title: '撤销 (Z)', 'aria-label': '撤销', onclick: () => undo() }, icon('undo'));
+  const shuffleBtn = h(
+    'button',
+    { class: 'icon-btn tool', title: '打乱顺序', 'aria-label': '打乱顺序', onclick: () => setPref('shuffle', !prefs.shuffle) },
+    icon('shuffle'),
+  );
+  const playBtn = h('button', { class: 'icon-btn tool', 'aria-label': '自动播放', onclick: () => togglePlay() }, icon('play'));
+  const settingsBtn = h('button', { class: 'icon-btn tool', title: '设置', 'aria-label': '设置', onclick: () => openSettings() }, icon('gear'));
+  const fullBtn = h('button', { class: 'icon-btn tool', title: '全屏 (F)', 'aria-label': '全屏', onclick: () => toggleFull() }, icon('expand'));
+  const page = h('section', { class: 'cards-page' });
 
-  // 点一下翻面; 开着「记录会不会」时手机上左右滑 = 还不会 / 会了
+  // 点一下翻面; 开着「跟踪进度」时手机上左右滑 = 还不会 / 会了
   let downX = null;
   let downY = null;
   cardEl.addEventListener('pointerdown', (e) => {
@@ -81,36 +141,18 @@ export function renderCards({ store }, id) {
     const dx = e.clientX - downX;
     const dy = e.clientY - downY;
     downX = null;
-    if (prefs.track && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-      mark(dx > 0);
-    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      flip();
-    }
+    if (prefs.track && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) mark(dx > 0);
+    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) flip();
   });
   cardEl.addEventListener('pointercancel', () => {
     downX = null;
   });
 
-  const options = h(
-    'div',
-    { class: 'options' },
-    toggle('track', '记录会不会'),
-    toggle('shuffle', '打乱顺序'),
-    toggle('defFirst', '先看解释'),
-    set.starred.length ? toggle('starredOnly', `只看星标 (${set.starred.length})`) : null,
-  );
-
-  function toggle(key, label) {
-    const box = h('input', {
-      type: 'checkbox',
-      checked: prefs[key],
-      onchange: () => {
-        prefs[key] = box.checked;
-        savePrefs(prefs);
-        start();
-      },
-    });
-    return h('label', { class: 'toggle' }, box, ` ${label}`);
+  function setPref(key, value) {
+    prefs[key] = value;
+    saveJSON(PREFS_KEY, prefs);
+    stopPlay();
+    start();
   }
 
   // ---- 一轮开始 ----
@@ -129,16 +171,23 @@ export function renderCards({ store }, id) {
     draw();
   }
 
+  function restart() {
+    store.resetKnown(set.id);
+    saveJSON(sessionKey, null);
+    start();
+  }
+
   function flip() {
     if (finished) return;
     flipped = !flipped;
     cardEl.classList.toggle('flipped', flipped);
+    autoSpeak();
   }
 
   function mark(known) {
     if (finished || busy || !prefs.track) return;
     const card = deck[index];
-    history.push({ card, known, wasKnown: set.known.includes(card.id) });
+    history.push({ id: card.id, known, wasKnown: set.known.includes(card.id) });
     store.setKnown(set.id, card.id, known);
     busy = true;
     cardEl.classList.add(known ? 'fly-right' : 'fly-left');
@@ -148,11 +197,13 @@ export function renderCards({ store }, id) {
     }, 180);
   }
 
-  // 退回上一张, 那张的「会了」恢复成标之前的样子
+  // 退回上一张; 跟踪进度时那张的「会了」恢复成标之前的样子
   function undo() {
-    if (busy || !prefs.track || history.length === 0) return;
+    if (busy) return;
+    if (!prefs.track) return prev();
+    if (history.length === 0) return;
     const last = history.pop();
-    store.setKnown(set.id, last.card.id, last.wasKnown);
+    store.setKnown(set.id, last.id, last.wasKnown);
     if (!finished) index = Math.max(0, index - 1);
     finished = false;
     flipped = false;
@@ -160,102 +211,194 @@ export function renderCards({ store }, id) {
   }
 
   function next() {
-    if (index >= deck.length - 1) {
-      finished = true;
-    } else {
-      index++;
-    }
+    if (index >= deck.length - 1) finished = true;
+    else index++;
     flipped = false;
+    if (finished) stopPlay();
     draw();
   }
 
   function prev() {
-    if (index === 0) return;
-    index--;
+    if (index === 0 && !finished) return;
+    if (finished) finished = false;
+    else index--;
     flipped = false;
     draw();
   }
 
+  // ---- 自动播放 (只在不跟踪进度时): 翻面, 下一张, 翻面…… ----
+  function togglePlay() {
+    if (playTimer) return stopPlay();
+    if (prefs.track || finished) return;
+    playTimer = setInterval(() => {
+      if (!flipped) flip();
+      else next();
+    }, AUTOPLAY_MS);
+    drawTools();
+  }
+
+  function stopPlay() {
+    clearInterval(playTimer);
+    playTimer = null;
+    drawTools();
+  }
+
+  // ---- 全屏 ----
+  function toggleFull() {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else page.requestFullscreen?.().catch(() => {});
+  }
+
+  function autoSpeak() {
+    if (!prefs.autoSpeak || finished) return;
+    const card = deck[index];
+    const showingDef = flipped !== (prefs.front === 'def');
+    speak(showingDef ? card.def : card.term, showingDef ? set.defLang : set.termLang);
+  }
+
   // ---- 画出来 ----
-  function draw() {
-    keysEl.textContent = `键盘: 空格翻面 · ${prefs.track ? '← 还不会 · → 会了 · Z 撤销' : '← → 上一张 / 下一张'} · S 朗读`;
+  function draw({ speakIt = true } = {}) {
     const shown = finished ? deck.length : index;
-    counter.textContent = `${Math.min(shown + 1, deck.length)} / ${deck.length}`;
     bar.style.width = `${(shown / deck.length) * 100}%`;
+    trackSwitch.checked = prefs.track;
+    keysStrip.replaceChildren(
+      h(
+        'span',
+        {},
+        icon('keyboard', 18),
+        h('strong', {}, ' 快捷键 '),
+        ' 按 ',
+        h('kbd', {}, '空格'),
+        ' 或点卡片翻面',
+        prefs.track ? [' · ', h('kbd', {}, '←'), ' 还不会 ', h('kbd', {}, '→'), ' 会了'] : [' · ', h('kbd', {}, '←'), ' ', h('kbd', {}, '→'), ' 上一张 / 下一张'],
+      ),
+    );
+    drawTools();
+    saveSession();
+
     if (finished) {
       stage.replaceChildren(summary());
-      controls.replaceChildren();
+      drawCenter();
       return;
     }
-
     const card = deck[index];
-    const front = prefs.defFirst ? card.def : card.term;
-    const back = prefs.defFirst ? card.term : card.def;
-    const frontLang = prefs.defFirst ? set.defLang : set.termLang;
-    const backLang = prefs.defFirst ? set.termLang : set.defLang;
-    faceFront.replaceChildren(...face(front, frontLang, card));
-    faceBack.replaceChildren(...face(back, backLang, card));
+    const defFront = prefs.front === 'def';
+    faceFront.replaceChildren(...face(defFront ? card.def : card.term, defFront ? set.defLang : set.termLang, card, defFront ? card.term : card.def));
+    faceBack.replaceChildren(...face(defFront ? card.term : card.def, defFront ? set.termLang : set.defLang, card, null));
     cardEl.className = 'flashcard';
     cardEl.classList.toggle('flipped', flipped);
     stage.replaceChildren(cardEl);
+    drawCenter();
+    if (speakIt) autoSpeak();
+  }
 
+  function drawCenter() {
+    const counter = h('span', { class: 'cc-count' }, `${Math.min((finished ? deck.length : index) + 1, deck.length)} / ${deck.length}`);
     if (prefs.track) {
-      controls.replaceChildren(
-        h('button', { class: 'btn round', title: '撤销 (Z)', disabled: history.length === 0, onclick: undo }, '↶'),
-        h('button', { class: 'btn big-choice bad', onclick: () => mark(false) }, '✗ 还不会'),
-        h('button', { class: 'btn big-choice good', onclick: () => mark(true) }, '✓ 会了'),
+      const still = history.filter((x) => !x.known).length;
+      const knew = history.length - still;
+      center.replaceChildren(
+        h(
+          'button',
+          { class: 'round-choice bad', title: '还不会 (←)', 'aria-label': '还不会', disabled: finished, onclick: () => mark(false) },
+          icon('x', 22),
+          still ? h('span', { class: 'tally' }, String(still)) : null,
+        ),
+        counter,
+        h(
+          'button',
+          { class: 'round-choice good', title: '会了 (→)', 'aria-label': '会了', disabled: finished, onclick: () => mark(true) },
+          icon('check', 22),
+          knew ? h('span', { class: 'tally' }, String(knew)) : null,
+        ),
       );
     } else {
-      controls.replaceChildren(
-        h('button', { class: 'btn round', title: '上一张 (←)', disabled: index === 0, onclick: prev }, '←'),
-        h('button', { class: 'btn', onclick: flip }, '翻面'),
-        h('button', { class: 'btn round', title: '下一张 (→)', onclick: next }, '→'),
+      center.replaceChildren(
+        h('button', { class: 'round-choice', title: '上一张 (←)', 'aria-label': '上一张', disabled: index === 0 && !finished, onclick: prev }, icon('left', 22)),
+        counter,
+        h('button', { class: 'round-choice', title: '下一张 (→)', 'aria-label': '下一张', disabled: finished, onclick: next }, icon('right', 22)),
       );
     }
   }
 
-  function face(text, lang, card) {
+  function drawTools() {
+    undoBtn.disabled = prefs.track ? history.length === 0 : index === 0 && !finished;
+    shuffleBtn.classList.toggle('on', prefs.shuffle);
+    shuffleBtn.setAttribute('aria-pressed', String(prefs.shuffle));
+    playBtn.replaceChildren(icon(playTimer ? 'pause' : 'play'));
+    playBtn.classList.toggle('on', Boolean(playTimer));
+    playBtn.disabled = prefs.track || finished;
+    playBtn.title = prefs.track ? '自动播放 (关掉跟踪进度才能用)' : playTimer ? '暂停 (P)' : '自动播放 (P)';
+  }
+
+  // 卡片的一面。hintFor 是背面的答案, 只有正面给「显示提示」
+  function face(text, lang, card, hintFor) {
     const starred = set.starred.includes(card.id);
+    const hintEl = h('div', { class: 'hint-text', hidden: !(hint && hintFor) }, hintFor ? hintOf(hintFor) : '');
     const tools = h(
       'div',
       { class: 'face-tools' },
-      canSpeak() && text.trim()
+      hintFor && hintFor.trim()
         ? h(
             'button',
             {
-              class: 'icon-btn',
-              title: '朗读 (S)',
-              'aria-label': '朗读',
+              class: 'hint-btn',
+              title: '显示提示 (H)',
               onclick: (e) => {
                 e.stopPropagation();
-                speak(text, lang);
+                toggleHint();
               },
             },
-            '🔊',
+            icon('bulb', 18),
+            hint ? ' 隐藏提示' : ' 显示提示',
           )
-        : null,
+        : h('span'),
       h(
-        'button',
-        {
-          class: `icon-btn star${starred ? ' on' : ''}`,
-          title: '星标',
-          'aria-label': '星标',
-          'aria-pressed': String(starred),
-          onclick: (e) => {
-            e.stopPropagation();
-            store.toggleStar(set.id, card.id);
-            const on = set.starred.includes(card.id);
-            for (const b of cardEl.querySelectorAll('.star')) {
-              b.classList.toggle('on', on);
-              b.setAttribute('aria-pressed', String(on));
-            }
+        'span',
+        { class: 'row' },
+        canSpeak() && text.trim()
+          ? h(
+              'button',
+              {
+                class: 'icon-btn',
+                title: '朗读 (S)',
+                'aria-label': '朗读',
+                onclick: (e) => {
+                  e.stopPropagation();
+                  speak(text, lang);
+                },
+              },
+              '🔊',
+            )
+          : null,
+        h(
+          'button',
+          {
+            class: `icon-btn star${starred ? ' on' : ''}`,
+            title: '星标',
+            'aria-label': '星标',
+            'aria-pressed': String(starred),
+            onclick: (e) => {
+              e.stopPropagation();
+              store.toggleStar(set.id, card.id);
+              const on = set.starred.includes(card.id);
+              for (const b of cardEl.querySelectorAll('.star')) {
+                b.classList.toggle('on', on);
+                b.setAttribute('aria-pressed', String(on));
+              }
+            },
           },
-        },
-        '★',
+          '★',
+        ),
       ),
     );
     const size = text.length > 200 ? ' tiny' : text.length > 60 ? ' small' : '';
-    return [tools, h('div', { class: `face-text${size}` }, text || h('span', { class: 'muted' }, '(空)'))];
+    return [tools, h('div', { class: `face-text${size}` }, text || h('span', { class: 'muted' }, '(空)')), hintEl];
+  }
+
+  function toggleHint() {
+    hint = !hint;
+    draw({ speakIt: false });
   }
 
   function summary() {
@@ -264,16 +407,22 @@ export function renderCards({ store }, id) {
         'div',
         { class: 'summary' },
         h('h2', {}, '看完一遍了'),
-        h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: () => start() }, '从头再来'), h('a', { class: 'btn', href: base }, '回到卡片集')),
+        h(
+          'div',
+          { class: 'row center' },
+          h('button', { class: 'btn primary', onclick: () => start() }, '从头再来'),
+          h('a', { class: 'btn', href: `${base}/learn` }, '用学习模式练'),
+          h('a', { class: 'btn', href: base }, '回到卡片集'),
+        ),
       );
     }
-    const knownIds = new Set(history.filter((x) => x.known).map((x) => x.card.id));
+    const knownIds = new Set(history.filter((x) => x.known).map((x) => x.id));
     const missed = deck.filter((c) => !knownIds.has(c.id));
     const got = deck.length - missed.length;
     return h(
       'div',
       { class: 'summary' },
-      h('h2', {}, missed.length ? '这一轮完了' : '全都会了 🎉'),
+      h('h2', {}, missed.length ? '你做得很好! 接着背还不会的吧' : '全都会了 🎉'),
       h(
         'div',
         { class: 'score' },
@@ -283,23 +432,96 @@ export function renderCards({ store }, id) {
       h(
         'div',
         { class: 'row center' },
-        missed.length
-          ? h('button', { class: 'btn primary', onclick: () => start(missed) }, `接着背还不会的 ${missed.length} 张`)
-          : null,
-        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: () => start() }, '从头再来'),
+        missed.length ? h('button', { class: 'btn primary', onclick: () => start(missed) }, `接着背还不会的 ${missed.length} 张`) : null,
+        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: restart }, '重新开始单词卡模式'),
+        h('a', { class: 'btn', href: `${base}/learn` }, '用学习模式练'),
         h('button', { class: 'btn', disabled: history.length === 0, onclick: undo }, '撤销最后一张'),
-        h('a', { class: 'btn', href: base }, '回到卡片集'),
       ),
     );
   }
 
+  // ---- 设置 ----
+  function openSettings() {
+    stopPlay();
+    const keys = h(
+      'details',
+      { class: 'keys-list' },
+      h('summary', {}, '快捷键'),
+      h(
+        'dl',
+        {},
+        [
+          ['空格 / ↑ / ↓', '翻面'],
+          ['← / →', '跟踪进度时: 还不会 / 会了; 不跟踪时: 上一张 / 下一张'],
+          ['Z', '撤销'],
+          ['S', '朗读看到的这一面'],
+          ['H', '显示 / 隐藏提示'],
+          ['F', '全屏'],
+          ['P', '自动播放 (不跟踪进度时)'],
+        ].map(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
+      ),
+    );
+    const frontSelect = h(
+      'select',
+      { class: 'input', 'aria-label': '正面', onchange: (e) => setPref('front', e.target.value) },
+      h('option', { value: 'term', selected: prefs.front === 'term' }, '词'),
+      h('option', { value: 'def', selected: prefs.front === 'def' }, '解释'),
+    );
+    dialog = openDialog({
+      title: '选项',
+      body: [
+        switchRow({
+          label: '跟踪进度',
+          desc: '把卡片分成「还不会」和「会了」两堆, 记下你会了哪些。只想快速翻一遍的话关掉。',
+          checked: prefs.track,
+          onchange: (v) => setPref('track', v),
+        }),
+        switchRow({
+          label: `只学星标的卡片${set.starred.length ? ` (${set.starred.length})` : ''}`,
+          desc: set.starred.length ? null : '还没有加星标的卡片',
+          checked: prefs.starredOnly,
+          disabled: set.starred.length === 0,
+          onchange: (v) => setPref('starredOnly', v),
+        }),
+        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '正面')), frontSelect),
+        switchRow({
+          label: '自动朗读',
+          desc: canSpeak() ? '每张卡片一出来、一翻面就念出来' : '这个浏览器不能朗读',
+          checked: prefs.autoSpeak,
+          disabled: !canSpeak(),
+          onchange: (v) => {
+            prefs.autoSpeak = v;
+            saveJSON(PREFS_KEY, prefs);
+          },
+        }),
+        keys,
+        h(
+          'button',
+          {
+            class: 'link-btn danger-link',
+            onclick: () => {
+              if (!confirm('把「会了」的记录都清掉, 从第一张重新开始?')) return;
+              dialog?.close();
+              restart();
+            },
+          },
+          '重新开始单词卡模式',
+        ),
+      ],
+      onClose: () => {
+        dialog = null;
+      },
+    });
+  }
+
   // ---- 键盘 ----
   function onKey(e) {
-    if (e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const key = e.key;
+    if (key === 'f' || key === 'F') return toggleFull();
     if (finished) return;
     // 勾选框上按空格是勾 / 不勾, 不翻面
-    if (e.key === ' ' && e.target.matches?.('input')) return;
-    const key = e.key;
+    if (key === ' ' && e.target.matches?.('input')) return;
     if (key === ' ' || key === 'ArrowUp' || key === 'ArrowDown' || (key === 'Enter' && e.target === cardEl)) {
       e.preventDefault();
       flip();
@@ -312,39 +534,45 @@ export function renderCards({ store }, id) {
       if (prefs.track) mark(true);
       else next();
     } else if (key === 'z' || key === 'Z' || key === 'Backspace') {
-      if (prefs.track) {
-        e.preventDefault();
-        undo();
-      }
+      e.preventDefault();
+      undo();
     } else if (key === 's' || key === 'S') {
       const card = deck[index];
-      const showingDef = flipped !== prefs.defFirst;
+      const showingDef = flipped !== (prefs.front === 'def');
       speak(showingDef ? card.def : card.term, showingDef ? set.defLang : set.termLang);
+    } else if (key === 'h' || key === 'H') {
+      toggleHint();
+    } else if (key === 'p' || key === 'P') {
+      togglePlay();
     }
   }
   document.addEventListener('keydown', onKey);
 
-  start();
+  if (!loadSession()) start();
+  else draw();
+
+  page.append(
+    h('div', { class: 'cards-head' }, h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`)),
+    h('span', { class: 'meter thin' }, bar),
+    stage,
+    keysStrip,
+    h(
+      'div',
+      { class: 'card-bar' },
+      h('label', { class: 'track-toggle' }, h('span', {}, '跟踪进度'), trackSwitch),
+      center,
+      h('div', { class: 'cc-tools' }, undoBtn, shuffleBtn, playBtn, settingsBtn, fullBtn),
+    ),
+  );
 
   return {
     title: `单词卡 · ${set.title}`,
-    el: h(
-      'section',
-      { class: 'cards-page' },
-      h(
-        'div',
-        { class: 'cards-head' },
-        h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`),
-        counter,
-      ),
-      h('span', { class: 'meter thin' }, bar),
-      stage,
-      controls,
-      options,
-      keysEl,
-    ),
+    el: page,
     cleanup: () => {
+      stopPlay();
+      dialog?.close();
       document.removeEventListener('keydown', onKey);
+      if (document.fullscreenElement) document.exitFullscreen?.();
       if (canSpeak()) window.speechSynthesis.cancel();
     },
   };

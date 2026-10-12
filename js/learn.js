@@ -1,8 +1,10 @@
 // 学习模式怎么排题 (照 Quizlet 的 Learn):
 // 每张卡片有个程度: 0 没学过, 1 认得了, 2 掌握了。
-//   - 没学过的先出选择题 / 判断题 (认), 答对变「认得了」
-//   - 认得了的出打字题 (写), 答对就「掌握了」
-//   - 答错程度不升 (掌握了的答错退回认得了), 这一轮后面再问一次
+// 目标「全部记住」(memorize):
+//   - 没学过的先出「认」的题 (选择题 / 判断题), 答对变「认得了」
+//   - 认得了的出「写」的题 (打字 / 单词卡), 答对就「掌握了」
+// 目标「备考」(cram): 时间紧, 开着的题型随便出, 每张答对一次就算掌握。
+// 答错程度不升 (掌握了的答错退回认得了), 这一轮后面再问一次。
 // 一轮最多 7 张, 一轮完了歇一下看看进度, 直到全部掌握。
 
 import { makeQuestion, shuffle } from './questions.js';
@@ -12,11 +14,16 @@ export const LEARNING = 1;
 export const MASTERED = 2;
 
 export const DEFAULT_LEARN_OPTIONS = {
-  types: { mc: true, tf: false, written: true },
+  goal: 'memorize',
+  types: { mc: true, tf: false, written: true, flash: false },
   answerWith: 'def',
   smart: true,
+  shuffle: true,
   roundSize: 7,
 };
+
+const RECOGNIZE = ['mc', 'tf'];
+const RECALL = ['written', 'flash'];
 
 export class LearnSession {
   // levels: { 卡片 id: 0 | 1 | 2 }
@@ -26,7 +33,7 @@ export class LearnSession {
     this.levels = { ...levels };
     this.options = { ...DEFAULT_LEARN_OPTIONS, ...options, types: { ...DEFAULT_LEARN_OPTIONS.types, ...options.types } };
     this.rng = rng;
-    this.order = shuffle(cards, rng); // 每次打开顺序不一样
+    this.order = this.options.shuffle ? shuffle(cards, rng) : [...cards];
     this.queue = [];
     this.retried = new Set();
     this.round = 0;
@@ -60,20 +67,28 @@ export class LearnSession {
     const learning = open.filter((c) => this.level(c) === LEARNING);
     const fresh = open.filter((c) => this.level(c) === NEW);
     this.roundCards = [...learning, ...fresh].slice(0, this.options.roundSize);
-    this.queue = shuffle(this.roundCards, this.rng);
+    this.queue = this.options.shuffle ? shuffle(this.roundCards, this.rng) : [...this.roundCards];
     this.retried = new Set();
     this.roundResults = [];
     this.round++;
     return this.roundCards.length;
   }
 
+  enabled(list) {
+    return list.filter((t) => this.options.types[t]);
+  }
+
+  pick(list) {
+    return list[Math.floor(this.rng() * list.length)];
+  }
+
   // 这张卡片该出什么题
   typeFor(card) {
-    const { mc, tf, written } = this.options.types;
-    const recognize = [mc && 'mc', tf && 'tf'].filter(Boolean);
-    const pickRecognize = () => recognize[Math.floor(this.rng() * recognize.length)];
-    if (this.level(card) === NEW) return recognize.length ? pickRecognize() : 'written';
-    return written ? 'written' : recognize.length ? pickRecognize() : 'written';
+    const recognize = this.enabled(RECOGNIZE);
+    const recall = this.enabled(RECALL);
+    if (this.options.goal === 'cram') return this.pick([...recognize, ...recall]) ?? 'written';
+    if (this.level(card) === NEW) return this.pick(recognize) ?? this.pick(recall) ?? 'written';
+    return this.pick(recall) ?? this.pick(recognize) ?? 'written';
   }
 
   // 下一道题; 这一轮完了返回 null
@@ -90,10 +105,10 @@ export class LearnSession {
     return this.current;
   }
 
-  // 答对升一级; 不出认的题时 (只开了打字), 答对一次就算掌握
+  // 答对升一级。备考、或者没开「认」的题时, 答对一次就算掌握
   promote(before) {
-    const { mc, tf } = this.options.types;
-    return !mc && !tf ? MASTERED : Math.min(MASTERED, before + 1);
+    if (this.options.goal === 'cram' || this.enabled(RECOGNIZE).length === 0) return MASTERED;
+    return Math.min(MASTERED, before + 1);
   }
 
   // 答完当前这题。返回卡片新的程度

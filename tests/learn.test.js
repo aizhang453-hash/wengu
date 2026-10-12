@@ -148,3 +148,38 @@ test('全部掌握了就 done', () => {
   assert.equal(rounds, 2);
   assert.equal(s.startRound(), 0);
 });
+
+test('单词卡题型: 学习里「写」的那一步可以是单词卡', () => {
+  const s = new LearnSession(cards.slice(0, 4), { c0: LEARNING, c1: LEARNING, c2: LEARNING, c3: LEARNING }, { types: { mc: true, tf: false, written: false, flash: true } }, seeded(3));
+  s.startRound();
+  const q = s.next();
+  assert.equal(q.type, 'flash');
+  assert.equal(q.answer, q.card.def);
+  assert.equal(s.answer(true), MASTERED);
+});
+
+test('备考: 每张答对一次就掌握, 题型随便出', () => {
+  const s = new LearnSession(cards, {}, { goal: 'cram', types: { mc: true, tf: true, written: true, flash: true } }, seeded(4));
+  const seen = new Set();
+  while (!s.done()) {
+    s.startRound();
+    let q;
+    while ((q = s.next())) {
+      seen.add(q.type);
+      assert.equal(s.answer(true), MASTERED);
+    }
+  }
+  assert.equal(s.round, 2); // 10 张: 7 + 3
+  assert.ok(seen.size >= 3);
+});
+
+test('不随机: 按卡片集里的顺序', () => {
+  const s = new LearnSession(cards, {}, { shuffle: false }, seeded(4));
+  s.startRound();
+  const order = [];
+  while (s.next()) {
+    order.push(s.current.card.id);
+    s.answer(true);
+  }
+  assert.deepEqual(order, ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
+});
