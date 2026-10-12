@@ -291,11 +291,10 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       defLang: defLang.value,
       cards,
     };
-    // 用户在别的页面 (比如单词卡) 改过的进度, 以存着的为准
+    // 进度在别的页面 (单词卡、学习) 也会变, 以存着的为准
     const latest = store.getSet(draft.id);
     if (latest) {
-      set.known = latest.known;
-      set.starred = latest.starred;
+      for (const key of ['known', 'starred', 'learn', 'stats', 'best']) set[key] = latest[key];
     }
     try {
       store.putSet(set);

@@ -1,7 +1,7 @@
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
 
-const KEY = 'wengu:v1';
+export const KEY = 'wengu:v1';
 
 export function newId() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
@@ -14,7 +14,12 @@ function emptyData() {
 
 // 一个卡片集:
 // { id, title, description, termLang, defLang, cards: [{ id, term, def }],
-//   known: [卡片 id...], starred: [卡片 id...], createdAt, updatedAt }
+//   known: [卡片 id...]        单词卡里标了「会了」的
+//   starred: [卡片 id...]      星标
+//   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
+//   stats: { 卡片 id: { right, wrong } }  学习、测试里答对答错几次
+//   best: { match: 毫秒, blast: 分 }       游戏最好成绩
+//   createdAt, updatedAt }
 export function makeSet(fields = {}) {
   const now = Date.now();
   return {
@@ -26,6 +31,9 @@ export function makeSet(fields = {}) {
     cards: [],
     known: [],
     starred: [],
+    learn: {},
+    stats: {},
+    best: {},
     createdAt: now,
     updatedAt: now,
     ...fields,
@@ -51,6 +59,22 @@ function cleanSet(raw) {
   const ids = new Set(cards.map((c) => c.id));
   const onlyCards = (list) =>
     Array.isArray(list) ? [...new Set(list.filter((id) => ids.has(id)))] : [];
+  const cardMap = (obj, clean) => {
+    const out = {};
+    if (obj && typeof obj === 'object') {
+      for (const [id, v] of Object.entries(obj)) {
+        if (!ids.has(id)) continue;
+        const c = clean(v);
+        if (c !== null) out[id] = c;
+      }
+    }
+    return out;
+  };
+  const best = {};
+  for (const key of ['match', 'blast']) {
+    const v = Number(raw.best?.[key]);
+    if (Number.isFinite(v) && v > 0) best[key] = v;
+  }
   return makeSet({
     id: typeof raw.id === 'string' && raw.id ? raw.id : newId(),
     title: String(raw.title ?? ''),
@@ -60,6 +84,11 @@ function cleanSet(raw) {
     cards,
     known: onlyCards(raw.known),
     starred: onlyCards(raw.starred),
+    learn: cardMap(raw.learn, (v) => ([0, 1, 2].includes(v) ? v : null)),
+    stats: cardMap(raw.stats, (v) =>
+      v && typeof v === 'object' ? { right: Math.max(0, Number(v.right) || 0), wrong: Math.max(0, Number(v.wrong) || 0) } : null,
+    ),
+    best,
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
   });
@@ -90,6 +119,11 @@ export class Store {
     } catch {
       return emptyData();
     }
+  }
+
+  // 别的标签页改了, 重新读一遍
+  reload() {
+    this.data = this.load();
   }
 
   // 存不下 (超过浏览器给的空间) 会抛错, 交给调用的地方提示
@@ -137,6 +171,47 @@ export class Store {
     if (!set) return;
     set.known = [];
     this.save();
+  }
+
+  // 学习模式的程度, 一次存好几张: { 卡片 id: 0|1|2 }
+  setLevels(setId, levels) {
+    const set = this.getSet(setId);
+    if (!set) return;
+    const ids = new Set(set.cards.map((c) => c.id));
+    for (const [id, level] of Object.entries(levels)) {
+      if (ids.has(id) && [0, 1, 2].includes(level)) set.learn[id] = level;
+    }
+    this.save();
+  }
+
+  resetLearn(setId) {
+    const set = this.getSet(setId);
+    if (!set) return;
+    set.learn = {};
+    this.save();
+  }
+
+  // 记一次答对 / 答错 (学习、测试用), 以后挑「老是错的」
+  recordAnswer(setId, cardId, correct, { save = true } = {}) {
+    const set = this.getSet(setId);
+    if (!set || !set.cards.some((c) => c.id === cardId)) return;
+    const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
+    if (correct) s.right++;
+    else s.wrong++;
+    if (save) this.save();
+  }
+
+  // 游戏成绩: 配对比谁快 (越小越好), 打陨石比分高 (越大越好)。破纪录返回 true
+  recordBest(setId, game, value) {
+    const set = this.getSet(setId);
+    if (!set || !(value > 0)) return false;
+    const old = set.best[game];
+    const better = game === 'match' ? old === undefined || value < old : old === undefined || value > old;
+    if (better) {
+      set.best[game] = value;
+      this.save();
+    }
+    return better;
   }
 
   toggleStar(setId, cardId) {

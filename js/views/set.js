@@ -33,7 +33,6 @@ export function renderSet({ store, go }, id) {
 
   function drawList() {
     const starred = new Set(set.starred);
-    const known = new Set(set.known);
     filterStar.textContent = `★ 星标 (${starred.size})`;
     const cards = onlyStarred ? set.cards.filter((c) => starred.has(c.id)) : set.cards;
     listEl.replaceChildren(
@@ -71,7 +70,7 @@ export function renderSet({ store, go }, id) {
               h(
                 'div',
                 { class: 'card-row-tools' },
-                known.has(card.id) ? h('span', { class: 'badge', title: '单词卡里标过「会了」' }, '会了') : null,
+                levelBadge(set.learn[card.id]),
                 star,
               ),
             );
@@ -85,7 +84,7 @@ export function renderSet({ store, go }, id) {
     'div',
     { class: 'modes' },
     mode('单词卡', '翻面背, 标记会不会', `${base}/cards`, total > 0),
-    mode('学习', '选择题加打字, 答对为止', null, false),
+    mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
     mode('测试', '出一套卷子打分', null, false),
     mode('配对', '把词和解释连起来, 计时', null, false),
   );
@@ -149,7 +148,7 @@ export function renderSet({ store, go }, id) {
       h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
       h('h1', {}, set.title || '未命名卡片集'),
       set.description ? h('p', { class: 'description' }, set.description) : null,
-      h('p', { class: 'muted' }, `${total} 张卡片 · 会了 ${set.known.length} 张`),
+      h('p', { class: 'muted' }, progressLine(set)),
       modes,
       actions,
       h(
@@ -161,6 +160,23 @@ export function renderSet({ store, go }, id) {
       listEl,
     ),
   };
+}
+
+function progressLine(set) {
+  const total = set.cards.length;
+  const levels = Object.values(set.learn);
+  const mastered = levels.filter((l) => l === 2).length;
+  const learning = levels.filter((l) => l === 1).length;
+  const parts = [`${total} 张卡片`];
+  if (mastered || learning) parts.push(`学习: 掌握 ${mastered} 张, 认得 ${learning} 张`);
+  if (set.known.length) parts.push(`单词卡: 会了 ${set.known.length} 张`);
+  return parts.join(' · ');
+}
+
+function levelBadge(level) {
+  if (level === 2) return h('span', { class: 'badge good', title: '学习模式里掌握了' }, '掌握了');
+  if (level === 1) return h('span', { class: 'badge mid', title: '学习模式里认得了, 还要会写' }, '认得了');
+  return null;
 }
 
 function mode(name, hint, href, enabled) {

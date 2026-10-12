@@ -11,7 +11,10 @@ export function renderHome({ store, go }) {
         { class: 'set-grid' },
         sets.map((set) => {
           const total = set.cards.length;
-          const known = set.known.length;
+          // 学习里掌握了的, 或者单词卡里标了会了的, 都算会了
+          const knownIds = new Set(set.known);
+          for (const [cid, level] of Object.entries(set.learn)) if (level === 2) knownIds.add(cid);
+          const known = knownIds.size;
           const pct = total ? Math.round((known / total) * 100) : 0;
           return h(
             'li',

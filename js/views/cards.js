@@ -4,6 +4,8 @@
 import { h, shuffled } from '../dom.js';
 import { speak, canSpeak } from '../speech.js';
 
+// 在这些框里打字时不接快捷键 (勾选框、单选框不算)
+const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const PREFS_KEY = 'wengu:cards-prefs';
 const DEFAULT_PREFS = { track: true, shuffle: false, defFirst: false, starredOnly: false };
 
@@ -293,8 +295,10 @@ export function renderCards({ store }, id) {
 
   // ---- 键盘 ----
   function onKey(e) {
-    if (e.target.closest?.('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (finished) return;
+    // 勾选框上按空格是勾 / 不勾, 不翻面
+    if (e.key === ' ' && e.target.matches?.('input')) return;
     const key = e.key;
     if (key === ' ' || key === 'ArrowUp' || key === 'ArrowDown' || (key === 'Enter' && e.target === cardEl)) {
       e.preventDefault();

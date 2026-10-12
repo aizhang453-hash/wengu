@@ -113,3 +113,44 @@ test('缺字段的老数据补齐, 乱七八糟的丢掉', () => {
   assert.deepEqual(set.known, []);
   assert.equal(set.termLang, 'auto');
 });
+
+test('学习程度、答对答错、游戏成绩; 删了卡片跟着去掉', () => {
+  const store = new Store(memoryStorage());
+  const set = store.putSet(sampleSet());
+  const [apple, pear] = set.cards;
+  store.setLevels(set.id, { [apple.id]: 2, [pear.id]: 1, nope: 2 });
+  store.setLevels(set.id, { [pear.id]: 7 }); // 不认识的程度不存
+  assert.deepEqual(store.getSet(set.id).learn, { [apple.id]: 2, [pear.id]: 1 });
+
+  store.recordAnswer(set.id, apple.id, true);
+  store.recordAnswer(set.id, apple.id, false);
+  store.recordAnswer(set.id, apple.id, true);
+  store.recordAnswer(set.id, 'nope', true);
+  assert.deepEqual(store.getSet(set.id).stats, { [apple.id]: { right: 2, wrong: 1 } });
+
+  // 配对越快越好, 打陨石越高越好
+  assert.equal(store.recordBest(set.id, 'match', 12000), true);
+  assert.equal(store.recordBest(set.id, 'match', 15000), false);
+  assert.equal(store.recordBest(set.id, 'match', 9000), true);
+  assert.equal(store.recordBest(set.id, 'blast', 300), true);
+  assert.equal(store.recordBest(set.id, 'blast', 200), false);
+  assert.deepEqual(store.getSet(set.id).best, { match: 9000, blast: 300 });
+
+  store.putSet({ ...store.getSet(set.id), cards: [pear] });
+  assert.deepEqual(store.getSet(set.id).learn, { [pear.id]: 1 });
+  assert.deepEqual(store.getSet(set.id).stats, {});
+  assert.deepEqual(store.getSet(set.id).best, { match: 9000, blast: 300 });
+
+  store.resetLearn(set.id);
+  assert.deepEqual(store.getSet(set.id).learn, {});
+});
+
+test('别的标签页存了, reload 读到新的', () => {
+  const storage = memoryStorage();
+  const a = new Store(storage);
+  const b = new Store(storage);
+  a.putSet(sampleSet());
+  assert.equal(b.allSets().length, 0);
+  b.reload();
+  assert.equal(b.allSets().length, 1);
+});

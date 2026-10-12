@@ -5,13 +5,15 @@
 //   #/set/<id>            一个卡片集
 //   #/set/<id>/edit       编辑
 //   #/set/<id>/cards      单词卡
+//   #/set/<id>/learn      学习
 
-import { Store } from './store.js';
+import { Store, KEY } from './store.js';
 import { h } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
 import { renderCards } from './views/cards.js';
+import { renderLearn } from './views/learn.js';
 
 const store = new Store();
 const main = document.getElementById('main');
@@ -29,6 +31,7 @@ function parse(hash) {
     if (sub === '') return { page: 'set', id: parts[1] };
     if (sub === 'edit') return { page: 'edit', id: parts[1] };
     if (sub === 'cards') return { page: 'cards', id: parts[1] };
+    if (sub === 'learn') return { page: 'learn', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -56,8 +59,10 @@ function render() {
   else if (route.page === 'edit') view = renderEdit(ctx, route.id, { openImport: route.openImport });
   else if (route.page === 'set') view = renderSet(ctx, route.id);
   else if (route.page === 'cards') view = renderCards(ctx, route.id);
+  else if (route.page === 'learn') view = renderLearn(ctx, route.id);
   else view = missing();
 
+  view.page = route.page;
   current = view;
   main.replaceChildren(view.el);
   document.title = view.title ? `${view.title} · 温故` : '温故';
@@ -79,6 +84,18 @@ function missing() {
 }
 
 window.addEventListener('hashchange', render);
+
+// 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
+// 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)
+window.addEventListener('storage', (e) => {
+  if (e.key !== null && e.key !== KEY) return;
+  store.reload();
+  if (current?.page === 'home' || current?.page === 'set') {
+    const y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+  }
+});
 window.addEventListener('beforeunload', (e) => {
   if (current?.isDirty?.()) {
     e.preventDefault();
