@@ -85,7 +85,7 @@ export function renderSet({ store, go }, id) {
     { class: 'modes' },
     mode('单词卡', '翻面背, 标记会不会', `${base}/cards`, total > 0),
     mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
-    mode('测试', '出一套卷子打分', null, false),
+    mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
     mode('配对', '把词和解释连起来, 计时', null, false),
   );
 

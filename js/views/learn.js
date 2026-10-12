@@ -463,10 +463,11 @@ export function renderLearn({ store }, id) {
         h(
           'div',
           { class: 'row center' },
+          h('a', { class: 'btn primary', href: `${base}/test` }, '考一下试试'),
           h(
             'button',
             {
-              class: 'btn primary',
+              class: 'btn',
               onclick: () => {
                 const reset = {};
                 for (const c of session.cards) reset[c.id] = 0;

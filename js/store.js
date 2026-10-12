@@ -201,6 +201,15 @@ export class Store {
     if (save) this.save();
   }
 
+  // 判错了, 用户说「我答对了」: 把记的一次错改成对
+  amendAnswer(setId, cardId) {
+    const s = this.getSet(setId)?.stats[cardId];
+    if (!s || s.wrong === 0) return;
+    s.wrong--;
+    s.right++;
+    this.save();
+  }
+
   // 游戏成绩: 配对比谁快 (越小越好), 打陨石比分高 (越大越好)。破纪录返回 true
   recordBest(setId, game, value) {
     const set = this.getSet(setId);

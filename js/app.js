@@ -6,6 +6,7 @@
 //   #/set/<id>/edit       编辑
 //   #/set/<id>/cards      单词卡
 //   #/set/<id>/learn      学习
+//   #/set/<id>/test       测试
 
 import { Store, KEY } from './store.js';
 import { h } from './dom.js';
@@ -14,6 +15,7 @@ import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
 import { renderCards } from './views/cards.js';
 import { renderLearn } from './views/learn.js';
+import { renderExam } from './views/exam.js';
 
 const store = new Store();
 const main = document.getElementById('main');
@@ -32,6 +34,7 @@ function parse(hash) {
     if (sub === 'edit') return { page: 'edit', id: parts[1] };
     if (sub === 'cards') return { page: 'cards', id: parts[1] };
     if (sub === 'learn') return { page: 'learn', id: parts[1] };
+    if (sub === 'test') return { page: 'test', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -60,6 +63,7 @@ function render() {
   else if (route.page === 'set') view = renderSet(ctx, route.id);
   else if (route.page === 'cards') view = renderCards(ctx, route.id);
   else if (route.page === 'learn') view = renderLearn(ctx, route.id);
+  else if (route.page === 'test') view = renderExam(ctx, route.id);
   else view = missing();
 
   view.page = route.page;
