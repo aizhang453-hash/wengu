@@ -7,6 +7,7 @@ import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { printSet } from '../print.js';
 import { newFolder } from './folder.js';
+import { dueCards } from '../srs.js';
 
 export function renderSet({ store, go }, id) {
   const set = store.getSet(id);
@@ -185,6 +186,7 @@ export function renderSet({ store, go }, id) {
   }
 
   const inFolders = store.foldersOf(set.id);
+  const due = dueCards([set]).length;
 
   drawList();
 
@@ -205,6 +207,7 @@ export function renderSet({ store, go }, id) {
             inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, `📁 ${f.name || '未命名文件夹'}`)]),
           )
         : null,
+      due ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(set.id)}` }, `🔁 该复习 ${due} 张 · 去复习`) : null,
       modes,
       h('h2', { class: 'games-title' }, '用游戏来记'),
       games,

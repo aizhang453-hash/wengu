@@ -1,3 +1,5 @@
+import { schedule, dayKey } from './srs.js';
+
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
 
@@ -8,8 +10,9 @@ export function newId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
 function emptyData() {
-  return { version: 1, sets: [], folders: [] };
+  return { version: 1, sets: [], folders: [], activity: {} };
 }
 
 // 文件夹: { id, name, setIds: [卡片集 id...], best: {}, createdAt, updatedAt }
@@ -26,7 +29,7 @@ export const FOLDER_PREFIX = 'folder:';
 //   known: [卡片 id...]        单词卡里标了「会了」的
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
-//   stats: { 卡片 id: { right, wrong } }  学习、测试里答对答错几次
+//   stats: { 卡片 id: { right, wrong, interval, ease, due } }  答对答错几次, 下次哪天复习 (srs.js)
 //   best: { match: 毫秒, blast: 分 }       游戏最好成绩
 //   createdAt, updatedAt }
 export function makeSet(fields = {}) {
@@ -95,9 +98,12 @@ function cleanSet(raw) {
     known: onlyCards(raw.known),
     starred: onlyCards(raw.starred),
     learn: cardMap(raw.learn, (v) => ([0, 1, 2].includes(v) ? v : null)),
-    stats: cardMap(raw.stats, (v) =>
-      v && typeof v === 'object' ? { right: Math.max(0, Number(v.right) || 0), wrong: Math.max(0, Number(v.wrong) || 0) } : null,
-    ),
+    stats: cardMap(raw.stats, (v) => {
+      if (!v || typeof v !== 'object') return null;
+      const out = { right: Math.max(0, Number(v.right) || 0), wrong: Math.max(0, Number(v.wrong) || 0) };
+      if (Number(v.due) > 0) Object.assign(out, { interval: Math.max(0, Number(v.interval) || 0), ease: Number(v.ease) || 2.5, due: Number(v.due) });
+      return out;
+    }),
     best,
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
@@ -132,6 +138,11 @@ export function cleanData(raw) {
     for (const s of raw.sets) {
       const set = cleanSet(s);
       if (set) data.sets.push(set);
+    }
+  }
+  if (raw && raw.activity && typeof raw.activity === 'object') {
+    for (const [day, n] of Object.entries(raw.activity)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number(n) > 0) data.activity[day] = Math.floor(Number(n));
     }
   }
   if (raw && Array.isArray(raw.folders)) {
@@ -324,14 +335,25 @@ export class Store {
     this.save();
   }
 
-  // 记一次答对 / 答错 (学习、测试用), 以后挑「老是错的」
-  recordAnswer(setId, cardId, correct, { save = true } = {}) {
+  // 记一次答对 / 答错 (单词卡、学习、测试、复习都用): 记次数, 排下次哪天复习, 算今天学过
+  recordAnswer(setId, cardId, correct, { save = true, now = Date.now() } = {}) {
     const set = this.ownerOf(setId, cardId);
     if (!set || !set.cards.some((c) => c.id === cardId)) return;
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
     if (correct) s.right++;
     else s.wrong++;
+    Object.assign(s, schedule(s, correct, now));
+    this.touchActivity(now);
     if (save) this.save();
+  }
+
+  // 今天学过 (连续打卡)
+  touchActivity(now = Date.now()) {
+    const key = dayKey(now);
+    this.data.activity[key] = (this.data.activity[key] ?? 0) + 1;
+    // 一年多以前的不留
+    const keys = Object.keys(this.data.activity).sort();
+    while (keys.length > 400) delete this.data.activity[keys.shift()];
   }
 
   // 判错了, 用户说「我答对了」: 把记的一次错改成对
@@ -340,6 +362,7 @@ export class Store {
     if (!s || s.wrong === 0) return;
     s.wrong--;
     s.right++;
+    Object.assign(s, schedule(s, true));
     this.save();
   }
 
@@ -351,10 +374,9 @@ export class Store {
     if (!set || !(value > 0)) return false;
     const old = set.best[game];
     const better = game === 'match' ? old === undefined || value < old : old === undefined || value > old;
-    if (better) {
-      set.best[game] = value;
-      this.save();
-    }
+    if (better) set.best[game] = value;
+    this.touchActivity();
+    this.save();
     return better;
   }
 

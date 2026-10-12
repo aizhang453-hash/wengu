@@ -3,6 +3,7 @@
 import { h, toast, openDialog, askText, switchRow } from '../dom.js';
 import { FOLDER_PREFIX, makeFolder } from '../store.js';
 import { pickDistinct, formatTime } from '../games.js';
+import { dueCards } from '../srs.js';
 
 export function renderFolder({ store, go }, id) {
   const folder = store.getFolder(id);
@@ -97,6 +98,9 @@ export function renderFolder({ store, go }, id) {
       h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
       h('h1', {}, `📁 ${folder.name || '未命名文件夹'}`),
       h('p', { class: 'muted' }, `${sets.length} 个卡片集 · 一共 ${total} 张卡片`),
+      dueCards(sets).length
+        ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(combo.id)}` }, `🔁 该复习 ${dueCards(sets).length} 张 · 去复习`)
+        : null,
       h('h2', { class: 'games-title' }, '合起来一起学'),
       h(
         'div',

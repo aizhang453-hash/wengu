@@ -3,6 +3,7 @@
 //   #/new                 新建卡片集
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
+//   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
 //   #/set/<id>            一个卡片集
 //   #/set/<id>/edit       编辑
@@ -25,6 +26,7 @@ import { renderMatch } from './views/match.js';
 import { renderBlast } from './views/blast.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
+import { renderReview } from './views/review.js';
 
 const store = new Store();
 const main = document.getElementById('main');
@@ -39,6 +41,7 @@ function parse(hash) {
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
+  if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
   if (parts[0] === 'set' && parts[1]) {
@@ -83,6 +86,7 @@ function render() {
   else if (route.page === 'blast') view = renderBlast(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
+  else if (route.page === 'review') view = renderReview(ctx, route.id);
   else view = missing();
 
   view.page = route.page;

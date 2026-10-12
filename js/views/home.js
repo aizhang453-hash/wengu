@@ -3,6 +3,44 @@
 import { h, toast, download, today } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
 import { newFolder } from './folder.js';
+import { dueCards, dueTomorrow, streak, lastDays } from '../srs.js';
+
+const WEEKDAYS = '日一二三四五六';
+
+// 首页最上面: 连续学了几天、最近 7 天、今天该复习几张
+function todayPanel(store, sets) {
+  const due = dueCards(sets).length;
+  const days = streak(store.data.activity);
+  const week = lastDays(store.data.activity, 7);
+  const studiedToday = week.at(-1).count > 0;
+  return h(
+    'section',
+    { class: 'today' },
+    h(
+      'div',
+      { class: 'today-streak' },
+      h('span', { class: `flame${days ? ' on' : ''}`, 'aria-hidden': 'true' }, '🔥'),
+      h(
+        'div',
+        {},
+        h('strong', {}, days ? `连续学了 ${days} 天` : '今天开始打卡吧'),
+        h('div', { class: 'muted small' }, studiedToday ? `今天答了 ${week.at(-1).count} 题` : days ? '今天还没学, 学一下就不断' : '学一题就算今天学过'),
+      ),
+      h(
+        'div',
+        { class: 'week', 'aria-label': '最近 7 天' },
+        week.map((d) => h('span', { class: `day${d.count ? ' on' : ''}`, title: `${d.key}: ${d.count} 题` }, WEEKDAYS[d.date.getDay()])),
+      ),
+    ),
+    h(
+      'div',
+      { class: 'today-review' },
+      due
+        ? [h('div', {}, h('strong', {}, `今天该复习 ${due} 张`), h('div', { class: 'muted small' }, '照遗忘的规律排好的, 趁快忘了再看一眼')), h('a', { class: 'btn primary', href: '#/review' }, '开始复习')]
+        : [h('div', {}, h('strong', {}, '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, dueTomorrow(sets) ? `明天有 ${dueTomorrow(sets)} 张` : '答过的卡片会自动排进以后的复习'))],
+    ),
+  );
+}
 
 export function renderHome({ store, go }) {
   const sets = store.allSets();
@@ -132,6 +170,7 @@ export function renderHome({ store, go }) {
             )
           : null,
       ),
+      sets.length ? todayPanel(store, sets) : null,
       list,
       sets.length ? folderSection : null,
       backup,

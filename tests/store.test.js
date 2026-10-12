@@ -12,6 +12,11 @@ function memoryStorage() {
   };
 }
 
+// 只看答对答错几次 (不看复习日期)
+function counts(stats) {
+  return Object.fromEntries(Object.entries(stats).map(([id, s]) => [id, { right: s.right, wrong: s.wrong }]));
+}
+
 function sampleSet() {
   return makeSet({ title: '水果', cards: [makeCard('apple', '苹果'), makeCard('pear', '梨')] });
 }
@@ -126,7 +131,7 @@ test('学习程度、答对答错、游戏成绩; 删了卡片跟着去掉', () 
   store.recordAnswer(set.id, apple.id, false);
   store.recordAnswer(set.id, apple.id, true);
   store.recordAnswer(set.id, 'nope', true);
-  assert.deepEqual(store.getSet(set.id).stats, { [apple.id]: { right: 2, wrong: 1 } });
+  assert.deepEqual(counts(store.getSet(set.id).stats), { [apple.id]: { right: 2, wrong: 1 } });
 
   // 配对越快越好, 打陨石越高越好
   assert.equal(store.recordBest(set.id, 'match', 12000), true);
@@ -192,7 +197,7 @@ test('合起来学: 卡片是各卡片集的, 进度记回原来的卡片集', (
   assert.deepEqual(store.getSet(a.id).known, [a1.id]);
   assert.deepEqual(store.getSet(b.id).starred, [b2.id]);
   assert.deepEqual(store.getSet(a.id).learn, { [a1.id]: 2 });
-  assert.deepEqual(store.getSet(b.id).stats, { [b2.id]: { right: 0, wrong: 1 } });
+  assert.deepEqual(counts(store.getSet(b.id).stats), { [b2.id]: { right: 0, wrong: 1 } });
   // 合起来的那个每次读都是最新的
   assert.deepEqual(combo.known, [a1.id]);
   assert.deepEqual(combo.starred, [b2.id]);
@@ -220,4 +225,23 @@ test('备份带上文件夹', () => {
   to.importBackup(from.exportBackup());
   assert.equal(to.allFolders().length, 1);
   assert.deepEqual(to.allFolders()[0].setIds, [a.id]);
+});
+
+test('答题时排好下次复习, 记今天学过; 存了再读还在', () => {
+  const storage = memoryStorage();
+  const store = new Store(storage);
+  const set = store.putSet(sampleSet());
+  const [apple, pear] = set.cards;
+  const noon = new Date(2026, 9, 12, 12).getTime();
+  store.recordAnswer(set.id, apple.id, true, { now: noon });
+  store.recordAnswer(set.id, pear.id, false, { now: noon });
+  const stats = new Store(storage).getSet(set.id).stats;
+  assert.equal(stats[apple.id].interval, 1);
+  assert.equal(stats[apple.id].due, new Date(2026, 9, 13).getTime());
+  assert.equal(stats[pear.id].due, noon + 10 * 60 * 1000);
+  assert.deepEqual(new Store(storage).data.activity, { '2026-10-12': 2 });
+
+  // 判错了改成对: 复习也按答对排
+  store.amendAnswer(set.id, pear.id);
+  assert.equal(store.getSet(set.id).stats[pear.id].interval, 1);
 });

@@ -2959,6 +2959,90 @@ a.card-row.search-hit:hover {
   font-size: 0.9rem;
 }
 
+/* ---- 今天: 打卡、复习 ---- */
+.today {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 700px) {
+  .today {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.today-streak,
+.today-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.today-review {
+  justify-content: space-between;
+}
+
+.flame {
+  font-size: 1.8rem;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.flame.on {
+  filter: none;
+  opacity: 1;
+}
+
+.week {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.day {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.day.on {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.due-chip {
+  display: inline-block;
+  margin: 2px 0 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--mid-soft);
+  color: var(--mid);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.due-chip:hover {
+  filter: brightness(0.97);
+}
+
+.review-title {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+}
+
 /* ---- 空页面 ---- */
 .empty {
   padding: 48px 0;

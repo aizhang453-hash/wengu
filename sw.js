@@ -30,6 +30,7 @@ const FILES = [
   'js/search.js',
   'js/sound.js',
   'js/speech.js',
+  'js/srs.js',
   'js/store.js',
   'js/views/blast.js',
   'js/views/cards.js',
@@ -39,6 +40,7 @@ const FILES = [
   'js/views/home.js',
   'js/views/learn.js',
   'js/views/match.js',
+  'js/views/review.js',
   'js/views/search.js',
   'js/views/set.js',
 ];

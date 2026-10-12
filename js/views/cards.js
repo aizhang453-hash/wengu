@@ -191,6 +191,7 @@ export function renderCards({ store }, id) {
     const card = deck[index];
     history.push({ id: card.id, known, wasKnown: set.known.includes(card.id) });
     store.setKnown(set.id, card.id, known);
+    store.recordAnswer(set.id, card.id, known); // 也排进以后的复习
     busy = true;
     cardEl.classList.add(known ? 'fly-right' : 'fly-left');
     setTimeout(() => {
