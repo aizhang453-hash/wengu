@@ -11,9 +11,12 @@ export function newId() {
 }
 
 // activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
+// deleted: { 卡片集 id 或 'folder:文件夹 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
 function emptyData() {
-  return { version: 1, sets: [], folders: [], activity: {} };
+  return { version: 1, sets: [], folders: [], activity: {}, deleted: {} };
 }
+
+const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
 
 // 文件夹: { id, name, setIds: [卡片集 id...], best: {}, createdAt, updatedAt }
 export function makeFolder(name = '') {
@@ -31,7 +34,7 @@ export const FOLDER_PREFIX = 'folder:';
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
 //   stats: { 卡片 id: { right, wrong, interval, ease, due } }  答对答错几次, 下次哪天复习 (srs.js)
 //   best: { match: 毫秒, blast / blocks / gems: 分, wordle: 最长连胜 }  游戏最好成绩
-//   createdAt, updatedAt }
+//   createdAt, updatedAt (改了卡片), progressAt (学习进度变了, 同步时用) }
 export function makeSet(fields = {}) {
   const now = Date.now();
   return {
@@ -48,6 +51,7 @@ export function makeSet(fields = {}) {
     best: {},
     createdAt: now,
     updatedAt: now,
+    progressAt: 0,
     ...fields,
   };
 }
@@ -102,11 +106,13 @@ function cleanSet(raw) {
       if (!v || typeof v !== 'object') return null;
       const out = { right: Math.max(0, Number(v.right) || 0), wrong: Math.max(0, Number(v.wrong) || 0) };
       if (Number(v.due) > 0) Object.assign(out, { interval: Math.max(0, Number(v.interval) || 0), ease: Number(v.ease) || 2.5, due: Number(v.due) });
+      if (Number(v.at) > 0) out.at = Number(v.at); // 最后一次答这张的时间 (同步时用)
       return out;
     }),
     best,
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
+    progressAt: Number(raw.progressAt) || 0,
   });
 }
 
@@ -139,6 +145,10 @@ export function cleanData(raw) {
       const set = cleanSet(s);
       if (set) data.sets.push(set);
     }
+  }
+  if (raw && raw.deleted && typeof raw.deleted === 'object') {
+    const old = Date.now() - DELETED_KEEP_MS;
+    for (const [id, t] of Object.entries(raw.deleted)) if (Number(t) > old) data.deleted[id] = Number(t);
   }
   if (raw && raw.activity && typeof raw.activity === 'object') {
     for (const [day, n] of Object.entries(raw.activity)) {
@@ -176,10 +186,18 @@ export class Store {
     this.data = this.load();
   }
 
-  // 存不下 (超过浏览器给的空间、无痕模式) 时不抛错, 调 onSaveError 提示一下, 返回 false
-  save() {
+  // 同步拿回来合并好的数据, 整个换掉
+  replaceData(data) {
+    this.data = cleanData(data);
+    return this.save({ fromSync: true });
+  }
+
+  // 存不下 (超过浏览器给的空间、无痕模式) 时不抛错, 调 onSaveError 提示一下, 返回 false。
+  // 存好了调 onChange (同步用; 同步自己存的不算)
+  save({ fromSync = false } = {}) {
     try {
       this.storage?.setItem(KEY, JSON.stringify(this.data));
+      if (!fromSync) this.onChange?.();
       return true;
     } catch (e) {
       this.onSaveError?.(e);
@@ -270,6 +288,7 @@ export class Store {
 
   deleteSet(id) {
     this.data.sets = this.data.sets.filter((s) => s.id !== id);
+    this.data.deleted[id] = Date.now();
     for (const f of this.data.folders) f.setIds = f.setIds.filter((sid) => sid !== id);
     this.save();
     this.forgetLocal(id);
@@ -305,6 +324,7 @@ export class Store {
 
   deleteFolder(id) {
     this.data.folders = this.data.folders.filter((f) => f.id !== id);
+    this.data.deleted[FOLDER_PREFIX + id] = Date.now();
     this.save();
     this.forgetLocal(FOLDER_PREFIX + id);
   }
@@ -331,11 +351,12 @@ export class Store {
     const has = set.known.includes(cardId);
     if (known && !has) set.known.push(cardId);
     if (!known && has) set.known = set.known.filter((id) => id !== cardId);
+    set.progressAt = Date.now();
     this.save();
   }
 
   resetKnown(setId) {
-    for (const set of this.setsOf(setId)) set.known = [];
+    for (const set of this.setsOf(setId)) Object.assign(set, { known: [], progressAt: Date.now() });
     this.save();
   }
 
@@ -343,13 +364,16 @@ export class Store {
   setLevels(setId, levels) {
     for (const [id, level] of Object.entries(levels)) {
       const set = this.ownerOf(setId, id);
-      if (set?.cards.some((c) => c.id === id) && [0, 1, 2].includes(level)) set.learn[id] = level;
+      if (set?.cards.some((c) => c.id === id) && [0, 1, 2].includes(level)) {
+        set.learn[id] = level;
+        set.progressAt = Date.now();
+      }
     }
     this.save();
   }
 
   resetLearn(setId) {
-    for (const set of this.setsOf(setId)) set.learn = {};
+    for (const set of this.setsOf(setId)) Object.assign(set, { learn: {}, progressAt: Date.now() });
     this.save();
   }
 
@@ -360,7 +384,7 @@ export class Store {
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
     if (correct) s.right++;
     else s.wrong++;
-    Object.assign(s, schedule(s, correct, now));
+    Object.assign(s, schedule(s, correct, now), { at: now });
     this.touchActivity(now);
     if (save) this.save();
   }
@@ -389,7 +413,7 @@ export class Store {
     if (!s || s.wrong === 0) return;
     s.wrong--;
     s.right++;
-    Object.assign(s, schedule(s, true));
+    Object.assign(s, schedule(s, true), { at: Date.now() });
     this.save();
   }
 
@@ -412,6 +436,7 @@ export class Store {
     if (!set) return false;
     const has = set.starred.includes(cardId);
     set.starred = has ? set.starred.filter((id) => id !== cardId) : [...set.starred, cardId];
+    set.progressAt = Date.now();
     this.save();
     return !has;
   }

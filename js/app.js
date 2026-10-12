@@ -3,6 +3,7 @@
 //   #/new                 新建卡片集
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
+//   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
 //   #/set/<id>            一个卡片集
@@ -18,7 +19,7 @@
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
-import { h, toast } from './dom.js';
+import { h, toast, icon } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
@@ -33,6 +34,8 @@ import { renderWordle } from './views/wordle.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
+import { renderSync } from './views/sync.js';
+import { SyncManager } from './sync.js';
 
 const store = new Store();
 let lastSaveError = 0;
@@ -55,6 +58,7 @@ function parse(hash) {
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
+  if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
   if (parts[0] === 'set' && parts[1]) {
@@ -92,7 +96,7 @@ function render() {
   shownHash = hash;
 
   const route = parse(hash);
-  const ctx = { store, go };
+  const ctx = { store, go, syncer };
   let view;
   if (route.page === 'home') view = renderHome(ctx);
   else if (route.page === 'edit') view = renderEdit(ctx, route.id, { openImport: route.openImport });
@@ -108,6 +112,7 @@ function render() {
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);
+  else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else view = missing();
 
   view.page = route.page;
@@ -143,6 +148,28 @@ document.getElementById('search-form')?.addEventListener('submit', (e) => {
   go(`#/search/${encodeURIComponent(q)}`);
 });
 
+// ---- 多设备同步 ----
+const badge = document.getElementById('sync-badge');
+const syncer = new SyncManager(store, {
+  onStatus: ({ status, message }) => {
+    if (!badge) return;
+    badge.hidden = status === 'off';
+    badge.className = `sync-badge ${status}`;
+    const text = { syncing: '同步中', ok: '已同步', error: '同步出错', idle: '同步' }[status] ?? '';
+    badge.replaceChildren(h('span', { class: 'sync-icon', 'aria-hidden': 'true' }, icon(status === 'error' ? 'alert' : status === 'syncing' ? 'refresh' : 'cloud', 18)), h('span', { class: 'sync-text' }, text));
+    badge.title = status === 'error' ? `同步出错: ${message}` : `多设备同步: ${text}`;
+  },
+  // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
+  onApplied: () => {
+    if (['home', 'set', 'folder', 'search'].includes(current?.page)) {
+      const y = window.scrollY;
+      render();
+      window.scrollTo(0, y);
+    }
+  },
+});
+store.onChange = () => syncer.changed();
+
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)
 window.addEventListener('storage', (e) => {
@@ -173,3 +200,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 setTimeout(() => cleanMedia(store), 5000);
 
 render();
+syncer.start();

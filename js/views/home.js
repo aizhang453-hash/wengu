@@ -150,6 +150,7 @@ export function renderHome({ store, go }) {
       h('button', { class: 'btn', onclick: () => fileInput.click() }, '导入备份'),
       fileInput,
     ),
+    h('p', { class: 'muted small sync-hint' }, '电脑、手机都想用? ', h('a', { href: '#/sync' }, '设置多设备同步'), ', 以后自动同步, 不用再导来导去。'),
   );
 
   return {
