@@ -2764,6 +2764,170 @@ mark {
   object-fit: contain;
 }
 
+/* ---- 搜索 ---- */
+.top-search {
+  flex: 1;
+  max-width: 420px;
+  margin-left: auto;
+}
+
+.top-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+}
+
+.top-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+@media (max-width: 600px) {
+  .logo-text {
+    display: none;
+  }
+}
+
+.search-results h2 {
+  margin-top: 24px;
+}
+
+a.card-row.search-hit {
+  color: var(--text);
+  text-decoration: none;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 1fr);
+}
+
+a.card-row.search-hit:hover {
+  border-color: var(--accent);
+}
+
+.hit-set {
+  align-self: center;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  a.card-row.search-hit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hit-set {
+    text-align: left;
+  }
+}
+
+/* ---- 打印卡片集 ---- */
+#print-area {
+  display: none;
+}
+
+.dialog-body .goal-option {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+@media print {
+  body.print-area-on > *:not(#print-area) {
+    display: none !important;
+  }
+
+  body.print-area-on #print-area {
+    display: block;
+  }
+
+  body.print-area-on {
+    background: #fff;
+  }
+
+  .print-title {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .print-sub {
+    margin: 2px 0 14px;
+    color: #555;
+    font-size: 0.85rem;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 6px 8px;
+    border: 1px solid #999;
+    text-align: left;
+    vertical-align: top;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .print-table tr {
+    break-inside: avoid;
+  }
+
+  .pt-num {
+    width: 2.5em;
+    color: #666;
+  }
+
+  .print-img {
+    display: block;
+    max-width: 160px;
+    max-height: 110px;
+    margin-top: 4px;
+    object-fit: contain;
+  }
+
+  .print-fold {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .fold-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 1.6in;
+    border: 1px dashed #999;
+    border-top: none;
+    break-inside: avoid;
+  }
+
+  .fold-card:first-child {
+    border-top: 1px dashed #999;
+  }
+
+  .fold-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 14px;
+    font-size: 1.1rem;
+    text-align: center;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .fold-side + .fold-side {
+    border-left: 2px dashed #555;
+  }
+}
+
 /* ---- 空页面 ---- */
 .empty {
   padding: 48px 0;

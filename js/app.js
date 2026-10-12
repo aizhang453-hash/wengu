@@ -2,6 +2,7 @@
 //   #/                    首页 (所有卡片集)
 //   #/new                 新建卡片集
 //   #/import              新建卡片集, 打开「导入」
+//   #/search/<字>         搜索
 //   #/set/<id>            一个卡片集
 //   #/set/<id>/edit       编辑
 //   #/set/<id>/cards      单词卡
@@ -21,6 +22,7 @@ import { renderLearn } from './views/learn.js';
 import { renderExam } from './views/exam.js';
 import { renderMatch } from './views/match.js';
 import { renderBlast } from './views/blast.js';
+import { renderSearch } from './views/search.js';
 
 const store = new Store();
 const main = document.getElementById('main');
@@ -33,6 +35,7 @@ function parse(hash) {
   if (parts.length === 0) return { page: 'home' };
   if (parts[0] === 'new') return { page: 'edit', id: null };
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
+  if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'set' && parts[1]) {
     const sub = parts[2] ?? '';
     if (sub === '') return { page: 'set', id: parts[1] };
@@ -73,6 +76,7 @@ function render() {
   else if (route.page === 'test') view = renderExam(ctx, route.id);
   else if (route.page === 'match') view = renderMatch(ctx, route.id);
   else if (route.page === 'blast') view = renderBlast(ctx, route.id);
+  else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else view = missing();
 
   view.page = route.page;
@@ -98,6 +102,16 @@ function missing() {
 
 window.addEventListener('hashchange', render);
 
+// 顶上的搜索框
+document.getElementById('search-form')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = e.target.querySelector('input');
+  const q = input.value.trim();
+  input.value = '';
+  input.blur();
+  go(`#/search/${encodeURIComponent(q)}`);
+});
+
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)
 window.addEventListener('storage', (e) => {
@@ -118,6 +132,11 @@ window.addEventListener('beforeunload', (e) => {
 
 // 请浏览器别在空间紧的时候自己清掉卡片 (不一定答应, 答不答应都不影响用)
 navigator.storage?.persist?.().catch(() => {});
+
+// 断网也能用 (sw.js 把网页的文件存下来)。只有 https 或者自己电脑上才能开
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 
 // 没有卡片用的图片、录音 (比如编辑时加了又没保存), 过一会儿删掉
 setTimeout(() => cleanMedia(store), 5000);

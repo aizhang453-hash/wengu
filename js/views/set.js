@@ -5,6 +5,7 @@ import { formatCards } from '../parse.js';
 import { pickDistinct, formatTime } from '../games.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
+import { printSet } from '../print.js';
 
 export function renderSet({ store, go }, id) {
   const set = store.getSet(id);
@@ -116,6 +117,7 @@ export function renderSet({ store, go }, id) {
       },
       '复制成文字',
     ),
+    h('button', { class: 'btn', disabled: total === 0, onclick: () => printSet(set) }, '打印'),
     h(
       'button',
       {
