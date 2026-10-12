@@ -5,6 +5,7 @@
 //   #/search/<字>         搜索
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
+//   #/ai                  AI 功能设置 (选填)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
@@ -19,6 +20,7 @@
 //   #/set/<id>/gems       宝石游戏
 //   #/set/<id>/wordle     Wordle
 //   #/set/<id>/diagram    标注图练习
+//   #/set/<id>/quiz       AI 练习题
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
@@ -35,6 +37,7 @@ import { renderBlocks } from './views/blocks.js';
 import { renderGems } from './views/gems.js';
 import { renderWordle } from './views/wordle.js';
 import { renderDiagramPractice } from './views/diagram.js';
+import { renderAISettings, renderAIQuiz } from './views/ai.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
@@ -66,6 +69,7 @@ function parse(hash) {
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
+  if (parts[0] === 'ai') return { page: 'ai' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
@@ -82,6 +86,7 @@ function parse(hash) {
     if (sub === 'gems') return { page: 'gems', id: parts[1] };
     if (sub === 'wordle') return { page: 'wordle', id: parts[1] };
     if (sub === 'diagram') return { page: 'diagram', id: parts[1] };
+    if (sub === 'quiz') return { page: 'quiz', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -119,6 +124,8 @@ function render() {
   else if (route.page === 'gems') view = renderGems(ctx, route.id);
   else if (route.page === 'wordle') view = renderWordle(ctx, route.id);
   else if (route.page === 'diagram') view = renderDiagramPractice(ctx, route.id);
+  else if (route.page === 'quiz') view = renderAIQuiz(ctx, route.id);
+  else if (route.page === 'ai') view = renderAISettings(ctx);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);

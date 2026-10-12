@@ -11,6 +11,7 @@ import { canRecord, record } from '../recorder.js';
 import { cardImage } from '../cardview.js';
 import { fileImportPanel } from './fileimport.js';
 import { diagramEditor } from './diagram.js';
+import { aiCardsPanel } from './ai.js';
 
 const FORMATS = [
   ['bold', 'B', '加粗 (Ctrl+B)'],
@@ -739,6 +740,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       h('button', { class: 'btn small', onclick: swapAll, title: '所有卡片的词和解释对调' }, '⇄ 词和解释对调'),
     ),
     importBox,
+    h('details', { class: 'import-box ai-box' }, h('summary', {}, '✨ AI 出卡片 (选填)'), aiCardsPanel({ onCards: (cards, title) => addImported(cards, title) })),
     diagramBox,
     rowsEl,
     h(

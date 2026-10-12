@@ -151,6 +151,7 @@ export function renderHome({ store, go }) {
       fileInput,
     ),
     h('p', { class: 'muted small sync-hint' }, '电脑、手机都想用? ', h('a', { href: '#/sync' }, '设置多设备同步'), ', 以后自动同步, 不用再导来导去。'),
+    h('p', { class: 'muted small sync-hint' }, '想让 AI 帮忙出卡片、判分、讲解? ', h('a', { href: '#/ai' }, 'AI 功能 (选填)'), ', 用你自己的 API 密钥。'),
   );
 
   return {
