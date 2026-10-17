@@ -3,6 +3,7 @@
 
 import { h, toast, fill } from '../dom.js';
 import { makeSet, makeCard } from '../store.js';
+import { planOf, newSeed } from '../plan.js';
 import { parseCards, guessTermSep, guessCardSep } from '../parse.js';
 import { LANGS } from '../speech.js';
 import { MARKS, toggleMark } from '../rich.js';
@@ -62,6 +63,9 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     );
   const termLang = langSelect(draft.termLang);
   const defLang = langSelect(draft.defLang);
+  // 每天背新词时先背哪些 (plan.js): 照卡片的顺序 (导入的就是文件里的顺序), 或者打乱
+  const orderSel = h('select', { class: 'input', onchange: markDirty }, h('option', { value: 'set' }, '按卡片的顺序'), h('option', { value: 'random' }, '随机'));
+  orderSel.value = planOf(draft).order;
 
   // ---- 卡片一行一行 ----
   const rowsEl = h('ol', { class: 'edit-rows' });
@@ -538,8 +542,11 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       if (title && !titleInput.value.trim()) (titleInput.value = title), markDirty();
       pasteEl.focus();
     },
-    onCards: (cards, title) => addImported(cards, title),
-    onSets: (list) => {
+    onCards: (cards, title, { random = false } = {}) => {
+      if (random) orderSel.value = 'random';
+      addImported(cards, title);
+    },
+    onSets: (list, { random = false } = {}) => {
       const made = [];
       try {
         for (const g of list) {
@@ -547,6 +554,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
           const set = store.putSet({ title: g.title || '未命名卡片集', cards });
           // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
           store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
+          if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
           made.push(set);
         }
       } catch {
@@ -705,8 +713,10 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     // 进度在别的页面 (单词卡、学习) 也会变, 以存着的为准
     const latest = store.getSet(draft.id);
     if (latest) {
-      for (const key of ['known', 'starred', 'learn', 'stats', 'best']) set[key] = latest[key];
+      for (const key of ['known', 'starred', 'learn', 'stats', 'best', 'plan']) set[key] = latest[key];
     }
+    const plan = planOf(set);
+    if (orderSel.value !== plan.order) set.plan = { ...plan, order: orderSel.value, seed: orderSel.value === 'random' ? newSeed() : plan.seed, at: Date.now() };
     try {
       store.putSet(set);
     } catch {
@@ -753,6 +763,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       { class: 'lang-row' },
       h('label', {}, '词的语言 (朗读用) ', termLang),
       h('label', {}, '解释的语言 ', defLang),
+      h('label', {}, '背新词的顺序 ', orderSel),
       h('button', { class: 'btn small', onclick: swapAll, title: '所有卡片的词和解释对调' }, '⇄ 词和解释对调'),
     ),
     importBox,

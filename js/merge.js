@@ -9,6 +9,7 @@
 //   文件夹                            听最后改过的那边
 //   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
 //   翻卡自评的记录 (revlog)            两边的合起来
+//   每天的计划、复习上限              听后改的那边
 
 import { mergeRuns } from './quiz.js';
 import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
@@ -51,6 +52,7 @@ function mergeSet(a, b) {
     stats: mergeStats(a.stats, b.stats),
     best: mergeBest(a.best, b.best),
     runs: mergeRuns(a.runs, b.runs),
+    plan: (b.plan?.at ?? 0) > (a.plan?.at ?? 0) ? b.plan : a.plan,
     createdAt: Math.min(a.createdAt ?? Infinity, b.createdAt ?? Infinity),
     updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0),
     progressAt: Math.max(a.progressAt ?? 0, b.progressAt ?? 0),
@@ -82,5 +84,6 @@ export function mergeData(local, remote) {
     activity,
     deleted,
     revlog: mergeLogs(local.revlog, remote.revlog),
+    settings: (remote.settings?.at ?? 0) > (local.settings?.at ?? 0) ? remote.settings : local.settings,
   };
 }

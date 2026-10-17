@@ -3,7 +3,9 @@
 import { h, toast, download, today } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
 import { newFolder } from './folder.js';
-import { dueCards, dueTomorrow, streak, lastDays } from '../srs.js';
+import { dueTomorrow, streak, lastDays } from '../srs.js';
+import { todayQueue, reviewedToday, plannedSets, newToday, planOf } from '../plan.js';
+import { todayText, planLine } from './plan.js';
 import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 import { dueMistakes } from '../mistakes.js';
 
@@ -11,7 +13,6 @@ const WEEKDAYS = '日一二三四五六';
 
 // 首页最上面: 连续学了几天、最近 7 天、今天该复习几张
 function todayPanel(store, sets) {
-  const due = dueCards(sets).length;
   const days = streak(store.data.activity);
   const week = lastDays(store.data.activity, 7);
   const studiedToday = week.at(-1).count > 0;
@@ -34,14 +35,47 @@ function todayPanel(store, sets) {
         week.map((d) => h('span', { class: `day${d.count ? ' on' : ''}`, title: `${d.key}: ${d.count} 题` }, WEEKDAYS[d.date.getDay()])),
       ),
     ),
-    h(
-      'div',
-      { class: 'today-review' },
-      due
-        ? [h('div', {}, h('strong', {}, `今天该复习 ${due} 张`), h('div', { class: 'muted small' }, '照遗忘的规律排好的, 趁快忘了再看一眼')), h('a', { class: 'btn primary', href: '#/review' }, '开始复习')]
-        : [h('div', {}, h('strong', {}, '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, dueTomorrow(sets) ? `明天有 ${dueTomorrow(sets)} 张` : '单词卡里翻过、自己说了会不会的卡片, 会排进以后的复习'))],
-    ),
+    reviewToday(store, sets),
     mistakesToday(store),
+  );
+}
+
+// 今天要背的: 到日子的复习 (每天有上限) + 定了计划的卡片集的新词; 下面一个一个说计划走到哪了
+function reviewToday(store, sets) {
+  const reviewed = reviewedToday(sets);
+  const { reviews, fresh, held } = todayQueue(sets, { cap: store.reviewCap, reviewed });
+  const text = todayText(reviews.length, fresh.length);
+  const planned = plannedSets(sets);
+  const tomorrow = dueTomorrow(sets);
+  let head;
+  if (text) {
+    head = [
+      h(
+        'div',
+        {},
+        h('strong', {}, `今天: ${text}`),
+        h('div', { class: 'muted small' }, held ? `还有 ${held} 张到日子的超过了每天 ${store.reviewCap} 张的上限, 明天再来` : '照遗忘的规律排好的, 趁快忘了再看一眼'),
+      ),
+      h('a', { class: 'btn primary', href: '#/review' }, '开始'),
+    ];
+  } else {
+    const hint = held ? `今天复习够 ${store.reviewCap} 张了, 还有 ${held} 张明天再来` : tomorrow ? `明天有 ${tomorrow} 张要复习` : planned.length ? '明天接着学新词' : '在卡片集里定个「每天背新词」的计划, 每天自动给你几个新词';
+    head = [h('div', {}, h('strong', {}, reviewed || planned.some((s) => newToday(s).learned) ? '今天的背完了 ✓' : '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, hint)), held ? h('a', { class: 'btn', href: '#/review' }, '接着复习') : null];
+  }
+  return h(
+    'div',
+    { class: `today-review today-plan${planned.length ? ' wide' : ''}` },
+    h('div', { class: 'today-head' }, head),
+    planned.length
+      ? h(
+          'ul',
+          { class: 'plan-list' },
+          planned.map((set) => {
+            const info = newToday(set);
+            return h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'), h('span', { class: 'muted small' }, planLine(info, planOf(set))));
+          }),
+        )
+      : null,
   );
 }
 

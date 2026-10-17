@@ -2,7 +2,8 @@
 
 import { h, toast, openDialog, askText, switchRow } from '../dom.js';
 import { FOLDER_PREFIX, makeFolder } from '../store.js';
-import { dueCards } from '../srs.js';
+import { todayQueue, reviewedToday } from '../plan.js';
+import { todayText } from './plan.js';
 
 export function renderFolder({ store, go }, id) {
   const folder = store.getFolder(id);
@@ -96,9 +97,7 @@ export function renderFolder({ store, go }, id) {
       h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
       h('h1', {}, `📁 ${folder.name || '未命名文件夹'}`),
       h('p', { class: 'muted' }, `${sets.length} 个卡片集 · 一共 ${total} 张卡片`),
-      dueCards(sets).length
-        ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(combo.id)}` }, `🔁 该复习 ${dueCards(sets).length} 张 · 去复习`)
-        : null,
+      todayChip(store, sets, combo.id),
       h('h2', { class: 'games-title' }, '合起来一起学'),
       h(
         'div',
@@ -157,4 +156,11 @@ export function newFolder(store, then) {
     okText: '建好了',
     onOk: (name) => then(store.putFolder(makeFolder(name))),
   });
+}
+
+// 今天要背的 (到日子的复习 + 里面定了计划的卡片集的新词)
+function todayChip(store, sets, id) {
+  const { reviews, fresh } = todayQueue(sets, { cap: store.reviewCap, reviewed: reviewedToday(store.allSets()) });
+  const text = todayText(reviews.length, fresh.length);
+  return text ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(id)}` }, `🔁 今天: ${text} · 去背`) : null;
 }

@@ -11,7 +11,7 @@ import { printSet } from '../print.js';
 import { openShareDialog } from './share.js';
 import { openExportDialog } from './export.js';
 import { newFolder } from './folder.js';
-import { dueCards } from '../srs.js';
+import { planPanel } from './plan.js';
 
 export function renderSet({ store, go }, id) {
   const set = store.getSet(id);
@@ -190,7 +190,6 @@ export function renderSet({ store, go }, id) {
   }
 
   const inFolders = store.foldersOf(set.id);
-  const due = dueCards([set]).length;
 
   drawList();
 
@@ -211,7 +210,7 @@ export function renderSet({ store, go }, id) {
             inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, `📁 ${f.name || '未命名文件夹'}`)]),
           )
         : null,
-      due ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(set.id)}` }, `🔁 该复习 ${due} 张 · 去复习`) : null,
+      total ? planPanel({ store, go }, set) : null, // 每天背新词的计划, 今天要背的
       modes,
       actions,
       set.virtual ? null : diagramSection(set),

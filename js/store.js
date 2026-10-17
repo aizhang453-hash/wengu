@@ -3,6 +3,7 @@ import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { cleanLog, mergeLogs, addReview, addReviews, dropLastReview } from './revlog.js';
+import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -19,8 +20,20 @@ export function newId() {
 // mistakes: 错题集 (mistakes.js)
 // revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
+// settings: { reviewsPerDay 每天最多复习几张, at 改的时间 (同步时听后改的) }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {} };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, settings: defaultSettings() };
+}
+
+const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, at: 0 });
+
+export function cleanSettings(raw) {
+  const out = defaultSettings();
+  if (!raw || typeof raw !== 'object') return out;
+  const cap = Math.round(Number(raw.reviewsPerDay));
+  if (cap >= 1) out.reviewsPerDay = Math.min(MAX_REVIEW_CAP, cap);
+  if (Number(raw.at) > 0) out.at = Number(raw.at);
+  return out;
 }
 
 const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
@@ -39,10 +52,12 @@ export const FOLDER_PREFIX = 'folder:';
 //   known: [卡片 id...]        单词卡里标了「会了」的
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
-//   stats: { 卡片 id: { right, wrong, interval, ease, s, d, due, at } }  答对答错几次, 记忆状态, 下次哪天复习 (srs.js)
+//   stats: { 卡片 id: { right, wrong, interval, ease, s, d, due, at, first } }  答对答错几次, 记忆状态, 下次哪天复习 (srs.js),
+//          first 第一次排进复习的时间 (算今天学了几个新词)
 //   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
 //   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
 //   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
+//   plan: 每天学几个新词 (plan.js), 没定过是 null
 //   createdAt, updatedAt (改了卡片), progressAt (学习进度变了, 同步时用) }
 export function makeSet(fields = {}) {
   const now = Date.now();
@@ -61,6 +76,7 @@ export function makeSet(fields = {}) {
     diagram: null, // 标注图 (diagram.js)
     kind: 'cards',
     runs: [],
+    plan: null,
     createdAt: now,
     updatedAt: now,
     progressAt: 0,
@@ -121,12 +137,14 @@ function cleanSet(raw) {
       if (Number(v.due) > 0) Object.assign(out, { interval: Math.max(0, Number(v.interval) || 0), ease: Number(v.ease) || 2.5, due: Number(v.due) });
       if (Number(v.s) > 0 && Number(v.d) >= 1) Object.assign(out, { s: Number(v.s), d: Math.min(10, Number(v.d)) }); // FSRS 的稳定性、难度
       if (Number(v.at) > 0) out.at = Number(v.at); // 最后一次答这张的时间 (同步时用)
+      if (out.due && Number(v.first) > 0) out.first = Number(v.first);
       return out;
     }),
     best,
     diagram: cleanDiagram(raw.diagram, ids),
     kind: raw.kind === 'quiz' ? 'quiz' : 'cards',
     runs: cleanRuns(raw.runs),
+    plan: raw.kind === 'quiz' ? null : cleanPlan(raw.plan),
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
     progressAt: Number(raw.progressAt) || 0,
@@ -173,6 +191,7 @@ export function cleanData(raw) {
     }
   }
   data.revlog = cleanLog(raw?.revlog);
+  data.settings = cleanSettings(raw?.settings);
   if (raw && Array.isArray(raw.mistakes)) {
     const seen = new Set();
     for (const m of raw.mistakes) {
@@ -470,6 +489,7 @@ export class Store {
     if (correct) s.right++;
     else s.wrong++;
     if (selfRated) {
+      if (!(s.due > 0)) s.first = now; // 新词今天开始背
       Object.assign(s, schedule(s, correct, now), { at: now });
       addReview(this.data.revlog, cardId, now, correct);
     }
@@ -487,11 +507,29 @@ export class Store {
     for (const [cardId, reviews] of entries) {
       if (!ids.has(cardId) || !reviews?.length) continue;
       addReviews(this.data.revlog, cardId, reviews);
-      if (!set.stats[cardId]?.at) set.stats[cardId] = replay(reviews);
+      if (!set.stats[cardId]?.at) set.stats[cardId] = { ...replay(reviews), first: Math.min(...reviews.map((r) => r.at)) };
       n++;
     }
     if (n) this.save();
     return n;
+  }
+
+  // 每天的计划 (plan.js): 改几项, 别的照旧
+  setPlan(setId, changes, now = Date.now()) {
+    const set = this.data.sets.find((s) => s.id === setId);
+    if (!set || set.kind === 'quiz') return null;
+    set.plan = cleanPlan({ ...set.plan, ...changes, at: now });
+    this.save();
+    return set.plan;
+  }
+
+  get reviewCap() {
+    return this.data.settings.reviewsPerDay;
+  }
+
+  setReviewCap(n, now = Date.now()) {
+    this.data.settings = cleanSettings({ ...this.data.settings, reviewsPerDay: n, at: now });
+    this.save();
   }
 
   // 撤销时把一张卡片的统计恢复成以前的样子 (null 就是以前没有)
@@ -588,6 +626,7 @@ export class Store {
       else this.data.folders[i] = folder;
     }
     this.data.revlog = mergeLogs(this.data.revlog, incoming.revlog);
+    if (incoming.settings.at > this.data.settings.at) this.data.settings = incoming.settings;
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
       if (i === -1) this.data.mistakes.push(m);

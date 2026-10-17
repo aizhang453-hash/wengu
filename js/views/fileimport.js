@@ -13,6 +13,7 @@ const BIG = 2000; // 卡片多过这么多张, 加进编辑页会很慢, 建议�
 // onText(text, title): 普通文字, 放进粘贴框
 // onCards(cards, title): 加进正在编辑的卡片集 (cards 已经是 { term, def, image, termAudio, defAudio }, 图片声音存好了)
 // onSets([{ title, cards }]): 每个工作表 / 牌组建一个卡片集
+// 后两个还有 { random }: 每天背新词时打乱顺序 (不勾就按文件里的顺序)
 export function fileImportPanel({ onText, onCards, onSets }) {
   const input = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: () => input.files[0] && load(input.files[0]) });
   const panel = h('div', { class: 'file-panel', hidden: true });
@@ -61,6 +62,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         : null;
     if (sheetSelect) sheetSelect.value = '0';
     const headerBox = h('input', { type: 'checkbox', onchange: () => (resetColumns(false), draw()) });
+    const randomBox = h('input', { type: 'checkbox' });
     const termSel = h('select', { class: 'input', 'aria-label': '词那一列', onchange: () => draw() });
     const defSel = h('select', { class: 'input', 'aria-label': '解释那一列', onchange: () => draw() });
     const extraSel = h('select', { class: 'input', 'aria-label': '解释后面再接上', onchange: () => draw() });
@@ -167,8 +169,9 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         const done = groups.map((g) => ({ title: g.title, cards: cards.slice(k, (k += g.cards.length)) }));
         if (failed) toast(`${failed} 个图片 / 声音拿不到, 跳过了`);
         panel.hidden = true;
-        if (mode === 'add') onCards(done[0].cards, done[0].title);
-        else onSets(done);
+        const opts = { random: randomBox.checked };
+        if (mode === 'add') onCards(done[0].cards, done[0].title, opts);
+        else onSets(done, opts);
       } catch (e) {
         console.warn(e);
         toast('存不进去, 可能浏览器空间满了');
@@ -190,6 +193,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         h('label', {}, '解释', defSel),
         h('label', {}, '解释后面再接上', extraSel),
         fieldsNamed ? null : h('label', { class: 'check' }, headerBox, ' 第一行是标题, 不要'),
+        h('label', { class: 'check', title: '每天背新词时先背哪些; 不勾就按文件里的顺序。以后在卡片集里也能改' }, randomBox, ' 新词打乱顺序背'),
       ),
       previewEl,
       h('div', { class: 'row' }, addBtn, directBtn, eachBtn),

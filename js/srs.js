@@ -15,7 +15,7 @@ export const RETENTION = 0.9; // 到该复习那天还记得的把握
 
 const fsrs = new FSRSAlgorithm(generatorParameters({ request_retention: RETENTION, enable_fuzz: false, enable_short_term: true }));
 
-function startOfDay(t) {
+export function startOfDay(t) {
   const d = new Date(t);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
@@ -74,6 +74,14 @@ export function replay(reviews) {
   }
   if (!lastStep) return null;
   return { right, wrong, ...nextDue(lastStep, lastRating, last), at: last };
+}
+
+// 现在还记得的把握 (0–1): 稳定性越大、隔得越短越高。今天的复习先来最可能忘的
+export function retrievability(stat, now = Date.now()) {
+  const s = Number(stat?.s) || Number(stat?.interval) || 0;
+  const last = Number(stat?.at) || (Number(stat?.due) && Number(stat?.interval) ? Number(stat.due) - Number(stat.interval) * DAY : 0);
+  if (!(s > 0) || !last) return 0;
+  return fsrs.forgetting_curve(Math.max(0, (now - last) / DAY), s);
 }
 
 export function isDue(stat, now = Date.now()) {
