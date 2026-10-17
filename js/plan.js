@@ -51,14 +51,18 @@ function hash(text) {
   return x >>> 0;
 }
 
-// 还没背过的卡片, 照计划的顺序
-export function newCards(set) {
-  const stats = set.stats; // 文件夹合起来的每次读都要现算, 只读一次
-  const list = set.cards.filter((c) => isNew(stats[c.id]));
+// 照计划的顺序排 (卡片集里的顺序, 或者按种子打乱)
+export function inPlanOrder(set, list) {
   const plan = planOf(set);
   if (plan.order !== 'random') return list;
   const key = new Map(list.map((c) => [c.id, hash(plan.seed + c.id)]));
-  return list.sort((a, b) => key.get(a.id) - key.get(b.id));
+  return [...list].sort((a, b) => key.get(a.id) - key.get(b.id));
+}
+
+// 还没背过的卡片, 照计划的顺序
+export function newCards(set) {
+  const stats = set.stats; // 文件夹合起来的每次读都要现算, 只读一次
+  return inPlanOrder(set, set.cards.filter((c) => isNew(stats[c.id])));
 }
 
 // 考试那天 0 点

@@ -7,6 +7,8 @@ import { editButton, editCardDialog } from './cardedit.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
 import { stripMarks } from '../rich.js';
+import { TEST_SCOPES, defaultTestScope, scopeCards } from '../scope.js';
+import { queueFor } from './plan.js';
 
 const PREFS_KEY = 'wengu:exam-prefs';
 const LETTERS = 'ABCDEFGHIJ';
@@ -20,10 +22,11 @@ function loadPrefs() {
       types: { ...d.types, ...p.types },
       answerWith: ['def', 'term', 'both'].includes(p.answerWith) ? p.answerWith : d.answerWith,
       smart: p.smart ?? d.smart,
-      starredOnly: Boolean(p.starredOnly),
+      // 从哪些出题 (没选过的按卡片集大小定; 以前开着「只考星标」的当成星标的)
+      scope: p.scope in TEST_SCOPES ? p.scope : p.starredOnly ? 'starred' : null,
     };
   } catch {
-    return { ...d, types: { ...d.types }, starredOnly: false };
+    return { ...d, types: { ...d.types }, scope: null };
   }
 }
 
@@ -56,6 +59,9 @@ export function renderExam({ store }, id) {
   }
 
   const prefs = loadPrefs();
+  // 从哪些出题: 上次选的这个卡片集一张都没有就换成全部
+  const scopeOf = (kind) => scopeCards(set, kind === 'today' ? 'reviewed' : kind, { fresh: queueFor(store, set).fresh.map((x) => x.card) });
+  if (!prefs.scope || !scopeOf(prefs.scope).length) prefs.scope = scopeOf(defaultTestScope(set)).length ? defaultTestScope(set) : 'all';
   const root = h('section', { class: 'exam-page' });
   let timer = null;
   let inProgress = null; // 答卷时: () => 答了几题
@@ -63,9 +69,9 @@ export function renderExam({ store }, id) {
   // ---- 设置 (跟 Quizlet 一样是个弹出窗口; 打开测试时先按上次的设置出一套垫在后面) ----
   let dialog = null;
   function openSetup() {
-    const starredCount = set.starred.length;
     const draft = structuredClone(prefs);
-    const poolSize = () => (draft.starredOnly && starredCount ? starredCount : set.cards.length);
+    const sizes = Object.fromEntries(Object.keys(TEST_SCOPES).map((k) => [k, scopeOf(k).length]));
+    const poolSize = () => sizes[draft.scope] || set.cards.length;
     const maxText = h('span', { class: 'muted' });
     const countInput = h('input', {
       class: 'input count',
@@ -123,6 +129,29 @@ export function renderExam({ store }, id) {
       title: '设置你的测试',
       body: [
         h('p', { class: 'muted dialog-sub' }, set.title || '未命名卡片集'),
+        h('div', { class: 'ask-label' }, '从哪些出题'),
+        h(
+          'div',
+          { class: 'chips scope-chips', role: 'group', 'aria-label': '从哪些出题' },
+          Object.entries(TEST_SCOPES).map(([k, name]) => {
+            const b = h(
+              'button',
+              {
+                class: `chip${draft.scope === k ? ' on' : ''}`,
+                type: 'button',
+                disabled: !sizes[k],
+                title: { studied: '学过、背过的 (单词卡、学习、复习里)', today: '今天学的新词、今天复习的', starred: '点了 ★ 的', all: '整个卡片集' }[k],
+                onclick: () => {
+                  draft.scope = k;
+                  for (const c of b.parentElement.children) c.classList.toggle('on', c === b);
+                  refreshMax();
+                },
+              },
+              `${name} (${sizes[k]})`,
+            );
+            return b;
+          }),
+        ),
         h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '问题', maxText)), countInput),
         h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '回答')), answerSelect),
         ...typeRows,
@@ -132,16 +161,6 @@ export function renderExam({ store }, id) {
           checked: draft.smart,
           onchange: (v) => (draft.smart = v),
         }),
-        starredCount
-          ? switchRow({
-              label: `只考星标 (${starredCount})`,
-              checked: draft.starredOnly,
-              onchange: (v) => {
-                draft.starredOnly = v;
-                refreshMax();
-              },
-            })
-          : null,
       ].filter(Boolean),
       footer: [h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: start }, '开始测试')],
       onClose: () => {
@@ -153,11 +172,8 @@ export function renderExam({ store }, id) {
   }
 
   function poolCards() {
-    if (prefs.starredOnly && set.starred.length) {
-      const starred = new Set(set.starred);
-      return set.cards.filter((c) => starred.has(c.id));
-    }
-    return set.cards;
+    const cards = scopeOf(prefs.scope);
+    return cards.length ? cards : set.cards;
   }
 
   // ---- 答卷 ----

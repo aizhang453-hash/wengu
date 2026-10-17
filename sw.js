@@ -42,6 +42,7 @@ const FILES = [
   'js/recorder.js',
   'js/revlog.js',
   'js/rich.js',
+  'js/scope.js',
   'js/search.js',
   'js/share.js',
   'js/sound.js',

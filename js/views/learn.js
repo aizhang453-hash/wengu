@@ -1,5 +1,6 @@
 // 学习模式 (照 Quizlet 的 Learn): 先选目标 (备考 / 全部记住),
 // 再一轮一轮做题 (选择、判断、打字、单词卡), 直到全部掌握。
+// 卡片多的 (从 Anki 搬来的上千张) 不一下全学: 「学哪些」选接着学 N 个 / 今天的新词 / 星标的 / 全部 (scope.js)
 
 import { h, fill, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { speak, canSpeak, canSay, sayCard, stopSpeaking } from '../speech.js';
@@ -9,6 +10,8 @@ import { editButton, editCardDialog } from './cardedit.js';
 import { grade } from '../grade.js';
 import { playSound } from '../sound.js';
 import { LearnSession, MASTERED, LEARNING, DEFAULT_LEARN_OPTIONS } from '../learn.js';
+import { LEARN_SCOPES, DEFAULT_NEXT, defaultLearnScope, scopeCards, scopeSizes } from '../scope.js';
+import { queueFor } from './plan.js';
 
 // 在这些框里打字时不接快捷键 (勾选框、单选框不算)
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
@@ -89,7 +92,21 @@ export function renderLearn({ store }, id) {
   }
 
   const goalKey = `wengu:learn-goal:${set.id}`;
+  const scopeKey = `wengu:learn-scope:${set.id}`;
   let prefs = loadPrefs();
+  // 学哪些 (每个卡片集自己记着; 以前开着「学习星标」的当成星标的)
+  let scope = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(scopeKey) ?? 'null');
+      if (s && s.kind in LEARN_SCOPES) return { kind: s.kind, count: Math.min(500, Math.max(1, Math.round(s.count) || DEFAULT_NEXT)) };
+    } catch {
+      // 用默认的
+    }
+    return prefs.starredOnly && set.starred.length ? { kind: 'starred', count: DEFAULT_NEXT } : defaultLearnScope(set);
+  })();
+  const todayFresh = () => queueFor(store, set).fresh.map((x) => x.card);
+  const scopeText = () => (scope.kind === 'next' ? `接着学 ${scope.count} 个` : LEARN_SCOPES[scope.kind]);
+  const scopeBtn = h('button', { class: 'btn small scope-btn', title: '学哪些卡片', onclick: () => openScope() });
   let goal = (() => {
     try {
       const g = JSON.parse(localStorage.getItem(goalKey) ?? 'null');
@@ -125,12 +142,9 @@ export function renderLearn({ store }, id) {
   function build() {
     flush();
     clearTimeout(autoTimer);
-    let cards = set.cards;
-    if (prefs.starredOnly) {
-      const starred = new Set(set.starred);
-      const only = cards.filter((c) => starred.has(c.id));
-      if (only.length) cards = only;
-    }
+    fill(scopeBtn, `学: ${scopeText()} ▾`);
+    const cards = scopeCards(set, scope.kind, { count: scope.count, fresh: todayFresh() });
+    if (!cards.length) return showEmptyScope();
     session = new LearnSession(cards, set.learn, {
       goal: goal ?? 'memorize',
       types: prefs.types,
@@ -139,7 +153,7 @@ export function renderLearn({ store }, id) {
       shuffle: prefs.shuffle,
       canListen: (card) => card.term.trim() !== '' && canSay(card, 'term'),
     });
-    // 选择题的错误选项从整个卡片集里挑, 只学星标时也一样
+    // 选择题的错误选项从整个卡片集里挑, 只学一部分时也一样
     session.pool = set.cards;
     drawProgress();
     if (!goal) return showGoal();
@@ -608,16 +622,18 @@ export function renderLearn({ store }, id) {
     phase = 'done';
     clearTimeout(autoTimer);
     if (prefs.sound) playSound('done');
+    const next = scope.kind === 'next' ? scopeCards(set, 'next', { count: scope.count }).length : 0;
     stage.replaceChildren(
       h(
         'div',
         { class: 'summary' },
-        h('h2', {}, '全部掌握了 🎉'),
-        h('p', { class: 'muted' }, `${session.cards.length} 张卡片都会了。过几天再来复习一遍, 记得更牢。`),
+        h('h2', {}, scope.kind === 'all' ? '全部掌握了 🎉' : `这 ${session.cards.length} 张都掌握了 🎉`),
+        h('p', { class: 'muted' }, `${session.cards.length} 张卡片都会了。在单词卡、今天的复习里翻过、说了会不会的, 会按遗忘的规律排进以后的复习。`),
         h(
           'div',
           { class: 'row center' },
-          h('a', { class: 'btn primary', href: `${base}/test` }, '考一下试试'),
+          next ? h('button', { class: 'btn primary', onclick: () => build() }, `接着学下 ${next} 个`) : null,
+          h('a', { class: `btn${next ? '' : ' primary'}`, href: `${base}/test` }, '考一下试试'),
           h('button', { class: 'btn', onclick: () => restart(false) }, '再学一遍'),
           h('a', { class: 'btn', href: base }, '回到卡片集'),
         ),
@@ -625,10 +641,97 @@ export function renderLearn({ store }, id) {
     );
   }
 
+  // 选的那种一张都没有
+  function showEmptyScope() {
+    phase = 'done';
+    const why = {
+      next: '没背过的都学完了 🎉 可以选「全部」再练练。',
+      today: '今天还没有新词。在卡片集里定个「每天背新词」的计划, 每天的新词就会在这里; 或者选「接着学」。',
+      starred: '还没有星标的卡片 (卡片右边的 ★)。',
+    };
+    stage.replaceChildren(
+      h(
+        'div',
+        { class: 'summary' },
+        h('h2', {}, `「${scopeText()}」没有卡片`),
+        h('p', { class: 'muted' }, why[scope.kind] ?? ''),
+        h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: () => openScope() }, '换一种'), h('a', { class: 'btn', href: base }, '回到卡片集')),
+      ),
+    );
+  }
+
+  // 学哪些: 接着学 N 个 / 今天的新词 / 星标的 / 全部 (几张写在旁边)
+  function openScope() {
+    let kind = scope.kind;
+    const fresh = todayFresh();
+    const count = () => Math.min(500, Math.max(1, Math.round(Number(countInput.value)) || scope.count));
+    const sizes = scopeSizes(set, Object.keys(LEARN_SCOPES), { count: scope.count, fresh });
+    const radios = {};
+    const nextSize = h('span', { class: 'muted' });
+    const showNext = () => (nextSize.textContent = ` (${scopeCards(set, 'next', { count: count() }).length} 张)`);
+    const countInput = h('input', {
+      class: 'input count',
+      type: 'number',
+      min: 1,
+      max: 500,
+      value: scope.count,
+      inputmode: 'numeric',
+      'aria-label': '接着学几个',
+      oninput: () => {
+        showNext();
+        radios.next.checked = true;
+        kind = 'next';
+      },
+    });
+    const desc = {
+      next: '照卡片集里的顺序, 还没背过、还没掌握的往下学; 学完了点「接着学下几个」',
+      today: '今天的复习里要出的新词 (定了「每天背新词」才有): 先用选择题、打字学一遍',
+      starred: '卡片右边点了 ★ 的',
+      all: `整个卡片集 ${set.cards.length} 张`,
+    };
+    const rows = Object.entries(LEARN_SCOPES).map(([k, name]) => {
+      const id = `learn-scope-${k}`;
+      radios[k] = h('input', { type: 'radio', id, name: 'learnScope', value: k, checked: kind === k, disabled: k !== 'next' && !sizes[k], onchange: () => (kind = k) });
+      return h(
+        'div',
+        { class: `switch-row${k !== 'next' && !sizes[k] ? ' disabled' : ''}` },
+        h(
+          'label',
+          { class: 'switch-text', for: id },
+          h('span', { class: 'switch-label' }, k === 'next' ? '接着学' : name, k === 'next' ? nextSize : h('span', { class: 'muted' }, ` (${sizes[k]} 张)`)),
+          h('span', { class: 'switch-desc' }, desc[k]),
+        ),
+        k === 'next' ? h('span', { class: 'scope-count' }, countInput, ' 个') : null,
+        radios[k],
+      );
+    });
+    showNext();
+    const d = openDialog({
+      title: '学哪些',
+      body: rows,
+      footer: [
+        h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
+        h(
+          'button',
+          {
+            class: 'btn primary',
+            onclick: () => {
+              scope = { kind, count: count() };
+              saveJSON(scopeKey, scope);
+              d.close();
+              build();
+            },
+          },
+          '好了',
+        ),
+      ],
+    });
+  }
+
   // 重新开始学习模式: 清掉进度; askGoal 时也重新选目标
   function restart(askGoal = true) {
     const reset = {};
-    for (const c of set.cards) reset[c.id] = 0;
+    for (const c of session?.cards ?? set.cards) reset[c.id] = 0; // 只清这次学的这些
     store.setLevels(set.id, reset);
     if (askGoal) {
       goal = null;
@@ -683,7 +786,6 @@ export function renderLearn({ store }, id) {
         'div',
         { class: 'chip-row' },
         chip('shuffle', icon('shuffle', 18), '随机'),
-        chip('starredOnly', '★', set.starred.length ? `学习星标 (${set.starred.length})` : '学习星标', set.starred.length === 0),
         chip('sound', '🔊', '音效'),
       ),
       section(
@@ -832,7 +934,7 @@ export function renderLearn({ store }, id) {
         'div',
         { class: 'cards-head' },
         h('a', { class: 'back', href: base }, `← ${set.title || '未命名卡片集'}`),
-        h('button', { class: 'icon-btn tool', title: '选项', 'aria-label': '选项', onclick: () => openSettings() }, icon('gear')),
+        h('div', { class: 'row' }, scopeBtn, h('button', { class: 'icon-btn tool', title: '选项', 'aria-label': '选项', onclick: () => openSettings() }, icon('gear'))),
       ),
       h('div', { class: 'progress-ends' }, leftNum, h('span', { class: 'meter stacked' }, barMastered, barLearning), rightNum),
       stage,

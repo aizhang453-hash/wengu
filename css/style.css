@@ -3093,6 +3093,27 @@ a.card-row.search-hit:hover {
   margin-left: 6px;
 }
 
+/* ---- 学习、测试: 学哪些 / 从哪些出题 ---- */
+.scope-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+.scope-count .input.count {
+  width: 4.5em;
+}
+
+.switch-row.disabled {
+  opacity: 0.5;
+}
+
+.scope-chips {
+  margin-bottom: 8px;
+}
+
 /* ---- 首页: 今天要背的 (像 Anki 的牌组列表) ---- */
 .deck-table {
   width: 100%;
