@@ -7,6 +7,7 @@ import { rich, cardImage, sayButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { dueCards, dueTomorrow } from '../srs.js';
 import { shuffle } from '../questions.js';
+import { reviewCount } from '../revlog.js';
 
 const PREFS_KEY = 'wengu:review-prefs';
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
@@ -134,6 +135,12 @@ export function renderReview({ store }, setId = null) {
     draw();
   }
 
+  // 复习记录攒了多少 (以后按自己的记录优化 FSRS 用)
+  function logNote() {
+    const n = reviewCount(store.data.log);
+    return n ? h('p', { class: 'muted small' }, `复习记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 就能按你自己的记录优化。`) : null;
+  }
+
   function finish() {
     const tomorrow = dueTomorrow(sets);
     if (total === 0) {
@@ -145,6 +152,7 @@ export function renderReview({ store }, setId = null) {
           h('h2', {}, '今天没有要复习的'),
           h('p', { class: 'muted' }, '单词卡、学习、测试里答过的卡片, 会照遗忘的规律排到以后某一天再出来: 答对了隔得越来越久, 答错了很快再来。'),
           tomorrow ? h('p', {}, `明天有 ${tomorrow} 张要复习。`) : null,
+          logNote(),
           h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: back }, `回到${backText}`)),
         ),
       );
@@ -159,6 +167,7 @@ export function renderReview({ store }, setId = null) {
         h('h2', {}, '今天的复习做完了'),
         h('p', { class: 'muted' }, `复习了 ${total} 张, 一次就记得的 ${right} 张。`),
         tomorrow ? h('p', {}, `明天还有 ${tomorrow} 张。`) : h('p', { class: 'muted' }, '明天没有要复习的。'),
+        logNote(),
         h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: back }, `回到${backText}`)),
       ),
     );

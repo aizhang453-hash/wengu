@@ -2,6 +2,7 @@ import { schedule, dayKey } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
+import { cleanLog, mergeLogs, addReview, amendLastReview, dropLastReview, mistakeKey } from './revlog.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -16,8 +17,9 @@ export function newId() {
 // activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
 // deleted: { 卡片集 id 或 'folder:文件夹 id' 或 'mistake:错题 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
 // mistakes: 错题集 (mistakes.js)
+// log: 每一次答题的记录 (revlog.js), 以后按自己的记录优化复习排法用
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {} };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, log: {} };
 }
 
 const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
@@ -169,6 +171,7 @@ export function cleanData(raw) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number(n) > 0) data.activity[day] = Math.floor(Number(n));
     }
   }
+  data.log = cleanLog(raw?.log);
   if (raw && Array.isArray(raw.mistakes)) {
     const seen = new Set();
     for (const m of raw.mistakes) {
@@ -364,6 +367,7 @@ export class Store {
     const m = this.getMistake(id);
     if (!m) return null;
     m.review = reviewAfter(m.review, correct, now);
+    addReview(this.data.log, mistakeKey(id), now, correct);
     this.touchActivity(now);
     this.save();
     return m.review;
@@ -463,6 +467,7 @@ export class Store {
     if (correct) s.right++;
     else s.wrong++;
     Object.assign(s, schedule(s, correct, now), { at: now });
+    addReview(this.data.log, cardId, now, correct);
     this.touchActivity(now);
     if (save) this.save();
   }
@@ -473,6 +478,7 @@ export class Store {
     if (!set) return;
     if (stat) set.stats[cardId] = stat;
     else delete set.stats[cardId];
+    dropLastReview(this.data.log, cardId);
     this.save();
   }
 
@@ -492,6 +498,7 @@ export class Store {
     s.wrong--;
     s.right++;
     Object.assign(s, schedule(s, true), { at: Date.now() });
+    amendLastReview(this.data.log, cardId);
     this.save();
   }
 
@@ -560,6 +567,7 @@ export class Store {
       if (i === -1) this.data.folders.push(folder);
       else this.data.folders[i] = folder;
     }
+    this.data.log = mergeLogs(this.data.log, incoming.log);
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
       if (i === -1) this.data.mistakes.push(m);

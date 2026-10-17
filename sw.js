@@ -37,6 +37,7 @@ const FILES = [
   'js/quiz.js',
   'js/quizlet.js',
   'js/recorder.js',
+  'js/revlog.js',
   'js/rich.js',
   'js/search.js',
   'js/share.js',
