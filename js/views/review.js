@@ -15,6 +15,7 @@ import { openOptimizeDialog } from './optimize.js';
 const PREFS_KEY = 'wengu:review-prefs';
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const MORE = 10; // 「再学几个新词」一次几个
+const AGAIN_GAP = 4; // 不会 / 忘了的, 隔几张再出来 (跟 Anki 一样一直出, 直到点会 / 记得)
 
 export function renderReview({ store }, setId = null) {
   // 卡片集这些每次开始、做完时都从 store 现拿: 别的标签页存了、同步回来了, 数据会整个换掉
@@ -48,7 +49,8 @@ export function renderReview({ store }, setId = null) {
   let queue = [];
   let total = 0;
   let held = 0; // 超过每天上限、没排进来的
-  let retried = new Set();
+  let retried = new Set(); // 这次忘过的 (不算「一次就会」)
+  let history = []; // 撤销用: 每答一张之前的样子
   let done = 0;
   let right = 0;
   let flipped = false;
@@ -87,6 +89,7 @@ export function renderReview({ store }, setId = null) {
     freshTotal = queue.filter((x) => x.fresh).length;
     sub.textContent = todayText(total - freshTotal, freshTotal);
     retried = new Set();
+    history = [];
     done = 0;
     right = 0;
     draw();
@@ -94,6 +97,7 @@ export function renderReview({ store }, setId = null) {
 
   const bar = h('span', { class: 'meter-fill' });
   const counter = h('span', { class: 'counter' });
+  const undoBtn = h('button', { class: 'btn small undo-btn', title: '撤销 (Z): 退回上一张重新选', onclick: () => undo() }, icon('undo', 16), ' 撤销');
   const stage = h('div', { class: 'learn-stage' });
 
   function sides() {
@@ -103,6 +107,7 @@ export function renderReview({ store }, setId = null) {
   function draw() {
     bar.style.width = `${total ? (done / total) * 100 : 0}%`;
     counter.textContent = total ? `${Math.min(done, total)} / ${total}` : '';
+    undoBtn.disabled = !history.length;
     if (!queue.length) return finish();
     const { set, card } = queue[0];
     const [front, backSide] = sides();
@@ -158,7 +163,7 @@ export function renderReview({ store }, setId = null) {
         answer,
         h('div', { class: 'row center' }, flipBtn),
         judge,
-        h('p', { class: 'muted small center-text' }, fresh ? '空格翻面 · 1 不会 · 2 会' : '空格翻面 · 1 忘了 · 2 记得'),
+        h('p', { class: 'muted small center-text' }, fresh ? '空格翻面 · 1 不会 · 2 会 · Z 撤销' : '空格翻面 · 1 忘了 · 2 记得 · Z 撤销'),
       ),
     );
     flipBtn.focus();
@@ -175,21 +180,32 @@ export function renderReview({ store }, setId = null) {
     stage.reveal?.();
   }
 
+  // 记得 / 会: 这张背完了; 忘了 / 不会: 隔几张再出来, 一直到点记得 (跟 Anki 一样)
   function grade(ok) {
     if (!flipped || !queue.length) return;
-    const item = queue.shift();
-    store.recordAnswer(item.set.id, item.card.id, ok, { selfRated: true });
+    const item = queue[0];
+    const stat = store.ownerOf(item.set.id, item.card.id)?.stats[item.card.id];
+    const before = { queue: [...queue], done, right, retried: new Set(retried), item, stat: stat ? structuredClone(stat) : null };
+    queue.shift();
+    before.code = store.recordAnswer(item.set.id, item.card.id, ok, { selfRated: true });
+    history.push(before);
     if (prefs.sound) playSound(ok ? 'right' : 'wrong');
     if (ok) {
-      if (!retried.has(item.card.id)) right++; // 忘过一次的不算「一次就记得」
+      if (!retried.has(item.card.id)) right++; // 忘过的不算「一次就会」
       done++;
-    } else if (!retried.has(item.card.id)) {
-      // 忘了的这次复习最后再来一遍
-      retried.add(item.card.id);
-      queue.push(item);
     } else {
-      done++;
+      retried.add(item.card.id);
+      queue.splice(Math.min(queue.length, AGAIN_GAP), 0, item);
     }
+    draw();
+  }
+
+  // 撤销: 上一张恢复成答以前的样子 (复习记录、下次哪天复习都退回去), 再出来重新选
+  function undo() {
+    const last = history.pop();
+    if (!last) return;
+    store.restoreStat(last.item.set.id, last.item.card.id, last.stat, last.code);
+    ({ queue, done, right, retried } = last);
     draw();
   }
 
@@ -255,7 +271,7 @@ export function renderReview({ store }, setId = null) {
           tomorrow ? h('p', {}, `明天有 ${tomorrow} 张要复习。`) : null,
           planNotes(),
           logNote(),
-          h('div', { class: 'row center' }, moreButtons(), backBtn),
+          h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), ' 撤销最后一张') : null, moreButtons(), backBtn),
         ),
       );
       return;
@@ -273,13 +289,18 @@ export function renderReview({ store }, setId = null) {
         tomorrow ? h('p', {}, `明天还有 ${tomorrow} 张。`) : h('p', { class: 'muted' }, '明天没有要复习的。'),
         planNotes(),
         logNote(),
-        h('div', { class: 'row center' }, moreButtons(), backBtn),
+        h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), ' 撤销最后一张') : null, moreButtons(), backBtn),
       ),
     );
   }
 
   function onKey(e) {
-    if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey || !queue.length) return;
+    if (dialogOpen() || e.target.closest?.(TYPING) || e.altKey) return;
+    if ((e.key === 'z' || e.key === 'Z' || e.key === 'Backspace') && !e.shiftKey) {
+      e.preventDefault();
+      return undo();
+    }
+    if (e.metaKey || e.ctrlKey || !queue.length) return;
     if (e.key === ' ' && !e.target.closest?.('button')) {
       e.preventDefault();
       reveal();
@@ -337,7 +358,7 @@ export function renderReview({ store }, setId = null) {
     el: h(
       'section',
       { class: 'learn-page' },
-      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${backText}`), counter),
+      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${backText}`), h('div', { class: 'row' }, undoBtn, counter)),
       h('h1', { class: 'review-title' }, scope ? `复习: ${scope.title || '未命名卡片集'}` : '今天的复习'),
       sub,
       h('span', { class: 'meter thin' }, bar),
