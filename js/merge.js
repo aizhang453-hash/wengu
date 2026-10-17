@@ -59,6 +59,16 @@ function mergeSet(a, b) {
   };
 }
 
+// 复习上限听后改的; FSRS 参数也听后换的 (优化过的、换回默认的都算)
+export function mergeSettings(a, b) {
+  if (!b) return a;
+  if (!a) return b;
+  const general = (b.at ?? 0) > (a.at ?? 0) ? b : a;
+  const changed = (x) => Math.max(x.fsrsAt ?? 0, x.fsrs?.at ?? 0);
+  const params = changed(b) > changed(a) ? b : a;
+  return { ...general, fsrs: params.fsrs ?? null, fsrsAt: changed(params) || undefined };
+}
+
 function mergeFolder(a, b) {
   const newer = (b.updatedAt ?? 0) > (a.updatedAt ?? 0) ? b : a;
   return { ...newer, best: mergeBest(a.best, b.best), updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0) };
@@ -84,6 +94,6 @@ export function mergeData(local, remote) {
     activity,
     deleted,
     revlog: mergeLogs(local.revlog, remote.revlog),
-    settings: (remote.settings?.at ?? 0) > (local.settings?.at ?? 0) ? remote.settings : local.settings,
+    settings: mergeSettings(local.settings, remote.settings),
   };
 }

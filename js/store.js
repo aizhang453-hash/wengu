@@ -1,9 +1,10 @@
-import { schedule, replay, dayKey } from './srs.js';
+import { schedule, replay, dayKey, useParameters } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
-import { cleanLog, mergeLogs, addReview, addReviews, dropLastReview } from './revlog.js';
+import { cleanLog, mergeLogs, addReview, addReviews, dropLastReview, fullHistory } from './revlog.js';
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
+import { mergeSettings } from './merge.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -20,12 +21,20 @@ export function newId() {
 // mistakes: 错题集 (mistakes.js)
 // revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
-// settings: { reviewsPerDay 每天最多复习几张, at 改的时间 (同步时听后改的) }
+// settings: { reviewsPerDay 每天最多复习几张, at 改的时间 (同步时听后改的),
+//   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
   return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, settings: defaultSettings() };
 }
 
-const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, at: 0 });
+const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, at: 0, fsrs: null });
+
+const pair = (v) => (Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) ? v : null);
+
+export function cleanFsrs(raw) {
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.w) || raw.w.length !== 21 || !raw.w.every(Number.isFinite)) return null;
+  return { w: raw.w.map(Number), at: Number(raw.at) > 0 ? Number(raw.at) : 0, items: Math.max(0, Math.floor(Number(raw.items) || 0)), logLoss: pair(raw.logLoss), rmse: pair(raw.rmse) };
+}
 
 export function cleanSettings(raw) {
   const out = defaultSettings();
@@ -33,6 +42,8 @@ export function cleanSettings(raw) {
   const cap = Math.round(Number(raw.reviewsPerDay));
   if (cap >= 1) out.reviewsPerDay = Math.min(MAX_REVIEW_CAP, cap);
   if (Number(raw.at) > 0) out.at = Number(raw.at);
+  out.fsrs = cleanFsrs(raw.fsrs);
+  if (raw.fsrsAt > 0) out.fsrsAt = Number(raw.fsrsAt); // 换回默认参数的时间 (同步时用)
   return out;
 }
 
@@ -216,6 +227,12 @@ export class Store {
   constructor(storage = globalThis.localStorage) {
     this.storage = storage;
     this.data = this.load();
+    this.applyParameters();
+  }
+
+  // 排复习用存着的 FSRS 参数 (按自己的记录优化过的, 没有就默认的)
+  applyParameters() {
+    useParameters(this.data.settings.fsrs?.w ?? null);
   }
 
   load() {
@@ -230,11 +247,13 @@ export class Store {
   // 别的标签页改了, 重新读一遍
   reload() {
     this.data = this.load();
+    this.applyParameters();
   }
 
   // 同步拿回来合并好的数据, 整个换掉
   replaceData(data) {
     this.data = cleanData(data);
+    this.applyParameters();
     return this.save({ fromSync: true });
   }
 
@@ -532,6 +551,28 @@ export class Store {
     this.save();
   }
 
+  // 换 FSRS 参数 (按自己的记录优化出来的; null 换回默认的)。有完整记录的卡片按新参数重算记忆状态 (稳定性、难度),
+  // 排好的复习日子不动 (下次复习起按新的排)。返回重算了几张
+  setParameters(fsrs, now = Date.now()) {
+    const clean = fsrs ? cleanFsrs({ ...fsrs, at: fsrs.at || now }) : null;
+    this.data.settings = { ...this.data.settings, fsrs: clean, fsrsAt: now };
+    this.applyParameters();
+    let n = 0;
+    for (const set of this.data.sets) {
+      for (const card of set.cards) {
+        const stat = set.stats[card.id];
+        const list = fullHistory(stat, this.data.revlog, card.id);
+        const r = list && replay(list);
+        if (!r) continue;
+        stat.s = r.s;
+        stat.d = r.d;
+        n++;
+      }
+    }
+    this.save();
+    return n;
+  }
+
   // 撤销时把一张卡片的统计恢复成以前的样子 (null 就是以前没有)
   restoreStat(setId, cardId, stat) {
     const set = this.ownerOf(setId, cardId);
@@ -626,7 +667,8 @@ export class Store {
       else this.data.folders[i] = folder;
     }
     this.data.revlog = mergeLogs(this.data.revlog, incoming.revlog);
-    if (incoming.settings.at > this.data.settings.at) this.data.settings = incoming.settings;
+    this.data.settings = mergeSettings(this.data.settings, incoming.settings);
+    this.applyParameters();
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
       if (i === -1) this.data.mistakes.push(m);

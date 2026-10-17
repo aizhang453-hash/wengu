@@ -3043,6 +3043,41 @@ a.card-row.search-hit:hover {
   margin-left: 6px;
 }
 
+/* ---- 按自己的记录优化复习排法 ---- */
+.opt-table {
+  width: 100%;
+  margin: 12px 0 4px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.opt-table th,
+.opt-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+
+.opt-table th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.opt-table tbody tr:last-child {
+  color: var(--accent);
+}
+
+.opt-facts {
+  margin: 8px 0;
+  padding-left: 1.2em;
+}
+
+.opt-same {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
 /* ---- 每天的计划 ---- */
 .plan-panel {
   display: flex;

@@ -168,8 +168,14 @@ Quizlet 要开会员才能用的 (学习模式、测试不限次数, 做标注�
   答对了: 第一次隔 2 天, 之后十来天、一个多月……; 答错了: 10 分钟后再来, 今天再答对的话明天再看。
   以前 (v1.15 以前) 的复习记录会换算过来接着排, 不用从头来
 - **复习记录**: 每一次翻卡自评都记下来什么时候、记没记得 (只记这一种; 从 Anki 搬来的复习记录也算), 跟着同步、备份。
-  现在用 FSRS 的默认参数 (很多 Anki 用户的平均); 攒到 1000 次左右, 就能按你自己的记录优化参数, 排得更准
-  (「今天的复习」页上显示攒了几次)。错题集的重做有自己的排法 (也用 FSRS), 不算进这个记录
+  错题集的重做有自己的排法 (也用 FSRS 的默认参数), 不算进这个记录
+- **按我的记录优化复习排法** (「今天的复习」页下面的「📈 复习排法」): FSRS 有 21 个参数 (隔多久再复习、多快会忘),
+  默认的是很多 Anki 用户的平均; 点「开始优化」, 拿你自己的翻卡自评记录 (连从 Anki 搬来的) 算一套更合你的, 跟 Anki 里的「优化」一样
+  (照 Anki 用的 fsrs-rs 写的, 同样的步骤: 去掉怪的记录、先估第一次以后能记几天、再梯度下降), 在你的浏览器里算, 几万次复习一两秒。
+  - 会拿你的记录比一比: 默认参数和新算的, 哪个预测「这次还记不记得」更准 (预测误差、对数损失, 越小越准); 新的更准才让你换
+  - 换了以后, 有完整记录的卡片按新参数重算记得多牢 (排好的复习日子不动, 下次复习起按新的排); 随时能换回默认参数
+  - 只用从第一次背起都记着的卡片 (v1.17 以前就背过、只记了一部分的不算); 记录太少时只调「第一次以后能记几天」。
+    攒到 1000 次左右最好, 以后多攒了可以再优化一次。参数跟着多设备同步
 - **连续打卡**: 首页显示连续学了几天、最近 7 天哪天学过
 </details>
 
@@ -260,7 +266,7 @@ Quizlet 要开会员才能用的 (学习模式、测试不限次数, 做标注�
 
 ## 更新记录
 
-现在是 **v1.19**。每一版改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+现在是 **v1.20**。每一版改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 自己在电脑上跑
 
@@ -283,7 +289,7 @@ npm run sw       # 新加了 js 文件以后, 更新「断网要存的文件」�
 - `js/views/`: 每一页
   - `home.js` 首页、`set.js` 卡片集页、`folder.js` 文件夹、`search.js` 搜索、`gamehub.js` 游戏板块
   - `edit.js` 新建 / 编辑卡片集、`fileimport.js` 选文件导入、`export.js` 导出文件、`cardedit.js` 学着学着改卡片的小窗口
-  - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今天的复习、`plan.js` 每天背新词的计划、`diagram.js` 标注图
+  - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今天的复习、`plan.js` 每天背新词的计划、`optimize.js` 优化复习排法的窗口、`diagram.js` 标注图
   - `gameshell.js` 游戏页顶上那一条和挑卡片集的列表、`match.js` 配对、`blast.js` 打陨石、`blocks.js` 方块、`gems.js` 宝石、`wordle.js` Wordle、`gamequiz.js` 游戏里出的题
   - `quizedit.js` 新建 / 编辑题目集、`quizset.js` 题目集页、`quizplay.js` 答题
   - `mistakes.js` 错题集、`mistakeedit.js` 记错题 / 改错题、`mistakereview.js` 重做错题
@@ -308,7 +314,8 @@ npm run sw       # 新加了 js 文件以后, 更新「断网要存的文件」�
 - `js/search.js`: 搜索
 - `js/print.js`: 打印卡片集
 - `js/srs.js`: 间隔重复 (哪天该复习, 用 `js/vendor/fsrs.js`: ts-fsrs, Open Spaced Repetition, MIT 许可)、连续打卡
-- `js/revlog.js`: 每一次翻卡自评的记录 (以后按自己的记录优化 FSRS 参数用)
+- `js/revlog.js`: 每一次翻卡自评的记录 (按自己的记录优化 FSRS 参数用)
+- `js/optimize.js`、`js/optimize-worker.js`: 按自己的记录优化 FSRS 参数 (照 [fsrs-rs](https://github.com/open-spaced-repetition/fsrs-rs) 改写, Open Spaced Repetition, BSD-3-Clause 许可), 在后台算
 - `js/plan.js`: 每天的计划 (每天几个新词、按考试日期算、新词的顺序) 和今天要背的 (复习上限、最可能忘的先来)
 - `js/sync.js`、`js/merge.js`: 多设备同步 (GitHub)、两份数据怎么合并
 - `js/share.js`: 分享链接 (卡片集压缩进网址)
@@ -324,3 +331,4 @@ npm run sw       # 新加了 js 文件以后, 更新「断网要存的文件」�
 ## 许可证
 
 [PolyForm Strict 1.0.0](LICENSE): 可以看代码、自己用, 不能拿去改了再发、不能商用。
+别人写的部分按它们自己的许可: `js/vendor/` 里的 (ts-fsrs、fzstd、qrcode-generator, 都是 MIT), `js/optimize.js` (照 fsrs-rs 改写, BSD-3-Clause, 许可原文在文件最后)。

@@ -6,6 +6,8 @@
 // 另外记: interval 下次隔几天, due 哪天该复习 (时间戳), at 最后答的时间。
 // 答对: 隔 interval 天, 到那天一早就算该复习; 答错: 10 分钟后再来 (今天再练一下)。
 // 以前 (v1.14 以前) 按 interval / ease 记的, 第一次换算成 FSRS 的稳定性、难度, 不用从头来。
+// 参数默认是 FSRS 的 (很多 Anki 用户的平均); 按自己的复习记录优化过 (optimize.js) 就用自己的 (useParameters)。
+// 错题集一直用默认的 (做题跟背单词不一样, 记录也不算在一起)。
 
 import { FSRSAlgorithm, generatorParameters, Rating } from './vendor/fsrs.js';
 
@@ -13,7 +15,19 @@ export const DAY = 24 * 60 * 60 * 1000;
 const RETRY_MS = 10 * 60 * 1000;
 export const RETENTION = 0.9; // 到该复习那天还记得的把握
 
-const fsrs = new FSRSAlgorithm(generatorParameters({ request_retention: RETENTION, enable_fuzz: false, enable_short_term: true }));
+const make = (w) => new FSRSAlgorithm(generatorParameters({ request_retention: RETENTION, enable_fuzz: false, enable_short_term: true, w }));
+const defaults = make();
+let fsrs = defaults;
+
+const goodParameters = (w) => Array.isArray(w) && w.length === 21 && w.every(Number.isFinite);
+
+// 换成自己的参数 (21 个数); 不对的、null 就用默认的
+export function useParameters(w) {
+  fsrs = goodParameters(w) ? make(w) : defaults;
+}
+
+// 现在用的参数
+export const currentParameters = () => [...fsrs.parameters.w];
 
 export function startOfDay(t) {
   const d = new Date(t);
@@ -32,27 +46,29 @@ function memoryOf(prev) {
 }
 
 // FSRS 走一步: 上次在 last 复习过 (记忆状态 memory), 现在 now 又复习了, 评分 rating (1 忘了 … 4 简单)
-function step(memory, last, now, rating) {
+function step(algo, memory, last, now, rating) {
   // 隔了几天 (按日子算)
   const elapsed = memory && last ? Math.max(0, Math.round((startOfDay(now) - startOfDay(last)) / DAY)) : 0;
-  return { memory: fsrs.next_state(memory, elapsed, rating), elapsed };
+  return { memory: algo.next_state(memory, elapsed, rating), elapsed };
 }
 
 // 走完这一步, 下次哪天复习: 忘了的 10 分钟后再来; 记得的隔几天, 到那天一早就算该复习
-function nextDue({ memory, elapsed }, rating, now) {
+function nextDue(algo, { memory, elapsed }, rating, now) {
   const s = round(memory.stability);
   const d = round(memory.difficulty);
   if (rating === Rating.Again) return { interval: 0, s, d, due: now + RETRY_MS };
-  const interval = fsrs.next_interval(memory.stability, elapsed);
+  const interval = algo.next_interval(memory.stability, elapsed);
   return { interval, s, d, due: startOfDay(now) + interval * DAY };
 }
 
-// 答了一次 (翻卡自评, 只有记得 / 忘了): 返回 { interval, s, d, due } (调的地方再记上 at)
-export function schedule(prev, correct, now = Date.now()) {
+// 答了一次 (翻卡自评, 只有记得 / 忘了): 返回 { interval, s, d, due } (调的地方再记上 at)。
+// own: false 用默认参数 (错题集)
+export function schedule(prev, correct, now = Date.now(), { own = true } = {}) {
+  const algo = own ? fsrs : defaults;
   const rating = correct ? Rating.Good : Rating.Again;
   // 老记录没有 at 的, 当成是按时复习的
   const last = Number(prev?.at) || (Number(prev?.due) && Number(prev?.interval) ? Number(prev.due) - Number(prev.interval) * DAY : 0);
-  return nextDue(step(memoryOf(prev), last, now, rating), rating, now);
+  return nextDue(algo, step(algo, memoryOf(prev), last, now, rating), rating, now);
 }
 
 // 从头按一遍复习记录 (从 Anki 搬来的, 四个键都有: 1 重来 2 困难 3 良好 4 简单), 算出现在的复习状态:
@@ -65,7 +81,7 @@ export function replay(reviews) {
   let right = 0;
   let wrong = 0;
   for (const { at, rating } of reviews) {
-    lastStep = step(memory, last, at, rating);
+    lastStep = step(fsrs, memory, last, at, rating);
     memory = lastStep.memory;
     last = at;
     lastRating = rating;
@@ -73,7 +89,7 @@ export function replay(reviews) {
     else right++;
   }
   if (!lastStep) return null;
-  return { right, wrong, ...nextDue(lastStep, lastRating, last), at: last };
+  return { right, wrong, ...nextDue(fsrs, lastStep, lastRating, last), at: last };
 }
 
 // 现在还记得的把握 (0–1): 稳定性越大、隔得越短越高。今天的复习先来最可能忘的

@@ -138,7 +138,7 @@ export function firstReview(now = Date.now()) {
 export function reviewAfter(review, correct, now = Date.now()) {
   const prev = review ?? firstReview(now);
   const streak = correct ? prev.streak + 1 : 0;
-  return { ...prev, ...schedule(prev, correct, now), right: prev.right + (correct ? 1 : 0), wrong: prev.wrong + (correct ? 0 : 1), streak, at: now, mastered: streak >= MASTER_STREAK };
+  return { ...prev, ...schedule(prev, correct, now, { own: false }), right: prev.right + (correct ? 1 : 0), wrong: prev.wrong + (correct ? 0 : 1), streak, at: now, mastered: streak >= MASTER_STREAK };
 }
 
 export function mistakeStatus(m, now = Date.now()) {

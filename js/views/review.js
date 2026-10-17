@@ -9,7 +9,8 @@ import { editButton, editCardDialog } from './cardedit.js';
 import { dueTomorrow } from '../srs.js';
 import { reviewCount } from '../revlog.js';
 import { todayQueue, reviewedToday, mixIn, newCards, newToday, plannedSets, planOf } from '../plan.js';
-import { todayText, planLine, openCapDialog } from './plan.js';
+import { todayText, planLine, openCapDialog, dateText } from './plan.js';
+import { openOptimizeDialog } from './optimize.js';
 
 const PREFS_KEY = 'wengu:review-prefs';
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
@@ -168,10 +169,18 @@ export function renderReview({ store, go }, setId = null) {
     draw();
   }
 
-  // 复习记录攒了多少 (以后按自己的记录优化 FSRS 用)
+  // 复习记录攒了多少, 按自己的记录优化 FSRS 参数
+  const optimizeBtn = (text) => h('button', { class: 'link-btn', onclick: () => openOptimizeDialog({ store, onChanged: () => go(location.hash) }) }, text);
   function logNote() {
     const n = reviewCount(store.data.revlog);
-    return n ? h('p', { class: 'muted small' }, `翻卡自评的记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 就能按你自己的记录优化。`) : null;
+    if (!n) return null;
+    const own = store.data.settings.fsrs;
+    const text = own
+      ? `现在按你的记录优化过的参数排 (${dateText(own.at)})。翻卡自评的记录一共 ${n} 次, 攒多了可以再优化一次。`
+      : n >= 400
+        ? `翻卡自评的记录已经攒了 ${n} 次, 可以按你自己的记录优化排法了。`
+        : `翻卡自评的记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 按你自己的记录优化会更准。`;
+    return h('p', { class: 'muted small' }, text, ' ', optimizeBtn('按我的记录优化'));
   }
 
   // 计划走到哪了 (这里有定了计划的卡片集才有)
@@ -285,6 +294,7 @@ export function renderReview({ store, go }, setId = null) {
       ' 音效',
     ),
     h('button', { class: 'btn small', onclick: () => openCapDialog({ store, onSaved: () => go(location.hash) }) }, icon('gear', 16), ` 每天最多复习 ${store.reviewCap} 张`),
+    h('button', { class: 'btn small', onclick: () => openOptimizeDialog({ store, onChanged: () => go(location.hash) }) }, store.data.settings.fsrs ? '📈 复习排法: 按我的记录' : '📈 复习排法: 默认'),
   );
 
   return {
