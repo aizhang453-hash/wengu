@@ -1,7 +1,7 @@
 // 每天的计划: 卡片集页上的「每天背新词」, 定计划的窗口, 每天最多复习几张的窗口 (算法在 ../plan.js)
 
 import { h, fill, openDialog, toast, today } from '../dom.js';
-import { planOf, newToday, todayQueue, reviewedToday, newSeed, examTime, cleanPlan, MAX_PER_DAY, MAX_REST, MAX_REVIEW_CAP } from '../plan.js';
+import { planOf, newToday, todayQueue, reviewedToday, shareOf, newSeed, examTime, cleanPlan, MAX_PER_DAY, MAX_REST, MAX_REVIEW_CAP } from '../plan.js';
 
 export function dateText(t, now = Date.now()) {
   const d = new Date(t);
@@ -33,10 +33,16 @@ export function planLine(info, plan) {
   return parts.join(' · ');
 }
 
-// 今天要背的 (卡片集, 或者文件夹合起来的): todayQueue 的结果
+// 今天要背的: 所有卡片集一起排 (每天的上限、最可能忘的先来、定了计划的卡片集和文件夹的新词)。
+// cap 换成 Infinity 就是不管上限
+export function todayAll(store, { cap = store.reviewCap } = {}) {
+  const all = store.allSets();
+  return todayQueue(all, { cap, reviewed: reviewedToday(all), groups: store.plannedFolders() });
+}
+
+// 卡片集 (或者文件夹合起来的) 今天那份: { reviews, fresh, held }
 export function queueFor(store, set) {
-  const sets = set.virtual ? store.setsOf(set.id) : [set];
-  return todayQueue(sets, { cap: store.reviewCap, reviewed: reviewedToday(store.allSets()), groups: set.virtual && set.plan?.on ? [set] : [] });
+  return shareOf(todayAll(store), set.virtual ? store.setsOf(set.id) : [set]);
 }
 
 // 卡片集页、文件夹页上的「每天背新词」

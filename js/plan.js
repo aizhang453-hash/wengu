@@ -149,6 +149,17 @@ export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, r
   return { reviews: [...again, ...due.slice(0, room)], fresh, held: Math.max(0, due.length - room) };
 }
 
+// 今天要背的里面, 某几个卡片集的那份 (首页的表、卡片集页、只背一个卡片集时都一样: 先所有卡片集一起排好每天的上限,
+// 再看这几个各占几张); held 是这几个卡片集到日子了、超过上限没排上的
+export function shareOf(today, sets, now = Date.now()) {
+  const ids = new Set(sets.map((s) => s.id));
+  const reviews = today.reviews.filter((x) => ids.has(x.set.id));
+  const fresh = today.fresh.filter((x) => ids.has(x.set.id));
+  let due = 0;
+  for (const set of sets) for (const card of set.cards) if (isDue(set.stats[card.id], now)) due++;
+  return { reviews, fresh, held: Math.max(0, due - reviews.length) };
+}
+
 // 新词均匀插进复习里
 export function mixIn(reviews, fresh) {
   const total = reviews.length + fresh.length;

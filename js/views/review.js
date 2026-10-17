@@ -8,8 +8,8 @@ import { rich, cardImage, sayButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { dueTomorrow } from '../srs.js';
 import { reviewCount } from '../revlog.js';
-import { todayQueue, reviewedToday, mixIn, newCards, newToday, plannedSets, planOf } from '../plan.js';
-import { todayText, planLine, openCapDialog, dateText } from './plan.js';
+import { reviewedToday, mixIn, newCards, newToday, plannedSets, planOf, shareOf } from '../plan.js';
+import { todayText, planLine, openCapDialog, dateText, todayAll } from './plan.js';
 import { openOptimizeDialog } from './optimize.js';
 
 const PREFS_KEY = 'wengu:review-prefs';
@@ -56,8 +56,11 @@ export function renderReview({ store }, setId = null) {
   let freshTotal = 0;
   const sub = h('p', { class: 'muted small review-sub' });
 
-  // 今天的 (每天的上限照算)
-  const todayOf = (cap = store.reviewCap) => todayQueue(sets, { cap, reviewed: reviewedToday(store.allSets()), groups });
+  // 今天的: 所有卡片集一起排好每天的上限, 只背一个卡片集 / 文件夹时拿它那份 (跟首页的表上写的一样多)
+  const todayOf = (cap = store.reviewCap) => {
+    const all = todayAll(store, { cap });
+    return setId ? shareOf(all, sets) : all;
+  };
 
   // 计划以外还能学的新词 (卡片集和文件夹都定了计划的, 同一张只算一次); 卡片记在原来的卡片集上
   function moreCards() {

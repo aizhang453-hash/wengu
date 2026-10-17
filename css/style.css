@@ -12,6 +12,7 @@
   --accent-soft: #f6e3e0;
   --good: #2e7d4f;
   --good-soft: #e1f1e7;
+  --new: #2f6fd6;
   --bad: #c0612b;
   --bad-soft: #f8e7dc;
   --mid: #9a6b00;
@@ -36,6 +37,7 @@
     --accent-soft: #3d2420;
     --good: #5cbf85;
     --good-soft: #1f3529;
+    --new: #7aa7f5;
     --bad: #e58b55;
     --bad-soft: #3c2a1f;
     --mid: #e2b54a;
@@ -3089,6 +3091,138 @@ a.card-row.search-hit:hover {
 
 .new-badge {
   margin-left: 6px;
+}
+
+/* ---- 首页: 今天要背的 (像 Anki 的牌组列表) ---- */
+.deck-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-table th,
+.deck-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.deck-table thead th {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.deck-table .num {
+  width: 3.4em;
+  text-align: right;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.deck-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+@media (max-width: 520px) {
+  .deck-table th,
+  .deck-table td {
+    padding: 7px 3px;
+  }
+
+  .deck-table .num {
+    width: 2.6em;
+  }
+
+  .deck-table tr.child .deck-name {
+    padding-left: 18px;
+  }
+}
+
+.deck-table td:last-child,
+.deck-table th:last-child {
+  width: 1%;
+  padding-left: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.deck-table .num.new {
+  color: var(--new);
+}
+
+.deck-table .num.due {
+  color: var(--good);
+}
+
+.deck-table .num.held {
+  color: var(--mid);
+}
+
+.deck-table .num.zero {
+  color: var(--muted);
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.deck-name a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.deck-name a:hover {
+  text-decoration: underline;
+}
+
+.deck-table tr.child .deck-name {
+  padding-left: 30px;
+}
+
+.deck-table tr.child .deck-name a {
+  font-weight: 500;
+}
+
+.deck-plan {
+  margin-top: 2px;
+  font-weight: 400;
+}
+
+.deck-toggle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.deck-table tfoot th,
+.deck-table tfoot td {
+  border-bottom: none;
+}
+
+.optimize-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+
+.today-plan.wide {
+  display: block;
 }
 
 /* ---- 按自己的记录优化复习排法 ---- */

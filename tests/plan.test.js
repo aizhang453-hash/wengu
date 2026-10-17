@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanPlan, planOf, newCards, newToday, todayQueue, reviewedToday, mixIn, isNew, examTime, DEFAULT_PER_DAY } from '../js/plan.js';
+import { cleanPlan, planOf, newCards, newToday, todayQueue, reviewedToday, mixIn, isNew, examTime, shareOf, DEFAULT_PER_DAY } from '../js/plan.js';
 import { DAY, retrievability } from '../js/srs.js';
 import { Store, makeSet, makeCard, makeFolder, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
@@ -186,4 +186,22 @@ test('文件夹的计划: 新词照文件夹里卡片集的顺序; 今天的新�
   const remote = structuredClone(again.data);
   remote.folders[0].plan = { ...remote.folders[0].plan, perDay: 9, at: now + 1 };
   assert.equal(mergeData(again.data, remote).folders[0].plan.perDay, 9);
+});
+
+test('各卡片集今天那份: 先一起排好每天的上限再分, 加起来就是一共的; 积压是到日子了没排上的', () => {
+  const mk = (n, s0) => {
+    const cards = cardsOf(n);
+    const stats = Object.fromEntries(cards.map((c, i) => [c.id, learned(now - 30 * DAY, s0 + i, now - DAY)]));
+    return makeSet({ cards, stats });
+  };
+  const a = mk(6, 1); // 稳定性小, 更容易忘
+  const b = mk(6, 20);
+  const today = todayQueue([a, b], { now, cap: 8, reviewed: 0 });
+  const sa = shareOf(today, [a], now);
+  const sb = shareOf(today, [b], now);
+  assert.equal(sa.reviews.length + sb.reviews.length, today.reviews.length);
+  assert.equal(sa.held + sb.held, today.held);
+  assert.ok(sa.reviews.length > sb.reviews.length); // 最可能忘的先来
+  assert.deepEqual([sa.reviews.length, sa.held], [6, 0]);
+  assert.deepEqual(shareOf(today, [a, b], now).held, 4);
 });
