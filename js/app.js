@@ -3,6 +3,7 @@
 //   #/new                 新建卡片集
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
+//   #/games               游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -41,6 +42,8 @@ import { renderReview } from './views/review.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
+import { renderGames } from './views/gamehub.js';
+import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
 
@@ -56,6 +59,7 @@ const main = document.getElementById('main');
 
 let current = null; // 当前页 { cleanup, canLeave }
 let shownHash = null;
+let outsideHash = null; // 进游戏之前在哪一页 (游戏里点 ✕ 回游戏板块还是回卡片集)
 
 function parse(hash) {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
@@ -63,6 +67,7 @@ function parse(hash) {
   if (parts[0] === 'new') return { page: 'edit', id: null };
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
+  if (parts[0] === 'games') return { page: 'games', game: parts[1] ?? null };
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
@@ -106,7 +111,12 @@ function render() {
   shownHash = hash;
 
   const route = parse(hash);
-  const ctx = { store, go, syncer };
+  // 游戏: 整页深色, 顶上的搜索栏收起来 (照 Quizlet)
+  const inGame = GAME_KEYS.includes(route.page);
+  document.body.classList.toggle('in-game', inGame);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inGame ? '#0a092d' : '#b8372e');
+  if (!inGame) outsideHash = hash;
+  const ctx = { store, go, syncer, from: outsideHash };
   let view;
   if (route.page === 'home') view = renderHome(ctx);
   else if (route.page === 'edit') view = renderEdit(ctx, route.id, { openImport: route.openImport });
@@ -121,6 +131,7 @@ function render() {
   else if (route.page === 'wordle') view = renderWordle(ctx, route.id);
   else if (route.page === 'diagram') view = renderDiagramPractice(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
+  else if (route.page === 'games') view = renderGames(ctx, route.game);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
@@ -177,7 +188,7 @@ const syncer = new SyncManager(store, {
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
   onApplied: () => {
-    if (['home', 'set', 'folder', 'search'].includes(current?.page)) {
+    if (['home', 'set', 'folder', 'search', 'games'].includes(current?.page)) {
       const y = window.scrollY;
       render();
       window.scrollTo(0, y);
@@ -191,7 +202,7 @@ store.onChange = () => syncer.changed();
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  if (current?.page === 'home' || current?.page === 'set' || current?.page === 'folder') {
+  if (['home', 'set', 'folder', 'games'].includes(current?.page)) {
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);

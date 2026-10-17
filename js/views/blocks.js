@@ -1,86 +1,60 @@
-// 方块 (照 Quizlet 的 Blocks): 把积木拖到棋盘上, 填满一行或一列就消掉。三块放完答对一题再给三块。
+// 方块 (照 Quizlet 的 Blocks): 答对一道题拿三块积木, 拖到棋盘上, 填满一行或一列就消掉。
+// 题目摆在棋盘旁边 (手机上从下面升上来); 三块放完再答一题。哪块都放不下了游戏结束。
 
 import { h } from '../dom.js';
 import { SIZE, emptyBoard, canPlace, place, fitsAnywhere, randomTray } from '../blocks.js';
-import { askGameQuestion, quizCards } from './gamequiz.js';
-import { soundToggle, sound, soundOn } from './match.js';
-import { pickDistinct } from '../games.js';
+import { whyNotPlayable } from '../games.js';
+import { quizPanel } from './gamequiz.js';
+import { sound } from './match.js';
+import { gameHeader, cantPlay, openSettings, rememberGame } from './gameshell.js';
 
 const PREFS_KEY = 'wengu:blocks-prefs';
 
-export function renderBlocks({ store }, id) {
+export function renderBlocks({ store, from }, id) {
   const set = store.getSet(id);
-  const back = set ? (set.virtual ? `#/folder/${encodeURIComponent(set.folderId)}` : `#/set/${encodeURIComponent(set.id)}`) : '#/';
-  if (!set || pickDistinct(quizCards(set.cards), 2).length < 2) {
-    return {
-      title: '方块',
-      el: h(
-        'section',
-        { class: 'empty' },
-        h('h1', {}, set ? '卡片不够, 玩不了方块' : '找不到这个卡片集'),
-        set ? h('p', { class: 'muted' }, '至少要两张词和解释都有、而且不一样的卡片。') : null,
-        h('a', { class: 'btn primary', href: set ? back : '#/' }, set ? '回去' : '回首页'),
-      ),
-    };
-  }
+  if (!set || whyNotPlayable('blocks', set)) return cantPlay({ set, game: 'blocks', from });
+  rememberGame('blocks', set.id);
 
-  let prefs = { answerWith: 'def', type: 'mc' };
+  // 默认跟 Quizlet 一样: 出解释, 选词
+  let prefs = { answerWith: 'term', type: 'mc' };
   try {
     prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
   } catch {
     // 用默认的
   }
+  const settings = () =>
+    openSettings({
+      groups: [
+        { name: 'answerWith', label: '题目', options: [['term', '出解释, 选词'], ['def', '出词, 选解释']] },
+        { name: 'type', label: '怎么答', options: [['mc', '选择题'], ['written', '打字']] },
+      ],
+      values: prefs,
+      onChange: (name, value) => {
+        prefs[name] = value;
+        try {
+          localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+        } catch {
+          // 存不了就算了
+        }
+      },
+      note: '下一题开始用新的设置。',
+    });
+
   const root = h('section', { class: 'game-page blocks-page' });
+  const header = gameHeader({ store, set, game: 'blocks', from, settings });
+  const quiz = quizPanel({ store, set, prefs });
   let cleanupDrag = null;
-  let left = false; // 离开这一页了 (答题窗口被换页关掉时别再出题)
-
-  const head = () => h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${set.title || '未命名卡片集'}`), soundToggle());
-
-  function showReady() {
-    const radio = (name, value, label) =>
-      h(
-        'label',
-        { class: 'toggle' },
-        h('input', {
-          type: 'radio',
-          name,
-          value,
-          checked: prefs[name] === value,
-          onchange: () => {
-            prefs[name] = value;
-            try {
-              localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-            } catch {
-              // 存不了就算了
-            }
-          },
-        }),
-        ` ${label}`,
-      );
-    root.replaceChildren(
-      head(),
-      h(
-        'div',
-        { class: 'summary game-ready' },
-        h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '🧱'),
-        h('h1', {}, '方块'),
-        h('p', {}, '把积木拖到棋盘上, 填满一整行或一整列就消掉、得分。三块都放完, 答对一道题再给三块。哪块都放不下了游戏结束。'),
-        h('p', { class: 'muted small' }, '手机上按住积木拖; 电脑上也可以先点积木, 再点棋盘上要放的地方 (积木左上角放在那格)。'),
-        h('div', { class: 'row center' }, radio('answerWith', 'def', '答解释'), radio('answerWith', 'term', '答词'), ' · ', radio('type', 'mc', '选择题'), radio('type', 'written', '打字')),
-        set.best.blocks ? h('p', { class: 'muted' }, `你的最高分: ${set.best.blocks}`) : null,
-        h('div', { class: 'row center' }, h('button', { class: 'btn primary big-choice', onclick: play }, '开始游戏')),
-      ),
-    );
-  }
+  let left = false; // 离开这一页了
 
   function play() {
     let board = emptyBoard();
-    let tray = randomTray();
+    let tray = [null, null, null];
     let score = 0;
     let selected = null; // 点选的积木序号
     let over = false;
 
-    const scoreEl = h('span', { class: 'hud-item' });
+    const scoreEl = h('span', { class: 'bs-score' });
+    const bestEl = h('span', { class: 'bs-best', title: '最高分' });
     const boardEl = h('div', { class: 'blocks-board', style: `--n:${SIZE}` });
     const cells = [];
     for (let r = 0; r < SIZE; r++) {
@@ -91,11 +65,14 @@ export function renderBlocks({ store }, id) {
       }
     }
     const trayEl = h('div', { class: 'blocks-tray' });
+    const trayBox = h('div', { class: 'tray-box', hidden: true }, h('div', { class: 'tray-hint' }, '把积木拖到棋盘上 (也可以先点积木, 再点要放的格子)'), trayEl);
     const cellAt = (r, c) => cells[r * SIZE + c];
 
     function drawBoard() {
       for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) cellAt(r, c).className = `bcell${board[r][c] ? ` filled k${board[r][c]}` : ''}`;
-      scoreEl.textContent = `分数 ${score}`;
+      scoreEl.textContent = String(score);
+      const best = Math.max(set.best.blocks ?? 0, score);
+      bestEl.replaceChildren(h('span', { 'aria-hidden': 'true' }, '🏆 '), String(best));
     }
 
     function pieceEl(piece, i) {
@@ -157,31 +134,24 @@ export function renderBlocks({ store }, id) {
         }
         if (res.lines >= 2) flash(`一次消了 ${res.lines} 条! +${res.points - piece.shape.cells.length}`);
       }
-      if (tray.every((p) => !p)) {
-        drawTray();
-        askForPieces();
-      } else {
-        drawTray();
-        checkOver();
-      }
+      drawTray();
+      if (tray.every((p) => !p)) askForPieces();
+      else checkOver();
       return true;
     }
 
-    // 三块都放完: 答对一道题再给三块 (答错换一题再答)
+    // 要积木: 答对一道题给三块 (答错再来一题)
     function askForPieces() {
-      askGameQuestion({
-        store,
-        set,
-        title: '答对拿三块新积木',
-        reward: '给你三块新积木',
-        answerWith: prefs.answerWith,
-        type: prefs.type,
-        sound: soundOn(),
+      trayBox.hidden = true;
+      quiz.ask({
+        title: '答对拿三块积木',
         onAnswer: (correct) => {
           if (over || left) return;
           if (!correct) return askForPieces();
+          quiz.hide();
           tray = randomTray();
           drawTray();
+          trayBox.hidden = false;
           checkOver();
         },
       });
@@ -190,21 +160,28 @@ export function renderBlocks({ store }, id) {
     function checkOver() {
       if (tray.some((p) => p && fitsAnywhere(board, p.shape))) return;
       over = true;
+      const old = set.best.blocks;
       const record = store.recordBest(set.id, 'blocks', score);
       sound('done');
       setTimeout(() => {
+        if (left) return;
         root.replaceChildren(
-          head(),
+          header,
           h(
             'div',
-            { class: 'summary game-ready' },
-            h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, record ? '🏆' : '🧱'),
-            h('h1', {}, record ? '新纪录!' : '放不下了'),
-            h('div', { class: 'big-score good' }, `${score} 分`),
-            h('p', { class: 'muted' }, `最高分 ${set.best.blocks ?? score}`),
-            h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: play }, '再玩一次'), h('a', { class: 'btn', href: back }, '回去')),
+            { class: 'game-stage center' },
+            h(
+              'div',
+              { class: 'summary game-ready' },
+              h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, record ? '🏆' : '🧱'),
+              h('h1', {}, record ? '新纪录!' : '放不下了'),
+              h('div', { class: 'big-score good' }, `${score} 分`),
+              h('p', { class: 'muted' }, record && old ? `原来最高 ${old} 分` : `最高分 ${set.best.blocks ?? score}`),
+              h('div', { class: 'row center' }, h('button', { class: 'btn primary big-choice', 'data-autofocus': '1', onclick: play }, '再玩一次')),
+            ),
           ),
         );
+        root.querySelector('[data-autofocus]')?.focus();
       }, 700);
     }
 
@@ -284,18 +261,30 @@ export function renderBlocks({ store }, id) {
     });
     boardEl.addEventListener('pointerleave', () => selected !== null && clearPreview());
 
-    root.replaceChildren(head(), h('div', { class: 'hud' }, scoreEl, set.best.blocks ? h('span', { class: 'hud-item muted' }, `最高 ${set.best.blocks}`) : null), h('div', { class: 'space-wrap' }, boardEl, banner), trayEl);
+    root.replaceChildren(
+      header,
+      h(
+        'div',
+        { class: 'game-stage' },
+        h('div', { class: 'blocks-layout' }, quiz.el, trayBox, h('div', { class: 'blocks-main' }, h('div', { class: 'blocks-scores' }, scoreEl, bestEl), h('div', { class: 'space-wrap' }, boardEl, banner))),
+      ),
+    );
     drawBoard();
     drawTray();
+    askForPieces();
   }
 
-  showReady();
+  const onKey = (e) => quiz.onKey(e);
+  document.addEventListener('keydown', onKey);
+  play();
   return {
     title: `方块 · ${set.title}`,
     el: root,
     cleanup: () => {
       left = true;
+      quiz.stop();
       cleanupDrag?.();
+      document.removeEventListener('keydown', onKey);
     },
   };
 }

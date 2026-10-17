@@ -1,7 +1,51 @@
-// 两个游戏用的东西: 配对 (Match) 的牌, 打陨石 (Blast) 的关卡
+// 游戏用的东西: 有哪几个游戏、这个卡片集能不能玩; 配对 (Match) 的牌, 打陨石 (Blast) 的关卡
 
 import { normalize } from './grade.js';
 import { shuffle } from './questions.js';
+import { stripMarks } from './rich.js';
+import { playable } from './wordle.js';
+
+// ---- 有哪几个游戏 ----
+export const GAMES = [
+  { key: 'match', emoji: '🧩', name: '配对', hint: '把词和解释配起来, 比谁快' },
+  { key: 'blast', emoji: '☄️', name: '打陨石', hint: '上面出解释, 打中写着对的词的陨石' },
+  { key: 'blocks', emoji: '🧱', name: '方块', hint: '答对题拿积木, 放满一行就消掉' },
+  { key: 'gems', emoji: '💎', name: '宝石', hint: '三个连一线消掉, 答题加步数' },
+  { key: 'wordle', emoji: '🟩', name: 'Wordle', hint: '6 次猜出卡片集里的词' },
+];
+export const GAME_KEYS = GAMES.map((g) => g.key);
+export const gameOf = (key) => GAMES.find((g) => g.key === key) ?? null;
+
+// 词和解释都有字的卡片才拿来出题
+export function quizCards(cards) {
+  return cards.filter((c) => c.term.trim() && c.def.trim());
+}
+
+// 这个卡片集玩不玩得了这个游戏: 能玩返回 '', 不能玩返回为什么
+export function whyNotPlayable(key, set) {
+  const cards = set?.cards ?? [];
+  if (key === 'wordle') return playable(cards).items.length ? '' : '要有字母拼的单词 (3 到 10 个字母)';
+  const pool = key === 'blocks' || key === 'gems' ? quizCards(cards) : cards;
+  return pickDistinct(pool, 2).length >= 2 ? '' : '至少要两张词和解释都不一样的卡片';
+}
+
+// 最好成绩怎么说; 还没玩过返回 ''
+export function bestText(key, best) {
+  const v = best?.[key];
+  if (!v) return '';
+  if (key === 'match') return `最好 ${formatTime(v)}`;
+  if (key === 'wordle') return `最长连胜 ${v}`;
+  return `最高 ${v} 分`;
+}
+
+// 字多字少分几档, 字多的用小一点的字 (陨石、选项、题目都用): '' / 'long' / 'longer' / 'longest'
+export function textSize(text, steps = [14, 32, 70]) {
+  const n = Array.from(stripMarks(String(text ?? '')).trim()).length;
+  if (n > steps[2]) return 'longest';
+  if (n > steps[1]) return 'longer';
+  if (n > steps[0]) return 'long';
+  return '';
+}
 
 // 挑几张能玩的卡片: 词和解释都有字, 而且彼此不重复 (不然配对时分不清)
 export function pickDistinct(cards, n, rng = Math.random) {
@@ -57,4 +101,16 @@ export function blastPoints(level) {
 
 export function blastLevel(correctCount) {
   return 1 + Math.floor(correctCount / BLAST_PER_LEVEL);
+}
+
+// 打陨石: n 块陨石摆在哪 (x 是中心离左边的比例, y 是起点高低)。宽屏排成一排;
+// 窄屏 (手机竖着) 两块一排、摆两排, 每块能宽一点, 字长也放得下。编号从左到右、从上到下
+export function rockSlots(n, narrow, rng = Math.random) {
+  const cols = narrow ? Math.min(2, n) : n;
+  return Array.from({ length: n }, (_, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const inRow = Math.min(cols, n - row * cols);
+    return { key: i + 1, x: (col + 0.5) / inRow, y: row * 0.32 + rng() * (narrow ? 0.05 : 0.14), width: 1 / cols };
+  });
 }

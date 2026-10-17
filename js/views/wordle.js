@@ -4,7 +4,8 @@ import { h, dialogOpen, toast, fill } from '../dom.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { playSound } from '../sound.js';
 import { TRIES, playable, evaluate, mergeKeys } from '../wordle.js';
-import { soundToggle, soundOn } from './match.js';
+import { soundOn } from './match.js';
+import { gameHeader, cantPlay, rememberGame, exitHref } from './gameshell.js';
 
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
@@ -17,22 +18,12 @@ function loadStats(key) {
   }
 }
 
-export function renderWordle({ store }, id) {
+export function renderWordle({ store, from }, id) {
   const set = store.getSet(id);
-  const back = set ? (set.virtual ? `#/folder/${encodeURIComponent(set.folderId)}` : `#/set/${encodeURIComponent(set.id)}`) : '#/';
   const pool = set ? playable(set.cards) : { items: [] };
-  if (!set || pool.items.length === 0) {
-    return {
-      title: 'Wordle',
-      el: h(
-        'section',
-        { class: 'empty' },
-        h('h1', {}, set ? '这个卡片集没有能猜的词' : '找不到这个卡片集'),
-        set ? h('p', { class: 'muted' }, 'Wordle 要用字母拼的单词 (英语、法语、德语……), 一个词, 3 到 10 个字母。') : null,
-        h('a', { class: 'btn primary', href: set ? back : '#/' }, set ? '回去' : '回首页'),
-      ),
-    };
-  }
+  if (!set || pool.items.length === 0) return cantPlay({ set, game: 'wordle', from });
+  rememberGame('wordle', set.id);
+  const back = exitHref(from, set);
 
   const statsKey = `wengu:wordle:${set.id}`;
   const stats = loadStats(statsKey);
@@ -263,13 +254,8 @@ export function renderWordle({ store }, id) {
     el: h(
       'section',
       { class: 'game-page wordle-page' },
-      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${set.title || '未命名卡片集'}`), soundToggle()),
-      h('h1', { class: 'wordle-title' }, 'Wordle'),
-      statsEl,
-      clueEl,
-      grid,
-      msg,
-      kb,
+      gameHeader({ store, set, game: 'wordle', from }),
+      h('div', { class: 'game-stage' }, statsEl, clueEl, grid, msg, kb),
     ),
     cleanup: () => document.removeEventListener('keydown', onKey),
   };

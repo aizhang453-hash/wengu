@@ -167,6 +167,7 @@ export function renderHome({ store, go }) {
           ? h(
               'div',
               { class: 'row' },
+              h('a', { class: 'btn', href: '#/games' }, '🎮 游戏'),
               h('a', { class: 'btn', href: '#/import', title: 'Quizlet 的文字、Excel、CSV、Anki 卡组' }, '导入'),
               h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建'),
             )

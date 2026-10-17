@@ -3,50 +3,58 @@
 
 import { h, fill } from '../dom.js';
 import { ROWS, COLS, makeBoard, adjacent, swap, swapMakesMatch, resolve, hasMove } from '../gems.js';
-import { askGameQuestion, quizCards } from './gamequiz.js';
-import { soundToggle, sound, soundOn } from './match.js';
-import { pickDistinct } from '../games.js';
+import { whyNotPlayable } from '../games.js';
+import { quizPanel } from './gamequiz.js';
+import { sound } from './match.js';
+import { gameHeader, cantPlay, openSettings, rememberGame } from './gameshell.js';
 
 const START_MOVES = 15;
+const PREFS_KEY = 'wengu:gems-prefs';
 // 每种颜色一个形状, 分不清颜色的人也能玩
 const SHAPES = ['●', '◆', '▲', '■', '★', '⬟'];
 
-export function renderGems({ store }, id) {
+export function renderGems({ store, from }, id) {
   const set = store.getSet(id);
-  const back = set ? (set.virtual ? `#/folder/${encodeURIComponent(set.folderId)}` : `#/set/${encodeURIComponent(set.id)}`) : '#/';
-  if (!set || pickDistinct(quizCards(set.cards), 2).length < 2) {
-    return {
-      title: '宝石',
-      el: h(
-        'section',
-        { class: 'empty' },
-        h('h1', {}, set ? '卡片不够, 玩不了宝石' : '找不到这个卡片集'),
-        set ? h('p', { class: 'muted' }, '至少要两张词和解释都有、而且不一样的卡片。') : null,
-        h('a', { class: 'btn primary', href: set ? back : '#/' }, set ? '回去' : '回首页'),
-      ),
-    };
+  if (!set || whyNotPlayable('gems', set)) return cantPlay({ set, game: 'gems', from });
+  rememberGame('gems', set.id);
+
+  let prefs = { answerWith: 'term', type: 'mc' };
+  try {
+    prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+  } catch {
+    // 用默认的
   }
+  const settings = () =>
+    openSettings({
+      groups: [
+        { name: 'answerWith', label: '题目', options: [['term', '出解释, 选词'], ['def', '出词, 选解释']] },
+        { name: 'type', label: '怎么答', options: [['mc', '选择题'], ['written', '打字']] },
+      ],
+      values: prefs,
+      onChange: (name, value) => {
+        prefs[name] = value;
+        try {
+          localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+        } catch {
+          // 存不了就算了
+        }
+      },
+      note: '下一题开始用新的设置。',
+    });
 
   const root = h('section', { class: 'game-page gems-page' });
+  const header = gameHeader({ store, set, game: 'gems', from, settings });
+  const quiz = quizPanel({ store, set, prefs });
   let left = false;
-  const head = () => h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${set.title || '未命名卡片集'}`), soundToggle());
-
-  function showReady() {
-    root.replaceChildren(
-      head(),
-      h(
-        'div',
-        { class: 'summary game-ready' },
-        h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '💎'),
-        h('h1', {}, '宝石'),
-        h('p', {}, '交换相邻的两颗宝石, 三颗以上同色连成一线就消掉。一次连四颗以上会留下炸弹 💣, 炸弹再被消掉时连周围一圈一起炸。'),
-        h('p', {}, `消掉带 ? 的问题宝石会出一道题, 答对加上面写的步数。一开始有 ${START_MOVES} 步, 步数用完游戏结束。`),
-        h('p', { class: 'muted small' }, '点一颗再点旁边那颗交换, 或者按住往旁边一划。'),
-        set.best.gems ? h('p', { class: 'muted' }, `你的最高分: ${set.best.gems}`) : null,
-        h('div', { class: 'row center' }, h('button', { class: 'btn primary big-choice', onclick: play }, '开始游戏')),
-      ),
+  const rules = () =>
+    h(
+      'div',
+      { class: 'side-hint' },
+      h('strong', {}, '怎么玩'),
+      h('p', {}, '交换相邻的两颗宝石, 三颗以上同色连成一线就消掉。一次连四颗以上留下炸弹 💣。'),
+      h('p', {}, `消掉带 ? 的问题宝石会出一道题, 答对加上面写的步数。一开始 ${START_MOVES} 步, 用完游戏结束。`),
+      h('p', { class: 'muted small' }, '点一颗再点旁边那颗, 或者按住往旁边一划。'),
     );
-  }
 
   function play() {
     let board = makeBoard();
@@ -56,8 +64,9 @@ export function renderGems({ store }, id) {
     let picked = null;
     let over = false;
 
-    const scoreEl = h('span', { class: 'hud-item' });
-    const movesEl = h('span', { class: 'hud-item' });
+    const scoreEl = h('span', { class: 'bs-score' });
+    const movesEl = h('span', { class: 'bs-moves' });
+    const hint = rules();
     const boardEl = h('div', { class: 'gems-board', style: `--rows:${ROWS};--cols:${COLS}` });
     const banner = h('div', { class: 'blast-banner', hidden: true });
     const cells = [];
@@ -71,7 +80,7 @@ export function renderGems({ store }, id) {
     const cellAt = (r, c) => cells[r * COLS + c];
 
     function drawHud() {
-      scoreEl.textContent = `分数 ${score}`;
+      scoreEl.textContent = String(score);
       movesEl.textContent = `还剩 ${moves} 步`;
       movesEl.classList.toggle('low', moves <= 3);
     }
@@ -136,15 +145,17 @@ export function renderGems({ store }, id) {
       // 问题宝石: 一题一题答
       for (const plus of res.questions) {
         if (left) return;
-        const correct = await new Promise((resolveQ) =>
-          askGameQuestion({ store, set, title: `答对加 ${plus} 步`, reward: `+${plus} 步`, sound: soundOn(), onAnswer: resolveQ }),
-        );
+        hint.hidden = true;
+        const correct = await new Promise((resolveQ) => quiz.ask({ title: `答对加 ${plus} 步`, onAnswer: resolveQ }));
         if (left) return;
         if (correct) {
           moves += plus;
           drawHud();
+          flash(`+${plus} 步`);
         }
       }
+      quiz.hide();
+      hint.hidden = false;
       if (!hasMove(board)) {
         flash('没有能走的了, 重新洗一下');
         board = makeBoard();
@@ -161,17 +172,22 @@ export function renderGems({ store }, id) {
       setTimeout(() => {
         if (left) return;
         root.replaceChildren(
-          head(),
+          header,
           h(
             'div',
-            { class: 'summary game-ready' },
-            h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, record ? '🏆' : '💎'),
-            h('h1', {}, record ? '新纪录!' : '步数用完了'),
-            h('div', { class: 'big-score good' }, `${score} 分`),
-            h('p', { class: 'muted' }, `最高分 ${set.best.gems ?? score}`),
-            h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: play }, '再玩一次'), h('a', { class: 'btn', href: back }, '回去')),
+            { class: 'game-stage center' },
+            h(
+              'div',
+              { class: 'summary game-ready' },
+              h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, record ? '🏆' : '💎'),
+              h('h1', {}, record ? '新纪录!' : '步数用完了'),
+              h('div', { class: 'big-score good' }, `${score} 分`),
+              h('p', { class: 'muted' }, `最高分 ${set.best.gems ?? score}`),
+              h('div', { class: 'row center' }, h('button', { class: 'btn primary big-choice', 'data-autofocus': '1', onclick: play }, '再玩一次')),
+            ),
           ),
         );
+        root.querySelector('[data-autofocus]')?.focus();
       }, 600);
     }
 
@@ -212,17 +228,30 @@ export function renderGems({ store }, id) {
       cellAt(...at).focus();
     });
 
-    root.replaceChildren(head(), h('div', { class: 'hud' }, scoreEl, movesEl, set.best.gems ? h('span', { class: 'hud-item muted' }, `最高 ${set.best.gems}`) : null), h('div', { class: 'space-wrap' }, boardEl, banner));
+    const bestEl = set.best.gems ? h('span', { class: 'bs-best', title: '最高分' }, h('span', { 'aria-hidden': 'true' }, '🏆 '), String(set.best.gems)) : null;
+    root.replaceChildren(
+      header,
+      h(
+        'div',
+        { class: 'game-stage' },
+        h('div', { class: 'blocks-layout' }, quiz.el, hint, h('div', { class: 'blocks-main' }, h('div', { class: 'blocks-scores' }, scoreEl, movesEl, bestEl), h('div', { class: 'space-wrap' }, boardEl, banner))),
+      ),
+    );
+    quiz.hide();
     drawHud();
     draw(board);
   }
 
-  showReady();
+  const onKey = (e) => quiz.onKey(e);
+  document.addEventListener('keydown', onKey);
+  play();
   return {
     title: `宝石 · ${set.title}`,
     el: root,
     cleanup: () => {
       left = true;
+      quiz.stop();
+      document.removeEventListener('keydown', onKey);
     },
   };
 }
