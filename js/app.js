@@ -57,7 +57,12 @@ import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
 
-const store = new Store();
+const store = new Store(globalThis.localStorage, { batch: true });
+// 答题攒着没存的: 离开页面、切到别的应用时马上存 (要在同步之前, 同步看见有改的才会赶紧推)
+window.addEventListener('pagehide', () => store.flush());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') store.flush();
+});
 let lastSaveError = 0;
 store.onSaveError = () => {
   // 一直存不进去时别每次都弹

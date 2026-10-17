@@ -231,6 +231,8 @@ function progressLine(set) {
   const mastered = levels.filter((l) => l === 2).length;
   const learning = levels.filter((l) => l === 1).length;
   const parts = [`${total} 张卡片`];
+  const scheduled = set.cards.filter((c) => set.stats[c.id]?.due > 0).length;
+  if (scheduled) parts.push(`排进复习的 ${scheduled} 张`);
   if (mastered || learning) parts.push(`学习: 掌握 ${mastered} 张, 认得 ${learning} 张`);
   if (set.known.length) parts.push(`单词卡: 会了 ${set.known.length} 张`);
   return parts.join(' · ');

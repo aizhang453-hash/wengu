@@ -485,6 +485,9 @@ a.mode:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  /* 几百张卡片的列表: 看不到的先不排版, 打开快 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 /* 卡片很多时, 屏幕外的先不排版, 滚到了再排 (几千张的卡片集打开快很多) */
@@ -2923,6 +2926,39 @@ a.card-row.search-hit:hover {
 /* ---- 文件夹 ---- */
 .folders {
   margin-top: 28px;
+}
+
+.folder-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.folder-card > .folder-tile {
+  flex: 1;
+}
+
+.folder-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0 4px;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.folder-members a {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.folder-members a:hover {
+  color: var(--text);
 }
 
 .folder-tile {

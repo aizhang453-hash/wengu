@@ -94,80 +94,99 @@ function mistakesToday(store) {
   );
 }
 
-export function renderHome({ store, go }) {
-  const sets = store.allSets();
+// 背到哪了: 背过的 (排进了复习的, 连从 Anki 搬来的; 单词卡标了会了的、学习里学过的也算) 和会了的
+function progressOf(sets) {
+  let total = 0;
+  let studied = 0;
+  let known = 0;
+  for (const set of sets) {
+    const knownIds = new Set(set.known);
+    for (const [cid, level] of Object.entries(set.learn)) if (level === 2) knownIds.add(cid);
+    for (const card of set.cards) {
+      total++;
+      if (knownIds.has(card.id)) known++;
+      if (set.stats[card.id]?.due > 0 || knownIds.has(card.id) || set.learn[card.id] >= 1) studied++;
+    }
+  }
+  return { total, studied, known };
+}
 
-  const list = sets.length
-    ? h(
-        'ul',
-        { class: 'set-grid' },
-        sets.map((set) => {
-          const total = set.cards.length;
-          if (set.kind === 'quiz') {
-            return h(
-              'li',
-              {},
-              h(
-                'a',
-                { class: 'set-tile quiz-tile', href: `#/set/${encodeURIComponent(set.id)}` },
-                h('span', { class: 'set-tile-title' }, set.title || '未命名题目集'),
-                h('span', { class: 'muted' }, h('span', { class: 'kind-tag' }, '📝 题目集'), ` ${total} 道题`),
-                h('span', { class: 'muted small' }, set.best.quiz ? `最高 ${set.best.quiz} 分 · 答过 ${set.runs.length} 次` : '还没答过'),
-              ),
-            );
-          }
-          // 学习里掌握了的, 或者单词卡里标了会了的, 都算会了
-          const knownIds = new Set(set.known);
-          for (const [cid, level] of Object.entries(set.learn)) if (level === 2) knownIds.add(cid);
-          const known = knownIds.size;
-          const pct = total ? Math.round((known / total) * 100) : 0;
-          return h(
-            'li',
-            {},
-            h(
-              'a',
-              { class: 'set-tile', href: `#/set/${encodeURIComponent(set.id)}` },
-              h('span', { class: 'set-tile-title' }, set.title || '未命名卡片集'),
-              h('span', { class: 'muted' }, `${total} 张卡片`),
-              h(
-                'span',
-                { class: 'meter', title: `会了 ${known} / ${total}` },
-                h('span', { class: 'meter-fill', style: `width:${pct}%` }),
-              ),
-              h('span', { class: 'muted small' }, total ? `会了 ${known} 张` : '还没有卡片'),
-            ),
-          );
-        }),
-      )
-    : welcome();
+function meter({ total, studied }) {
+  const pct = total ? Math.round((studied / total) * 100) : 0;
+  return h('span', { class: 'meter', title: `背过 ${studied} / ${total}` }, h('span', { class: 'meter-fill', style: `width:${pct}%` }));
+}
 
-  // 文件夹
-  const folders = store.allFolders();
-  const folderSection = h(
-    'section',
-    { class: 'folders' },
-    h('div', { class: 'list-head' }, h('h2', {}, `文件夹${folders.length ? ` (${folders.length})` : ''}`), h('button', { class: 'btn small', onclick: () => newFolder(store, (f) => go(`#/folder/${encodeURIComponent(f.id)}`)) }, '＋ 新建文件夹')),
-    folders.length
+const progressText = ({ total, studied, known }) => (!total ? '还没有卡片' : studied ? `背过 ${studied} 张${known ? ` · 会了 ${known} 张` : ''}` : '还没背过');
+
+function setTile(set) {
+  const total = set.cards.length;
+  if (set.kind === 'quiz') {
+    return h(
+      'li',
+      {},
+      h(
+        'a',
+        { class: 'set-tile quiz-tile', href: `#/set/${encodeURIComponent(set.id)}` },
+        h('span', { class: 'set-tile-title' }, set.title || '未命名题目集'),
+        h('span', { class: 'muted' }, h('span', { class: 'kind-tag' }, '📝 题目集'), ` ${total} 道题`),
+        h('span', { class: 'muted small' }, set.best.quiz ? `最高 ${set.best.quiz} 分 · 答过 ${set.runs.length} 次` : '还没答过'),
+      ),
+    );
+  }
+  const p = progressOf([set]);
+  return h(
+    'li',
+    {},
+    h(
+      'a',
+      { class: 'set-tile', href: `#/set/${encodeURIComponent(set.id)}` },
+      h('span', { class: 'set-tile-title' }, set.title || '未命名卡片集'),
+      h('span', { class: 'muted' }, `${total} 张卡片`),
+      meter(p),
+      h('span', { class: 'muted small' }, progressText(p)),
+    ),
+  );
+}
+
+// 文件夹 (像 Anki 的大牌组): 里面的卡片集列在下面, 首页就不再单独摆一遍
+function folderTile(store, folder) {
+  const members = folder.setIds.map((sid) => store.getSet(sid)).filter(Boolean);
+  const p = progressOf(members);
+  return h(
+    'li',
+    { class: 'folder-card' },
+    h(
+      'a',
+      { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(folder.id)}` },
+      h('span', { class: 'set-tile-title' }, `📁 ${folder.name || '未命名文件夹'}`),
+      h('span', { class: 'muted' }, `${members.length} 个卡片集 · ${p.total} 张卡片`),
+      meter(p),
+      h('span', { class: 'muted small' }, progressText(p)),
+    ),
+    members.length
       ? h(
           'ul',
-          { class: 'set-grid' },
-          folders.map((f) => {
-            const n = f.setIds.length;
-            const cards = f.setIds.reduce((sum, sid) => sum + (store.getSet(sid)?.cards.length ?? 0), 0);
-            return h(
-              'li',
-              {},
-              h(
-                'a',
-                { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(f.id)}` },
-                h('span', { class: 'set-tile-title' }, `📁 ${f.name || '未命名文件夹'}`),
-                h('span', { class: 'muted' }, `${n} 个卡片集 · ${cards} 张卡片`),
-              ),
-            );
-          }),
+          { class: 'folder-members' },
+          members.map((set) => h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'))),
         )
-      : h('p', { class: 'muted small' }, '把几个卡片集放进一个文件夹, 就能合起来一起学 (比如期末要考的几课)。'),
+      : null,
   );
+}
+
+export function renderHome({ store, go }) {
+  const sets = store.allSets();
+  const folders = store.allFolders();
+  const inFolder = new Set(folders.flatMap((f) => f.setIds));
+  const loose = sets.filter((s) => !inFolder.has(s.id));
+  const newFolderBtn = h('button', { class: 'btn small', onclick: () => newFolder(store, (f) => go(`#/folder/${encodeURIComponent(f.id)}`)) }, '＋ 新建文件夹');
+
+  const list = sets.length
+    ? [
+        h('div', { class: 'list-head' }, h('h2', {}, folders.length ? '文件夹和卡片集' : '卡片集'), newFolderBtn),
+        h('ul', { class: 'set-grid' }, folders.map((f) => folderTile(store, f)), loose.map(setTile)),
+        folders.length ? null : h('p', { class: 'muted small' }, '把几个卡片集放进一个文件夹, 就能合起来一起学 (比如期末要考的几课); 从 Anki 搬来的大牌组会自动变成文件夹。'),
+      ]
+    : welcome();
 
   const fileInput = h('input', {
     type: 'file',
@@ -242,7 +261,6 @@ export function renderHome({ store, go }) {
       expiryNotice(),
       sets.length || store.data.mistakes.length ? todayPanel(store, sets) : null,
       list,
-      sets.length ? folderSection : null,
       backup,
     ),
   };

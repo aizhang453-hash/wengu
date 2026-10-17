@@ -224,11 +224,26 @@ export function cleanData(raw) {
 }
 
 export class Store {
-  // storage 默认是浏览器的 localStorage; 测试时换成假的
-  constructor(storage = globalThis.localStorage) {
+  // storage 默认是浏览器的 localStorage; 测试时换成假的。
+  // batch: 答题这种一秒好几次的, 攒一下过一会儿再一起存 (卡片多了存一次要几十毫秒, 手机上点一下会顿); 网页里用
+  constructor(storage = globalThis.localStorage, { batch = false } = {}) {
     this.storage = storage;
+    this.batch = batch;
+    this.saveTimer = null;
     this.data = this.load();
     this.applyParameters();
+  }
+
+  // 一会儿再存 (batch 关着就马上存)
+  saveSoon() {
+    if (!this.batch) return this.save();
+    this.saveTimer ??= setTimeout(() => this.save(), 400);
+    return true;
+  }
+
+  // 有攒着没存的马上存 (离开页面、切到别的应用时)
+  flush() {
+    if (this.saveTimer) this.save();
   }
 
   // 排复习用存着的 FSRS 参数 (按自己的记录优化过的, 没有就默认的)
@@ -247,6 +262,9 @@ export class Store {
 
   // 别的标签页改了, 重新读一遍
   reload() {
+    // 别的标签页刚存过: 听那边的 (这边攒着没存的最多零点几秒, 不要了)
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
     this.data = this.load();
     this.applyParameters();
   }
@@ -261,6 +279,8 @@ export class Store {
   // 存不下 (超过浏览器给的空间、无痕模式) 时不抛错, 调 onSaveError 提示一下, 返回 false。
   // 存好了调 onChange (同步用; 同步自己存的不算)
   save({ fromSync = false } = {}) {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
     try {
       this.storage?.setItem(KEY, JSON.stringify(this.data));
       if (!fromSync) this.onChange?.();
@@ -481,7 +501,7 @@ export class Store {
     if (known && !has) set.known.push(cardId);
     if (!known && has) set.known = set.known.filter((id) => id !== cardId);
     set.progressAt = Date.now();
-    this.save();
+    this.saveSoon();
   }
 
   resetKnown(setId) {
@@ -498,7 +518,7 @@ export class Store {
         set.progressAt = Date.now();
       }
     }
-    this.save();
+    this.saveSoon();
   }
 
   resetLearn(setId) {
@@ -522,7 +542,7 @@ export class Store {
       addReview(this.data.revlog, cardId, now, correct);
     }
     this.touchActivity(now);
-    if (save) this.save();
+    if (save) this.saveSoon();
   }
 
   // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }]]]。按一遍 FSRS 接着 Anki 的进度排,
