@@ -158,7 +158,9 @@ export function fileImportPanel({ onText, onCards, onSets }) {
     // mode: 'add' 加进编辑页, 'direct' 直接建成一个卡片集, 'each' 每个工作表 / 牌组建一个
     async function finish(mode) {
       const each = mode === 'each';
-      const groups = each ? sheets.map((s) => ({ title: s.name.split('::').pop().trim() || data.title, cards: cardsOf(s) })).filter((g) => g.cards.length) : [{ title: sheetSelect && sheetSelect.value !== '-1' ? chosen()[0].name.split('::').pop().trim() : data.title, cards: chosen().flatMap(cardsOf) }];
+      const groups = each
+        ? sheets.map((s) => ({ path: s.name, title: s.name.split('::').pop().trim() || data.title, cards: cardsOf(s) })).filter((g) => g.cards.length)
+        : [{ title: sheetSelect && sheetSelect.value !== '-1' ? chosen()[0].name.split('::').pop().trim() : data.title, cards: chosen().flatMap(cardsOf) }];
       const btn = { add: addBtn, direct: directBtn, each: eachBtn }[mode];
       const label0 = btn.textContent;
       for (const b of [addBtn, directBtn, eachBtn]) if (b) b.disabled = true;
@@ -166,7 +168,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         const all = groups.flatMap((g) => g.cards);
         const { cards, failed } = await withMedia(all, (t) => (btn.textContent = t));
         let k = 0;
-        const done = groups.map((g) => ({ title: g.title, cards: cards.slice(k, (k += g.cards.length)) }));
+        const done = groups.map((g) => ({ ...g, cards: cards.slice(k, (k += g.cards.length)) }));
         if (failed) toast(`${failed} 个图片 / 声音拿不到, 跳过了`);
         panel.hidden = true;
         const opts = { random: randomBox.checked };
@@ -197,6 +199,10 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       ),
       previewEl,
       h('div', { class: 'row' }, addBtn, directBtn, eachBtn),
+      // Anki 里大牌组下面分小牌组的
+      eachBtn && sheets.some((s) => s.name.includes('::'))
+        ? h('p', { class: 'muted small' }, `「${eachBtn.textContent}」照 Anki 的样子建: 大牌组变成文件夹, 小牌组变成里面的卡片集。文件夹里能合起来学, 也能给整个大牌组定每天背多少 (照顺序一个小牌组一个小牌组来)。`)
+        : null,
     );
     panel.hidden = false;
     draw();

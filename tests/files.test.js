@@ -8,7 +8,7 @@ import { SQLiteDB, parseCreate } from '../js/sqlite.js';
 import { readXlsx, writeXlsx, colName } from '../js/xlsx.js';
 import { parseCsv, toCsv, guessDelimiter, decodeText } from '../js/csv.js';
 import { htmlToText, mediaRefs, cloze, parseAnkiText, readApkg, toAnkiText, textToHtml } from '../js/anki.js';
-import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, exportFile, FileError } from '../js/cardfile.js';
+import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, exportFile, deckFolders, FileError } from '../js/cardfile.js';
 
 const fixture = (name) => new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
 const fileOf = (name, bytes) => new File([bytes], name);
@@ -280,4 +280,23 @@ test('导出: Excel、CSV 再导入回来一样; Anki 文字格式', async () =>
     ['**apple**', '苹果, 一种水果'],
     ['say "hi"', '打招呼\n第二行'],
   ]);
+});
+
+test('Anki 的「大牌组::小牌组」: 大牌组变成文件夹, 小牌组是里面的卡片集; 没分小牌组的照旧', () => {
+  const g = (path) => ({ path, title: path.split('::').pop(), cards: [path] });
+  const out = deckFolders([g('4000 Essential English Words::1.Book'), g('4000 Essential English Words::2.Book'), g('4000 Essential English Words::Extra::Unit A'), g('Barron'), g('4000 Essential English Words')]);
+  assert.deepEqual(out, [
+    {
+      folder: '4000 Essential English Words',
+      sets: [
+        { title: '1.Book', cards: ['4000 Essential English Words::1.Book'] },
+        { title: '2.Book', cards: ['4000 Essential English Words::2.Book'] },
+        { title: 'Extra · Unit A', cards: ['4000 Essential English Words::Extra::Unit A'] },
+        { title: '4000 Essential English Words', cards: ['4000 Essential English Words'] },
+      ],
+    },
+    { folder: null, sets: [{ title: 'Barron', cards: ['Barron'] }] },
+  ]);
+  // Excel 的工作表 (没有 path)
+  assert.deepEqual(deckFolders([{ title: 'Sheet1', cards: [1] }]), [{ folder: null, sets: [{ title: 'Sheet1', cards: [1] }] }]);
 });

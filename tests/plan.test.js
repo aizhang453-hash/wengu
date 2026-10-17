@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanPlan, planOf, newCards, newToday, todayQueue, reviewedToday, mixIn, isNew, examTime, DEFAULT_PER_DAY } from '../js/plan.js';
 import { DAY, retrievability } from '../js/srs.js';
-import { Store, makeSet, makeCard, cleanData } from '../js/store.js';
+import { Store, makeSet, makeCard, makeFolder, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 
 function memoryStorage() {
@@ -154,4 +154,36 @@ test('题目集没有每天新词的计划', () => {
   const quiz = store.putSet(makeSet({ kind: 'quiz', cards: [makeCard('q', '')] }));
   assert.equal(store.setPlan(quiz.id, { on: true }), null);
   assert.equal(newToday({ ...quiz, plan: cleanPlan({ on: true }) }, now).today, 0);
+});
+
+test('文件夹的计划: 新词照文件夹里卡片集的顺序; 今天的新词记回原来的卡片集; 卡片集也定了的同一张只出一次', () => {
+  const store = new Store(memoryStorage());
+  const book1 = store.putSet(makeSet({ title: '1.Book', cards: cardsOf(3) }));
+  const book2 = store.putSet(makeSet({ title: '2.Book', cards: cardsOf(5) }));
+  const folder = store.putFolder({ ...makeFolder('4000 Essential English Words'), setIds: [book1.id, book2.id] });
+  const fid = `folder:${folder.id}`;
+  store.recordAnswer(book1.id, book1.cards[0].id, true, { now: now - 5 * DAY, selfRated: true }); // 以前学的
+  store.setPlan(fid, { on: true, perDay: 4 }, now);
+  const combo = store.getSet(fid);
+  assert.equal(combo.plan.perDay, 4);
+  assert.deepEqual(store.plannedFolders().map((f) => f.id), [fid]);
+  const info = newToday(combo, now);
+  assert.deepEqual([info.today, info.left], [4, 7]);
+  assert.deepEqual(newCards(combo).map((c) => c.id).slice(0, 4), [book1.cards[1].id, book1.cards[2].id, book2.cards[0].id, book2.cards[1].id]);
+  // 1.Book 自己也定了计划: 重复的只出一次
+  store.setPlan(book1.id, { on: true, perDay: 2 }, now);
+  const q = todayQueue(store.setsOf(fid), { now, cap: 200, reviewed: 0, groups: store.plannedFolders() });
+  assert.equal(q.fresh.length, 4);
+  assert.equal(new Set(q.fresh.map((x) => x.card.id)).size, 4);
+  assert.deepEqual(q.fresh.map((x) => x.set.title), ['1.Book', '1.Book', '2.Book', '2.Book']);
+  // 学了两个 (记在各自的卡片集), 文件夹今天还剩两个
+  store.recordAnswer(book2.id, book2.cards[0].id, true, { now, selfRated: true });
+  store.recordAnswer(book1.id, book1.cards[1].id, false, { now, selfRated: true });
+  assert.deepEqual([newToday(store.getSet(fid), now).learned, newToday(store.getSet(fid), now).today], [2, 2]);
+  // 存着、同步听后改的
+  const again = new Store(store.storage);
+  assert.equal(again.getFolder(folder.id).plan.perDay, 4);
+  const remote = structuredClone(again.data);
+  remote.folders[0].plan = { ...remote.folders[0].plan, perDay: 9, at: now + 1 };
+  assert.equal(mergeData(again.data, remote).folders[0].plan.perDay, 9);
 });

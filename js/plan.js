@@ -2,6 +2,7 @@
 // 或者填考试日期, 自动算每天几个、考前留几天只复习。今天的复习 = 到日子的卡片 + 各卡片集今天的新词。
 //   set.plan = { on, perDay, exam: 'YYYY-MM-DD' 或 '', rest: 考前几天只复习, order: 'set' 按卡片集里的顺序 | 'random', seed, at }
 //   (没定过计划是 null; at 是改计划的时间, 同步时听后改的)
+// 文件夹也能定计划 (像 Anki 在大牌组上定每天几个): 新词照文件夹里卡片集的顺序一个一个出 (folder.plan, 用合起来的卡片集算)。
 // 复习也有上限 (每天最多几张, 所有卡片集一起算), 太多时先来最可能忘的; 今天看过、忘了又到时候的不算上限。
 // 新词算「今天学的」: 第一次翻卡自评在今天 (stats.first), 在单词卡里翻的也算。
 
@@ -52,7 +53,8 @@ function hash(text) {
 
 // 还没背过的卡片, 照计划的顺序
 export function newCards(set) {
-  const list = set.cards.filter((c) => isNew(set.stats[c.id]));
+  const stats = set.stats; // 文件夹合起来的每次读都要现算, 只读一次
+  const list = set.cards.filter((c) => isNew(stats[c.id]));
   const plan = planOf(set);
   if (plan.order !== 'random') return list;
   const key = new Map(list.map((c) => [c.id, hash(plan.seed + c.id)]));
@@ -75,8 +77,9 @@ export function newToday(set, now = Date.now()) {
   const today0 = startOfDay(now);
   let left = 0;
   let learned = 0;
+  const stats = set.stats;
   for (const card of set.cards) {
-    const stat = set.stats[card.id];
+    const stat = stats[card.id];
     if (isNew(stat)) left++;
     else if (stat.first >= today0) learned++;
   }
@@ -114,8 +117,9 @@ export function reviewedToday(sets, now = Date.now()) {
 }
 
 // 今天要背的: { reviews: [{ set, card }], fresh: [{ set, card, fresh: true }], held: 超过上限、明天再来的几张 }
-//   cap 每天最多复习几张; reviewed 今天已经复习了几张 (所有卡片集的)
-export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, reviewed = 0 } = {}) {
+//   cap 每天最多复习几张; reviewed 今天已经复习了几张 (所有卡片集的);
+//   groups 定了计划的文件夹 (合起来的卡片集), 它们的新词也要, 卡片记在 sets 里原来的卡片集上
+export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, reviewed = 0, groups = [] } = {}) {
   const today0 = startOfDay(now);
   const again = []; // 今天看过、忘了, 十分钟后又到时候的: 不算上限
   const due = [];
@@ -130,9 +134,17 @@ export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, r
   due.sort((a, b) => a.r - b.r); // 最可能忘的先来
   const room = Math.max(0, cap - reviewed);
   const fresh = [];
-  for (const set of sets) {
+  const seen = new Set(); // 卡片集和它所在的文件夹都定了计划的, 同一张只出一次
+  const owner = groups.length ? new Map(sets.flatMap((set) => set.cards.map((c) => [c.id, set]))) : null;
+  for (const set of [...sets, ...groups]) {
     const { today } = newToday(set, now);
-    if (today) fresh.push(...newCards(set).slice(0, today).map((card) => ({ set, card, fresh: true })));
+    if (!today) continue;
+    for (const card of newCards(set).slice(0, today)) {
+      const home = set.virtual ? owner.get(card.id) : set;
+      if (!home || seen.has(card.id)) continue;
+      seen.add(card.id);
+      fresh.push({ set: home, card, fresh: true });
+    }
   }
   return { reviews: [...again, ...due.slice(0, room)], fresh, held: Math.max(0, due.length - room) };
 }

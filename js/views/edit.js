@@ -2,7 +2,8 @@
 // 每张卡片: 词、解释 (能加粗、斜体、下划线、高亮), 解释那面能放图片, 两面都能录音。
 
 import { h, toast, fill } from '../dom.js';
-import { makeSet, makeCard } from '../store.js';
+import { makeSet, makeCard, makeFolder, FOLDER_PREFIX } from '../store.js';
+import { deckFolders } from '../cardfile.js';
 import { planOf, newSeed } from '../plan.js';
 import { parseCards, guessTermSep, guessCardSep } from '../parse.js';
 import { LANGS } from '../speech.js';
@@ -548,22 +549,37 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     },
     onSets: (list, { random = false } = {}) => {
       const made = [];
-      try {
-        for (const g of list) {
-          const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
-          const set = store.putSet({ title: g.title || '未命名卡片集', cards });
-          // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
-          store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
-          if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
-          made.push(set);
+      const folders = [];
+      let full = false;
+      // Anki 的「大牌组::小牌组」: 大牌组建成文件夹, 小牌组是里面的卡片集
+      for (const entry of deckFolders(list)) {
+        const ids = [];
+        try {
+          for (const g of entry.sets) {
+            const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
+            const set = store.putSet({ title: g.title || '未命名卡片集', cards });
+            // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
+            store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
+            if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
+            made.push(set);
+            ids.push(set.id);
+          }
+        } catch {
+          full = true;
         }
-      } catch {
-        toast(made.length ? `建好了 ${made.length} 个, 后面的存不下了: 浏览器给的空间满了` : '存不下了: 浏览器给的空间满了');
-        if (!made.length) return;
+        if (entry.folder && ids.length) {
+          const folder = store.putFolder({ ...makeFolder(entry.folder), setIds: ids });
+          if (random) store.setPlan(FOLDER_PREFIX + folder.id, { order: 'random', seed: newSeed() });
+          folders.push(folder);
+        }
+        if (full) break;
       }
-      if (made.length === list.length) toast(`建好了 ${made.length} 个卡片集`);
+      if (full) toast(made.length ? `建好了 ${made.length} 个, 后面的存不下了: 浏览器给的空间满了` : '存不下了: 浏览器给的空间满了');
+      if (!made.length) return;
+      if (!full) toast(folders.length === 1 ? `建好了 ${made.length} 个卡片集, 放进文件夹「${folders[0].name}」` : `建好了 ${made.length} 个卡片集${folders.length ? `, 放进 ${folders.length} 个文件夹` : ''}`);
       if (!existing && rows.every(isBlank)) dirty = false;
-      go(made.length === 1 ? `#/set/${encodeURIComponent(made[0].id)}` : '#/');
+      const inOne = folders.length === 1 && folders[0].setIds.length === made.length;
+      go(inOne ? `#/folder/${encodeURIComponent(folders[0].id)}` : made.length === 1 ? `#/set/${encodeURIComponent(made[0].id)}` : '#/');
     },
   });
   const importBox = h(

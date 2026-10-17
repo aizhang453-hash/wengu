@@ -43,9 +43,10 @@ function todayPanel(store, sets) {
 // 今天要背的: 到日子的复习 (每天有上限) + 定了计划的卡片集的新词; 下面一个一个说计划走到哪了
 function reviewToday(store, sets) {
   const reviewed = reviewedToday(sets);
-  const { reviews, fresh, held } = todayQueue(sets, { cap: store.reviewCap, reviewed });
+  const groups = store.plannedFolders();
+  const { reviews, fresh, held } = todayQueue(sets, { cap: store.reviewCap, reviewed, groups });
   const text = todayText(reviews.length, fresh.length);
-  const planned = plannedSets(sets);
+  const planned = [...groups, ...plannedSets(sets)];
   const tomorrow = dueTomorrow(sets);
   let head;
   if (text) {
@@ -72,7 +73,8 @@ function reviewToday(store, sets) {
           { class: 'plan-list' },
           planned.map((set) => {
             const info = newToday(set);
-            return h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'), h('span', { class: 'muted small' }, planLine(info, planOf(set))));
+            const href = set.virtual ? `#/folder/${encodeURIComponent(set.folderId)}` : `#/set/${encodeURIComponent(set.id)}`;
+            return h('li', {}, h('a', { href }, set.virtual ? `📁 ${set.title}` : set.title || '未命名卡片集'), h('span', { class: 'muted small' }, planLine(info, planOf(set))));
           }),
         )
       : null,

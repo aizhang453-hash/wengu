@@ -33,13 +33,39 @@ export function planLine(info, plan) {
   return parts.join(' · ');
 }
 
-// 卡片集页上的「每天背新词」
+// 今天要背的 (卡片集, 或者文件夹合起来的): todayQueue 的结果
+export function queueFor(store, set) {
+  const sets = set.virtual ? store.setsOf(set.id) : [set];
+  return todayQueue(sets, { cap: store.reviewCap, reviewed: reviewedToday(store.allSets()), groups: set.virtual && set.plan?.on ? [set] : [] });
+}
+
+// 卡片集页、文件夹页上的「每天背新词」
 export function planPanel({ store, go }, set) {
   const info = newToday(set);
   const plan = planOf(set);
-  const { reviews, fresh } = todayQueue([set], { cap: store.reviewCap, reviewed: reviewedToday(store.allSets()) });
+  const { reviews, fresh } = queueFor(store, set);
   const redraw = () => go(location.hash);
   const text = todayText(reviews.length, fresh.length);
+  // 卡片集在定了计划的文件夹里: 新词从文件夹一起出, 这里就不单独定了
+  const viaFolder = !set.virtual && !info.on ? store.foldersOf(set.id).find((f) => f.plan?.on) : null;
+  if (viaFolder) {
+    return h(
+      'section',
+      { class: 'plan-panel' },
+      h(
+        'div',
+        { class: 'plan-text' },
+        h('strong', {}, '📅 每天背新词'),
+        h('div', { class: 'muted small' }, `跟着文件夹「${viaFolder.name || '未命名文件夹'}」的计划: 新词从文件夹里按顺序一起出。`),
+      ),
+      h(
+        'div',
+        { class: 'row' },
+        h('a', { class: 'btn', href: `#/folder/${encodeURIComponent(viaFolder.id)}` }, '去文件夹'),
+        text ? h('a', { class: 'btn primary', href: `#/review/${encodeURIComponent(set.id)}` }, `开始今天的: ${text}`) : null,
+      ),
+    );
+  }
   return h(
     'section',
     { class: `plan-panel${info.on ? ' on' : ''}` },
@@ -50,7 +76,11 @@ export function planPanel({ store, go }, set) {
       h(
         'div',
         { class: 'muted small' },
-        info.on ? planLine(info, plan) : info.left ? `还有 ${num(info.left)} 张没背过。定个计划, 每天给你几个新词, 跟到日子的复习一起出, 不用一下背完。` : '卡片都背过了, 按复习的日子来就行。',
+        info.on
+          ? planLine(info, plan)
+          : info.left
+            ? `还有 ${num(info.left)} 张没背过。定个计划, 每天给你几个新词, 跟到日子的复习一起出, 不用一下背完。${set.virtual ? '新词照文件夹里卡片集的顺序, 一个背完再下一个。' : ''}`
+            : '卡片都背过了, 按复习的日子来就行。',
       ),
     ),
     h(
@@ -151,7 +181,7 @@ export function openPlanDialog({ store, set, onSaved }) {
         { class: 'row' },
         chips(
           [
-            ['set', '按卡片集里的顺序'],
+            ['set', set.virtual ? '按文件夹里的顺序' : '按卡片集里的顺序'],
             ['random', '随机'],
           ],
           order,

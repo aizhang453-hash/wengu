@@ -42,7 +42,7 @@ export async function readCardFile(file) {
       const columns = list.find((n) => n.model === common)?.fieldNames ?? [];
       return { name: deck || '卡组', columns, rows: list.map((n) => Object.assign([...n.fields], { reviews: n.reviews })) };
     });
-    sheets.sort((a, b) => a.name.localeCompare(b.name));
+    sheets.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); // 2.Book 在 10.Book 前面
     const withHistory = notes.filter((n) => n.reviews.length);
     const history = { cards: withHistory.length, reviews: withHistory.reduce((k, n) => k + n.reviews.length, 0) };
     return { kind: 'table', title: sheets.length === 1 ? lastPart(sheets[0].name) : title, html: true, label: '牌组', sheets, media, history };
@@ -81,6 +81,29 @@ export async function readCardFile(file) {
 }
 
 const lastPart = (deck) => deck.split('::').pop().trim();
+
+// Anki 的牌组「大牌组::小牌组」照样搬: 有小牌组的大牌组变成文件夹, 小牌组变成里面的卡片集
+// (再往下分的用「 · 」连起来, 大牌组自己的卡片叫大牌组的名字)。
+// groups: [{ path: 牌组全名, title, cards }] → [{ folder: 文件夹名或 null, sets: [{ title, cards }] }], 顺序不变
+export function deckFolders(groups) {
+  const byTop = new Map();
+  for (const g of groups) {
+    const parts = String(g.path ?? '').split('::').map((p) => p.trim()).filter(Boolean);
+    const top = parts[0] ?? '';
+    if (!byTop.has(top)) byTop.set(top, []);
+    byTop.get(top).push({ g, parts });
+  }
+  const out = [];
+  for (const [top, list] of byTop) {
+    const nested = top && list.some(({ parts }) => parts.length > 1);
+    if (!nested) {
+      out.push(...list.map(({ g }) => ({ folder: null, sets: [{ title: g.title, cards: g.cards }] })));
+      continue;
+    }
+    out.push({ folder: top, sets: list.map(({ g, parts }) => ({ title: parts.length > 1 ? parts.slice(1).join(' · ') : top, cards: g.cards })) });
+  }
+  return out;
+}
 
 // 第一行是不是标题 (「词」「解释」「Term」「Definition」这种)
 const HEADER_WORDS = /^(terms?|words?|vocab(ulary)?|front|questions?|prompts?|definitions?|meanings?|back|answers?|translations?|examples?|notes?|pronunciation|phonetics?|ipa|pinyin|english|chinese|词|单词|词语|生词|词汇|术语|名词|解释|释义|意思|含义|定义|翻译|中文|英文|英语|正面|背面|问题|答案|例句|备注|音标|拼音|发音|词性)$/i;

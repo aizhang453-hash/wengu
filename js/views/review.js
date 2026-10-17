@@ -35,8 +35,10 @@ export function renderReview({ store, go }, setId = null) {
     }
   };
 
-  // 能学新词的: 定了计划的; 只复习一个卡片集时, 没定计划也能「再学几个」
-  const learnable = setId ? sets.filter((s) => s.kind !== 'quiz') : plannedSets(sets);
+  // 定了计划的文件夹 (合起来的): 全部复习时所有的, 只复习一个文件夹时它自己
+  const groups = !setId ? store.plannedFolders() : scope?.virtual && scope.plan?.on ? [scope] : [];
+  // 能学新词的: 定了计划的; 只复习一个卡片集 / 文件夹时, 没定计划也能「再学几个」(文件夹照里面的顺序)
+  const learnable = setId ? (scope?.virtual ? [scope] : sets.filter((s) => s.kind !== 'quiz')) : [...groups, ...plannedSets(sets)];
   let queue = [];
   let total = 0;
   let held = 0; // 超过每天上限、没排进来的
@@ -51,10 +53,16 @@ export function renderReview({ store, go }, setId = null) {
   // noCap: 不管每天的上限; more: 计划以外再学几个新词
   function start({ noCap = false, more = 0 } = {}) {
     if (more) {
-      queue = learnable.flatMap((set) => newCards(set).map((card) => ({ set, card, fresh: true }))).slice(0, more);
+      // 卡片记在原来的卡片集上 (文件夹合起来的找回原来的)
+      const owner = new Map(sets.flatMap((set) => set.cards.map((c) => [c.id, set])));
+      const seen = new Set();
+      queue = learnable
+        .flatMap((set) => newCards(set).map((card) => ({ set: owner.get(card.id), card, fresh: true })))
+        .filter((x) => x.set && !seen.has(x.card.id) && seen.add(x.card.id))
+        .slice(0, more);
       held = 0;
     } else {
-      const today = todayQueue(sets, { cap: noCap ? Infinity : store.reviewCap, reviewed: reviewedToday(store.allSets()) });
+      const today = todayQueue(sets, { cap: noCap ? Infinity : store.reviewCap, reviewed: reviewedToday(store.allSets()), groups });
       queue = mixIn(today.reviews, today.fresh);
       held = today.held;
     }
@@ -185,7 +193,7 @@ export function renderReview({ store, go }, setId = null) {
 
   // 计划走到哪了 (这里有定了计划的卡片集才有)
   function planNotes() {
-    const planned = plannedSets(sets);
+    const planned = [...groups, ...plannedSets(sets)];
     if (!planned.length) return null;
     return h(
       'ul',

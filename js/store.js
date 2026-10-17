@@ -49,10 +49,10 @@ export function cleanSettings(raw) {
 
 const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
 
-// 文件夹: { id, name, setIds: [卡片集 id...], best: {}, createdAt, updatedAt }
+// 文件夹: { id, name, setIds: [卡片集 id...], best: {}, plan: 每天背新词的计划 (plan.js, 没定过是 null), createdAt, updatedAt }
 export function makeFolder(name = '') {
   const now = Date.now();
-  return { id: newId(), name, setIds: [], best: {}, createdAt: now, updatedAt: now };
+  return { id: newId(), name, setIds: [], best: {}, plan: null, createdAt: now, updatedAt: now };
 }
 
 export const FOLDER_PREFIX = 'folder:';
@@ -179,6 +179,7 @@ function cleanFolder(raw, setIds) {
     name: String(raw.name ?? ''),
     setIds: Array.isArray(raw.setIds) ? [...new Set(raw.setIds.filter((id) => setIds.has(id)))] : [],
     best: cleanBest(raw.best),
+    plan: cleanPlan(raw.plan),
     createdAt: Number(raw.createdAt) || now,
     updatedAt: Number(raw.updatedAt) || now,
   };
@@ -316,7 +317,15 @@ export class Store {
       get best() {
         return folder.best;
       },
+      get plan() {
+        return folder.plan ?? null;
+      },
     };
+  }
+
+  // 定了每天背新词计划的文件夹 (合起来的卡片集)
+  plannedFolders() {
+    return this.data.folders.filter((f) => f.plan?.on && f.setIds.length).map((f) => this.folderSet(f.id));
   }
 
   // 这张卡片的进度该记到哪个卡片集 (合起来学的时候是卡片原来的卡片集)
@@ -533,8 +542,15 @@ export class Store {
     return n;
   }
 
-  // 每天的计划 (plan.js): 改几项, 别的照旧
+  // 每天的计划 (plan.js): 改几项, 别的照旧。setId 是「folder:文件夹 id」时定在文件夹上
   setPlan(setId, changes, now = Date.now()) {
+    if (typeof setId === 'string' && setId.startsWith(FOLDER_PREFIX)) {
+      const folder = this.getFolder(setId.slice(FOLDER_PREFIX.length));
+      if (!folder) return null;
+      folder.plan = cleanPlan({ ...folder.plan, ...changes, at: now });
+      this.save();
+      return folder.plan;
+    }
     const set = this.data.sets.find((s) => s.id === setId);
     if (!set || set.kind === 'quiz') return null;
     set.plan = cleanPlan({ ...set.plan, ...changes, at: now });

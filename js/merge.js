@@ -6,7 +6,7 @@
 //   题目集每次的成绩                  两边的合起来
 //   打卡                              同一天取多的
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
-//   文件夹                            听最后改过的那边
+//   文件夹                            听最后改过的那边 (每天的计划听后改的)
 //   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
 //   翻卡自评的记录 (revlog)            两边的合起来
 //   每天的计划、复习上限              听后改的那边
@@ -71,7 +71,12 @@ export function mergeSettings(a, b) {
 
 function mergeFolder(a, b) {
   const newer = (b.updatedAt ?? 0) > (a.updatedAt ?? 0) ? b : a;
-  return { ...newer, best: mergeBest(a.best, b.best), updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0) };
+  return {
+    ...newer,
+    best: mergeBest(a.best, b.best),
+    plan: (b.plan?.at ?? 0) > (a.plan?.at ?? 0) ? b.plan : a.plan,
+    updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0),
+  };
 }
 
 // 两份按 id 合并; 删除记录比最后修改晚的就不要了
