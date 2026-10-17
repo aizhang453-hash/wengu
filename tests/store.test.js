@@ -236,14 +236,16 @@ test('答题时排好下次复习, 记今天学过; 存了再读还在', () => {
   store.recordAnswer(set.id, apple.id, true, { now: noon });
   store.recordAnswer(set.id, pear.id, false, { now: noon });
   const stats = new Store(storage).getSet(set.id).stats;
-  assert.equal(stats[apple.id].interval, 1);
-  assert.equal(stats[apple.id].due, new Date(2026, 9, 13).getTime());
+  // FSRS: 第一次答对隔 2 天; 记忆状态 (稳定性 s、难度 d) 存了再读还在
+  assert.equal(stats[apple.id].interval, 2);
+  assert.equal(stats[apple.id].due, new Date(2026, 9, 14).getTime());
+  assert.ok(stats[apple.id].s > 2 && stats[apple.id].d >= 1);
   assert.equal(stats[pear.id].due, noon + 10 * 60 * 1000);
   assert.deepEqual(new Store(storage).data.activity, { '2026-10-12': 2 });
 
-  // 判错了改成对: 复习也按答对排
+  // 判错了改成对: 复习也按答对排 (至少明天)
   store.amendAnswer(set.id, pear.id);
-  assert.equal(store.getSet(set.id).stats[pear.id].interval, 1);
+  assert.ok(store.getSet(set.id).stats[pear.id].interval >= 1);
 });
 
 test('存不进去 (空间满了): 不抛错, 告诉 onSaveError; 编辑保存 (putSet) 才抛错', () => {

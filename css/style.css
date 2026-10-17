@@ -5911,10 +5911,15 @@ a.pick-row:hover {
     align-items: start;
   }
 
-  .mk-paper.with-passage .mk-passage {
+  .mk-paper.with-passage .mk-passage-side {
     position: sticky;
     top: 76px;
     max-height: calc(100vh - 100px);
+    overflow: auto;
+  }
+
+  .mk-paper.with-passage .mk-passage {
+    max-height: none;
   }
 }
 
@@ -5970,4 +5975,60 @@ a.pick-row:hover {
 
 .mk-review .input.wrong {
   border-color: var(--bad);
+}
+
+/* 错题的图片 */
+.mk-images-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mk-thumb {
+  display: block;
+  max-width: 120px;
+  max-height: 90px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.mk-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mk-images {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mk-passage-side .mk-images {
+  margin: 12px 0 0;
+}
+
+.mk-image-btn {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.mk-img {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+
+.mk-img-big {
+  display: block;
+  max-width: 100%;
+  max-height: 80vh;
+  margin: 0 auto;
 }

@@ -73,10 +73,15 @@ export function setMediaIds(set) {
   return [...set.cards.flatMap(mediaIdsOf), set.diagram?.image].filter(Boolean);
 }
 
-// 没有卡片用的图片、录音删掉, 省地方
+// 所有用到的图片、录音: 卡片集的, 加上错题集的图片 (同步、备份、清理都看这个)
+export function usedMediaIds(data) {
+  return [...data.sets.flatMap(setMediaIds), ...(data.mistakes ?? []).flatMap((m) => m.images ?? [])];
+}
+
+// 没有卡片 (错题) 用的图片、录音删掉, 省地方
 export async function cleanMedia(store) {
   try {
-    const used = new Set(store.data.sets.flatMap(setMediaIds));
+    const used = new Set(usedMediaIds(store.data));
     const d = await db();
     const old = await new Promise((resolve, reject) => {
       const out = [];

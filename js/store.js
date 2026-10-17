@@ -36,7 +36,7 @@ export const FOLDER_PREFIX = 'folder:';
 //   known: [卡片 id...]        单词卡里标了「会了」的
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
-//   stats: { 卡片 id: { right, wrong, interval, ease, due } }  答对答错几次, 下次哪天复习 (srs.js)
+//   stats: { 卡片 id: { right, wrong, interval, ease, s, d, due, at } }  答对答错几次, 记忆状态, 下次哪天复习 (srs.js)
 //   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
 //   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
 //   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
@@ -116,6 +116,7 @@ function cleanSet(raw) {
       if (!v || typeof v !== 'object') return null;
       const out = { right: Math.max(0, Number(v.right) || 0), wrong: Math.max(0, Number(v.wrong) || 0) };
       if (Number(v.due) > 0) Object.assign(out, { interval: Math.max(0, Number(v.interval) || 0), ease: Number(v.ease) || 2.5, due: Number(v.due) });
+      if (Number(v.s) > 0 && Number(v.d) >= 1) Object.assign(out, { s: Number(v.s), d: Math.min(10, Number(v.d)) }); // FSRS 的稳定性、难度
       if (Number(v.at) > 0) out.at = Number(v.at); // 最后一次答这张的时间 (同步时用)
       return out;
     }),

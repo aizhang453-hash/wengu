@@ -4,6 +4,7 @@ import { newMistake, cleanMistake, mistakeProblem, tidyMistake, parseNumber, ans
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { DAY } from '../js/srs.js';
+import { usedMediaIds } from '../js/media.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -31,11 +32,21 @@ test('错题: 坏的、怪的补齐或者不要', () => {
   assert.equal(m.mine, 1);
   assert.equal(m.review, null);
   assert.equal(m.passage, '');
+  assert.deepEqual(m.images, []);
+  // 图片: 只要 media 的 id, 去重, 最多 6 张
+  const withImages = cleanMistake({ id: 'y', images: ['m_a', 'm_a', 'http://evil', 5, 'm_b', 'm_c', 'm_d', 'm_e', 'm_f', 'm_g'] });
+  assert.deepEqual(withImages.images, ['m_a', 'm_b', 'm_c', 'm_d', 'm_e', 'm_f']);
+});
+
+test('错题的图片也算「用到的」: 同步、备份会带上, 清理不会删', () => {
+  const data = cleanData({ sets: [{ id: 's', cards: [{ id: 'c', term: 'a', def: 'b', image: 'm_card' }] }], mistakes: [{ ...sat(), images: ['m_graph', 'm_passage'] }] });
+  assert.deepEqual(usedMediaIds(data).sort(), ['m_card', 'm_graph', 'm_passage']);
 });
 
 test('错题: 没写完的说差什么', () => {
   assert.equal(mistakeProblem(sat()), '');
-  assert.equal(mistakeProblem(sat({ question: '  ' })), '题目还没写');
+  assert.match(mistakeProblem(sat({ question: '  ' })), /题目还没写/);
+  assert.equal(mistakeProblem(sat({ question: '', images: ['m_shot'] })), ''); // 题目截图了就不用打字
   assert.match(mistakeProblem(sat({ options: ['only one', '', '', ''] })), /至少写 2 个/);
   assert.match(mistakeProblem(sat({ options: ['a', '', 'c', ''] })), /选项 B 是空的/);
   assert.match(mistakeProblem(sat({ correct: -1 })), /哪个是对的/);

@@ -1,7 +1,7 @@
 // 错题集: 记下的错题, 今天该重做几道、一道道列出来 (可以筛、可以搜), 记新的、改、删
 
 import { h, toast } from '../dom.js';
-import { rich } from '../cardview.js';
+import { rich, cardImage } from '../cardview.js';
 import { DAY } from '../srs.js';
 import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel } from '../mistakes.js';
 
@@ -83,9 +83,11 @@ export function renderMistakes({ store }) {
                 h('span', { class: `mk-status ${st}` }, statusText(m, now)),
                 h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
                 m.passage ? h('span', { class: 'qi-tag' }, '📄 有文章') : null,
+                m.images.length ? h('span', { class: 'qi-tag' }, `🖼 ${m.images.length} 张图`) : null,
                 m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次, 对 ${m.review.right}`) : null,
               ),
-              h('div', { class: 'mk-question' }, rich(m.question)),
+              m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
+              m.images.length ? h('div', { class: 'mk-thumbs' }, m.images.slice(0, 3).map((id) => cardImage(id, 'mk-thumb'))) : null,
               h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '✓ 对的'), rich(answerLabel(m))),
               mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '✕ 我选的'), rich(mine)) : null,
               m.note ? h('div', { class: 'mk-note' }, rich(m.note)) : null,

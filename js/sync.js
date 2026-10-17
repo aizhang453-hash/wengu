@@ -7,7 +7,7 @@
 
 import { cleanData } from './store.js';
 import { mergeData } from './merge.js';
-import { setMediaIds, getMedia, putMedia } from './media.js';
+import { usedMediaIds, getMedia, putMedia } from './media.js';
 
 export const CONFIG_KEY = 'wengu:sync';
 export const DATA_PATH = 'wengu.json';
@@ -209,7 +209,7 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
     }
 
     // 图片录音: 本机缺的拿下来, 仓库缺的传上去 (先传, 别的设备拿到数据时图片已经在了)
-    const needed = new Set(store.data.sets.flatMap(setMediaIds));
+    const needed = new Set(usedMediaIds(store.data));
     if (needed.size) {
       const files = await repo.list('media');
       const remoteNames = new Map(files.map((name) => [name.replace(/\.[^.]+$/, ''), name]));

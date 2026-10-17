@@ -47,6 +47,7 @@ const FILES = [
   'js/store.js',
   'js/sync.js',
   'js/unlock.js',
+  'js/vendor/fsrs.js',
   'js/vendor/fzstd.js',
   'js/vendor/qrcode.js',
   'js/views/blast.js',

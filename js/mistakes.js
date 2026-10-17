@@ -5,7 +5,8 @@
 //     mine      当时选错的是第几个 (-1 是没记)
 //     answer    填空题对的答案 (几个都对的用逗号隔开; 数字 3/4 和 0.75 算一样)    mineText  当时写的
 //     note      为什么错 / 解析
-//     review    { right, wrong, streak (连对几次), interval, ease, due, at, mastered }  重做的记录, 按遗忘规律排 (srs.js)
+//     review    { right, wrong, streak (连对几次), interval, s, d, due, at, mastered }  重做的记录, 用 FSRS 排 (srs.js)
+//     images    图片 (media.js 的 id): 题目截图、函数图像、几何图……
 //     createdAt, updatedAt (改了题目) }
 // 重做连对 3 次算掌握, 不再排进复习。
 
@@ -17,19 +18,22 @@ export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 6;
 export const MASTER_STREAK = 3;
 export const PREFIX = 'mistake:'; // 删除记录里的 id 前缀 (同步时用)
+export const MAX_IMAGES = 6;
 
 const str = (v) => (typeof v === 'string' ? v : '');
 const index = (v, n) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) < n ? Number(v) : -1);
 const startOfDay = (t) => new Date(t).setHours(0, 0, 0, 0);
 
 export function newMistake(id, now = Date.now()) {
-  return { id, type: 'choice', passage: '', question: '', options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', review: null, createdAt: now, updatedAt: now };
+  return { id, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', review: null, createdAt: now, updatedAt: now };
 }
 
 function cleanReview(r) {
   if (!r || typeof r !== 'object' || !(Number(r.due) > 0)) return null;
   const n = (v) => Math.max(0, Math.round(Number(v) || 0));
-  return { right: n(r.right), wrong: n(r.wrong), streak: n(r.streak), interval: Math.max(0, Number(r.interval) || 0), ease: Number(r.ease) || 2.5, due: Number(r.due), at: Number(r.at) || 0, mastered: Boolean(r.mastered) };
+  const out = { right: n(r.right), wrong: n(r.wrong), streak: n(r.streak), interval: Math.max(0, Number(r.interval) || 0), due: Number(r.due), at: Number(r.at) || 0, mastered: Boolean(r.mastered) };
+  if (Number(r.s) > 0 && Number(r.d) >= 1) Object.assign(out, { s: Number(r.s), d: Math.min(10, Number(r.d)) });
+  return out;
 }
 
 // 存着的、同步来的、备份里的: 补齐、去掉坏的; 不像错题返回 null
@@ -42,6 +46,7 @@ export function cleanMistake(raw) {
     type: raw.type === 'input' ? 'input' : 'choice',
     passage: str(raw.passage),
     question: str(raw.question),
+    images: [...new Set((Array.isArray(raw.images) ? raw.images : []).filter((x) => typeof x === 'string' && /^m_[\w-]+$/.test(x)))].slice(0, MAX_IMAGES),
     options,
     correct: index(raw.correct, options.length),
     mine: index(raw.mine, options.length),
@@ -56,7 +61,7 @@ export function cleanMistake(raw) {
 
 // 写完整了没有: 好了返回 '', 不然说差什么
 export function mistakeProblem(m) {
-  if (!m.question.trim()) return '题目还没写';
+  if (!m.question.trim() && !m.images.length) return '题目还没写 (或者放一张题目的图片)';
   if (m.type === 'input') return m.answer.trim() ? '' : '写上对的答案';
   const last = m.options.findLastIndex((o) => o.trim());
   if (last + 1 < MIN_OPTIONS) return `至少写 ${MIN_OPTIONS} 个选项`;
@@ -126,7 +131,7 @@ export const mineLabel = (m) => (m.type === 'input' ? m.mineText : m.mine >= 0 ?
 // ---- 复习 ----
 // 刚记下的错题: 明天开始重做 (今天想做也可以「全部重做」)
 export function firstReview(now = Date.now()) {
-  return { right: 0, wrong: 0, streak: 0, interval: 0, ease: 2.5, due: startOfDay(now) + DAY, at: 0, mastered: false };
+  return { right: 0, wrong: 0, streak: 0, interval: 0, due: startOfDay(now) + DAY, at: 0, mastered: false };
 }
 
 // 重做了一次: 排下次哪天; 连对 3 次算掌握。答错了, 掌握了的也重新排回来

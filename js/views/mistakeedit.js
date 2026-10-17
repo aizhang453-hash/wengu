@@ -1,8 +1,11 @@
-// 记一道错题 / 改错题: 文章 (可以不写)、题目; 选择题写选项, 点「对」和「我选的」; 填空题写对的答案和当时写的; 为什么错。
+// 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」;
+// 填空题写对的答案和当时写的; 为什么错。
 
-import { h, toast } from '../dom.js';
+import { h, fill, toast } from '../dom.js';
 import { newId } from '../store.js';
-import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, newMistake, mistakeProblem, tidyMistake } from '../mistakes.js';
+import { putMedia, shrinkImage } from '../media.js';
+import { cardImage } from '../cardview.js';
+import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, newMistake, mistakeProblem, tidyMistake } from '../mistakes.js';
 
 export function renderMistakeEdit({ store, go }, id = null) {
   const existing = id ? store.getMistake(id) : null;
@@ -25,6 +28,46 @@ export function renderMistakeEdit({ store, go }, id = null) {
   const answerEl = h('input', { class: 'input', placeholder: '比如 3/4 (3/4 和 0.75 都算对; 几个都对的用逗号隔开)', 'aria-label': '对的答案', autocomplete: 'off', oninput: () => ((draft.answer = answerEl.value), markDirty()) });
   const mineTextEl = h('input', { class: 'input', placeholder: '当时写的 (可以不写)', 'aria-label': '当时写的', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
   const answersEl = h('div', { class: 'mk-answers' });
+
+  // ---- 图片: 点按钮选、直接粘贴截图、拖进来 ----
+  const imagesEl = h('div', { class: 'mk-images-edit' });
+  const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: () => (addImages(fileInput.files), (fileInput.value = '')) });
+  async function addImages(files) {
+    const list = [...(files ?? [])].filter((f) => f.type.startsWith('image/'));
+    if (!list.length) return false;
+    for (const file of list) {
+      if (draft.images.length >= MAX_IMAGES) {
+        toast(`一道题最多放 ${MAX_IMAGES} 张图片`);
+        break;
+      }
+      try {
+        // 文章、图表要看得清字, 比卡片上的图大一点
+        draft.images.push(await putMedia(await shrinkImage(file, 1600)));
+        markDirty();
+      } catch {
+        toast('图片存不进去, 可能浏览器空间满了');
+        break;
+      }
+    }
+    drawImages();
+    return true;
+  }
+  function drawImages() {
+    fill(
+      imagesEl,
+      ...draft.images.map((id, i) =>
+        h(
+          'span',
+          { class: 'media-chip image-chip' },
+          cardImage(id, 'mk-thumb'),
+          h('button', { class: 'chip-x', type: 'button', title: '去掉这张图片', 'aria-label': `去掉第 ${i + 1} 张图片`, onclick: () => (draft.images.splice(i, 1), markDirty(), drawImages()) }, '✕'),
+        ),
+      ),
+      draft.images.length < MAX_IMAGES ? h('button', { class: 'tool-btn', type: 'button', onclick: () => fileInput.click() }, '🖼 加图片') : null,
+      h('span', { class: 'muted small' }, '题目截图、函数图像、几何图都行; 也可以直接粘贴 (Ctrl+V) 或者拖进来'),
+      fileInput,
+    );
+  }
   const problemEl = h('p', { class: 'qe-problem', hidden: true });
 
   function fillInputs() {
@@ -142,25 +185,46 @@ export function renderMistakeEdit({ store, go }, id = null) {
     draft = { ...newMistake(newId()), type: draft.type };
     fillInputs();
     draw();
+    drawImages();
     window.scrollTo(0, 0);
     (draft.passage ? questionEl : passageEl).focus();
   }
 
   fillInputs();
   draw();
+  drawImages();
 
   const saveBtn = () => h('button', { class: 'btn primary', onclick: () => save(false) }, '保存');
   return {
     title: existing ? '改错题' : '记一道错题',
     el: h(
       'section',
-      { class: 'edit mistake-edit' },
+      {
+        class: 'edit mistake-edit',
+        // 在这一页哪里粘贴、拖进来图片都行 (粘贴文字照常)
+        onpaste: (e) => {
+          if ([...(e.clipboardData?.files ?? [])].some((f) => f.type.startsWith('image/'))) {
+            e.preventDefault();
+            addImages(e.clipboardData.files);
+          }
+        },
+        ondragover: (e) => {
+          if ([...(e.dataTransfer?.items ?? [])].some((i) => i.type.startsWith('image/'))) e.preventDefault();
+        },
+        ondrop: (e) => {
+          if (![...(e.dataTransfer?.files ?? [])].some((f) => f.type.startsWith('image/'))) return;
+          e.preventDefault();
+          addImages(e.dataTransfer.files);
+        },
+      },
       h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
       h('div', { class: 'page-head' }, h('h1', {}, existing ? '改错题' : '记一道错题'), h('div', { class: 'row' }, h('div', { class: 'chips', role: 'group', 'aria-label': '题型' }, typeBtns))),
       h('label', { class: 'ask-label' }, '文章 / 材料 (可以不写)'),
       passageEl,
       h('label', { class: 'ask-label' }, '题目'),
       questionEl,
+      h('label', { class: 'ask-label' }, '图片 (可以不放)'),
+      imagesEl,
       answersEl,
       h('label', { class: 'ask-label' }, '为什么错 / 解析'),
       noteEl,

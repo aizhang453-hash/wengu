@@ -4,8 +4,8 @@
 //   #/mistakes/review/all   还没掌握的全做一遍
 //   #/mistakes/review/<id>  只做这一道
 
-import { h, fill, dialogOpen } from '../dom.js';
-import { rich } from '../cardview.js';
+import { h, fill, dialogOpen, openDialog } from '../dom.js';
+import { rich, cardImage } from '../cardview.js';
 import { shuffle } from '../questions.js';
 import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel } from '../mistakes.js';
 import { sound } from './match.js';
@@ -30,6 +30,16 @@ export function renderMistakeReview({ store }, which = null) {
     );
     return { title: '重做错题', el: root };
   }
+
+  // 题目的图片: 点一下放大看
+  const images = (ids) =>
+    ids.length
+      ? h(
+          'div',
+          { class: 'mk-images' },
+          ids.map((id) => h('button', { class: 'mk-image-btn', type: 'button', title: '放大看', onclick: () => openDialog({ title: '图片', body: cardImage(id, 'mk-img-big') }) }, cardImage(id, 'mk-img'))),
+        )
+      : null;
 
   let i = 0;
   const results = []; // { m, correct }
@@ -107,10 +117,12 @@ export function renderMistakeReview({ store }, which = null) {
       setTimeout(() => input.focus({ preventScroll: true }), 0);
     }
 
-    const questionBlock = h('div', { class: 'mk-q-side' }, h('div', { class: 'mk-question big' }, rich(m.question)), answerArea, feedback);
+    // 有文章: 左边文章 (图片跟着文章), 右边题目; 没文章: 图片放在题目上面
+    const side = m.passage ? h('div', { class: 'mk-passage-side' }, h('div', { class: 'mk-passage' }, rich(m.passage)), images(m.images)) : null;
+    const questionBlock = h('div', { class: 'mk-q-side' }, m.passage ? null : images(m.images), m.question ? h('div', { class: 'mk-question big' }, rich(m.question)) : null, answerArea, feedback);
     root.replaceChildren(
       h('div', { class: 'cards-head' }, h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'), counter),
-      h('div', { class: `mk-paper${m.passage ? ' with-passage' : ''}` }, m.passage ? h('div', { class: 'mk-passage' }, rich(m.passage)) : null, questionBlock),
+      h('div', { class: `mk-paper${m.passage ? ' with-passage' : ''}` }, side, questionBlock),
     );
     window.scrollTo(0, 0);
   }
