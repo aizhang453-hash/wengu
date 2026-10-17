@@ -5,6 +5,8 @@
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
 //   #/games               游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
+//   #/mistakes            错题集 (#/mistakes/new 记一道, #/mistakes/<id>/edit 改,
+//                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道)
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -48,6 +50,9 @@ import { renderGames } from './views/gamehub.js';
 import { renderQuizEdit } from './views/quizedit.js';
 import { renderQuizSet } from './views/quizset.js';
 import { renderQuizPlay } from './views/quizplay.js';
+import { renderMistakes } from './views/mistakes.js';
+import { renderMistakeEdit } from './views/mistakeedit.js';
+import { renderMistakeReview } from './views/mistakereview.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
@@ -74,6 +79,12 @@ function parse(hash) {
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'games') return { page: 'games', game: parts[1] ?? null };
+  if (parts[0] === 'mistakes') {
+    if (!parts[1]) return { page: 'mistakes' };
+    if (parts[1] === 'new') return { page: 'mistake-edit', mistake: null };
+    if (parts[1] === 'review') return { page: 'mistake-review', which: parts[2] ?? null };
+    if (parts[2] === 'edit') return { page: 'mistake-edit', mistake: parts[1] };
+  }
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
@@ -143,6 +154,9 @@ function render() {
   else if (route.page === 'diagram') view = renderDiagramPractice(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'games') view = renderGames(ctx, route.game);
+  else if (route.page === 'mistakes') view = renderMistakes(ctx);
+  else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake);
+  else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
@@ -199,7 +213,7 @@ const syncer = new SyncManager(store, {
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
   onApplied: () => {
-    if (['home', 'set', 'folder', 'search', 'games'].includes(current?.page)) {
+    if (['home', 'set', 'folder', 'search', 'games', 'mistakes'].includes(current?.page)) {
       const y = window.scrollY;
       render();
       window.scrollTo(0, y);
@@ -213,7 +227,7 @@ store.onChange = () => syncer.changed();
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  if (['home', 'set', 'folder', 'games'].includes(current?.page)) {
+  if (['home', 'set', 'folder', 'games', 'mistakes'].includes(current?.page)) {
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);

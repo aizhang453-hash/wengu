@@ -5,6 +5,7 @@ import { exportBackup, importBackup } from '../backup.js';
 import { newFolder } from './folder.js';
 import { dueCards, dueTomorrow, streak, lastDays } from '../srs.js';
 import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
+import { dueMistakes } from '../mistakes.js';
 
 const WEEKDAYS = '日一二三四五六';
 
@@ -40,6 +41,20 @@ function todayPanel(store, sets) {
         ? [h('div', {}, h('strong', {}, `今天该复习 ${due} 张`), h('div', { class: 'muted small' }, '照遗忘的规律排好的, 趁快忘了再看一眼')), h('a', { class: 'btn primary', href: '#/review' }, '开始复习')]
         : [h('div', {}, h('strong', {}, '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, dueTomorrow(sets) ? `明天有 ${dueTomorrow(sets)} 张` : '答过的卡片会自动排进以后的复习'))],
     ),
+    mistakesToday(store),
+  );
+}
+
+// 错题集里今天该重做的 (有错题才显示)
+function mistakesToday(store) {
+  if (!store.data.mistakes.length) return null;
+  const due = dueMistakes(store.data.mistakes).length;
+  return h(
+    'div',
+    { class: 'today-review' },
+    due
+      ? [h('div', {}, h('strong', {}, `📕 错题: 今天该重做 ${due} 道`), h('div', { class: 'muted small' }, '先不看答案再做一遍, 连对 3 次算掌握')), h('a', { class: 'btn primary', href: '#/mistakes/review' }, '去重做')]
+      : [h('div', {}, h('strong', {}, '📕 错题: 今天不用重做 ✓'), h('div', { class: 'muted small' }, `错题集里 ${store.data.mistakes.length} 道`)), h('a', { class: 'btn', href: '#/mistakes' }, '看错题集')],
   );
 }
 
@@ -180,6 +195,7 @@ export function renderHome({ store, go }) {
           ? h(
               'div',
               { class: 'row' },
+              h('a', { class: 'btn', href: '#/mistakes' }, '📕 错题集'),
               h('a', { class: 'btn', href: '#/games' }, '🎮 游戏'),
               h('a', { class: 'btn', href: '#/new-quiz', title: '像 Kahoot 那样每道题自己写选项, 限时答' }, '📝 新建题目集'),
               h('a', { class: 'btn', href: '#/import', title: 'Quizlet 的文字、Excel、CSV、Anki 卡组' }, '导入'),
@@ -188,7 +204,7 @@ export function renderHome({ store, go }) {
           : null,
       ),
       expiryNotice(),
-      sets.length ? todayPanel(store, sets) : null,
+      sets.length || store.data.mistakes.length ? todayPanel(store, sets) : null,
       list,
       sets.length ? folderSection : null,
       backup,

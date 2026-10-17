@@ -1,6 +1,7 @@
 import { schedule, dayKey } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
+import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -13,9 +14,10 @@ export function newId() {
 }
 
 // activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
-// deleted: { 卡片集 id 或 'folder:文件夹 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
+// deleted: { 卡片集 id 或 'folder:文件夹 id' 或 'mistake:错题 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
+// mistakes: 错题集 (mistakes.js)
 function emptyData() {
-  return { version: 1, sets: [], folders: [], activity: {}, deleted: {} };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {} };
 }
 
 const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
@@ -166,6 +168,15 @@ export function cleanData(raw) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number(n) > 0) data.activity[day] = Math.floor(Number(n));
     }
   }
+  if (raw && Array.isArray(raw.mistakes)) {
+    const seen = new Set();
+    for (const m of raw.mistakes) {
+      const clean = cleanMistake(m);
+      if (!clean || seen.has(clean.id)) continue;
+      seen.add(clean.id);
+      data.mistakes.push(clean);
+    }
+  }
   if (raw && Array.isArray(raw.folders)) {
     const ids = new Set(data.sets.map((s) => s.id));
     for (const f of raw.folders) {
@@ -312,6 +323,49 @@ export class Store {
     } catch {
       // 删不掉就算了
     }
+  }
+
+  // ---- 错题集 ----
+  // 最近记的在前面
+  allMistakes() {
+    return [...this.data.mistakes].sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  getMistake(id) {
+    return this.data.mistakes.find((m) => m.id === id) ?? null;
+  }
+
+  // 新记的明天开始排进复习; 改题目不动重做记录
+  putMistake(mistake, now = Date.now()) {
+    const clean = cleanMistake({ ...mistake, updatedAt: now });
+    const i = this.data.mistakes.findIndex((m) => m.id === clean.id);
+    if (i === -1) {
+      clean.createdAt = now;
+      clean.review ??= firstReview(now);
+      this.data.mistakes.push(clean);
+    } else {
+      clean.review = this.data.mistakes[i].review;
+      clean.createdAt = this.data.mistakes[i].createdAt;
+      this.data.mistakes[i] = clean;
+    }
+    if (!this.save()) throw new Error('存不下了');
+    return clean;
+  }
+
+  deleteMistake(id) {
+    this.data.mistakes = this.data.mistakes.filter((m) => m.id !== id);
+    this.data.deleted[MISTAKE_PREFIX + id] = Date.now();
+    this.save();
+  }
+
+  // 重做了一道: 排下次哪天, 算进今天的打卡
+  recordMistake(id, correct, now = Date.now()) {
+    const m = this.getMistake(id);
+    if (!m) return null;
+    m.review = reviewAfter(m.review, correct, now);
+    this.touchActivity(now);
+    this.save();
+    return m.review;
   }
 
   // ---- 文件夹 ----
@@ -504,6 +558,11 @@ export class Store {
       const i = this.data.folders.findIndex((f) => f.id === folder.id);
       if (i === -1) this.data.folders.push(folder);
       else this.data.folders[i] = folder;
+    }
+    for (const m of incoming.mistakes) {
+      const i = this.data.mistakes.findIndex((x) => x.id === m.id);
+      if (i === -1) this.data.mistakes.push(m);
+      else this.data.mistakes[i] = m;
     }
     this.save();
     return { added, replaced };

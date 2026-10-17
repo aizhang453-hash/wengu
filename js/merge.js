@@ -7,8 +7,10 @@
 //   打卡                              同一天取多的
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
 //   文件夹                            听最后改过的那边
+//   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
 
 import { mergeRuns } from './quiz.js';
+import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -74,6 +76,7 @@ export function mergeData(local, remote) {
     version: 1,
     sets: mergeList(local.sets, remote.sets ?? [], mergeSet, deleted),
     folders: mergeList(local.folders ?? [], remote.folders ?? [], mergeFolder, deleted, 'folder:'),
+    mistakes: mergeList(local.mistakes ?? [], remote.mistakes ?? [], mergeMistake, deleted, MISTAKE_PREFIX),
     activity,
     deleted,
   };

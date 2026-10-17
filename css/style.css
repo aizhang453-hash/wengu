@@ -5688,3 +5688,286 @@ a.pick-row:hover {
     font-size: 1.3rem;
   }
 }
+
+/* ==== 错题集 ==== */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+
+.mk-search {
+  width: auto;
+  flex: 0 1 260px;
+  padding: 7px 12px;
+}
+
+.mk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.mk-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mk-status {
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.mk-status.due {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.mk-status.mastered {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.mk-question {
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mk-item .mk-question {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mk-line {
+  display: flex;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.mk-line-label {
+  flex: none;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.mk-line.ok .mk-line-label {
+  color: var(--good);
+}
+
+.mk-line.bad .mk-line-label {
+  color: var(--bad);
+}
+
+.mk-note {
+  padding: 8px 12px;
+  border-left: 3px solid var(--mid);
+  border-radius: 0 8px 8px 0;
+  background: var(--mid-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mk-note .mk-line-label {
+  color: var(--mid);
+}
+
+.mk-actions {
+  margin-top: 4px;
+}
+
+/* 记错题 */
+.mistake-edit .input {
+  margin-bottom: 4px;
+}
+
+.mistake-edit .ask-label {
+  margin-top: 14px;
+}
+
+.mistake-edit .mk-answers {
+  margin-top: 14px;
+}
+
+.mk-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mk-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.mk-opt.right {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.mk-opt.mine {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.mk-letter {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.mk-mark {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mk-mark.ok.on {
+  border-color: var(--good);
+  background: var(--good);
+  color: #fff;
+}
+
+.mk-mark.bad.on {
+  border-color: var(--bad);
+  background: var(--bad);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .mk-opt {
+    flex-wrap: wrap;
+  }
+
+  .mk-opt .qe-opt-input {
+    flex: 1 1 calc(100% - 80px);
+  }
+
+  .mk-mark {
+    margin-left: auto;
+  }
+
+  .mk-mark.bad {
+    margin-left: 0;
+  }
+}
+
+/* 重做: 有文章的, 电脑上左边文章、右边题目 (跟 SAT 的 Bluebook 一样) */
+.mk-paper {
+  display: grid;
+  gap: 20px;
+}
+
+@media (min-width: 900px) {
+  .mk-paper.with-passage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .mk-paper.with-passage .mk-passage {
+    position: sticky;
+    top: 76px;
+    max-height: calc(100vh - 100px);
+  }
+}
+
+.mk-passage {
+  max-height: 45vh;
+  overflow: auto;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-family: Georgia, 'Times New Roman', 'Songti SC', serif;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mk-question.big {
+  margin-bottom: 14px;
+  font-size: 1.15rem;
+}
+
+.mk-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+}
+
+.mk-feedback.good {
+  background: var(--good-soft);
+}
+
+.mk-feedback.good > strong {
+  color: var(--good);
+}
+
+.mk-feedback.bad {
+  background: var(--bad-soft);
+}
+
+.mk-feedback.bad > strong {
+  color: var(--bad);
+}
+
+.mk-review .input.wrong {
+  border-color: var(--bad);
+}
