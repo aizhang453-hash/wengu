@@ -2,7 +2,6 @@
 
 import { h, toast, download, openDialog, switchRow } from '../dom.js';
 import { formatCards } from '../parse.js';
-import { gameModes } from './gamelist.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
@@ -96,9 +95,6 @@ export function renderSet({ store, go }, id) {
     mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
     pinnedCards(set).length >= 2 ? mode('标注图', '这是哪个? 在图上找出来', `${base}/diagram`, true) : null,
   );
-
-  // 游戏 (Quizlet 的「通过有趣的游戏掌握所学内容」)
-  const games = gameModes(set, base);
 
   const actions = h(
     'div',
@@ -217,8 +213,6 @@ export function renderSet({ store, go }, id) {
         : null,
       due ? h('a', { class: 'due-chip', href: `#/review/${encodeURIComponent(set.id)}` }, `🔁 该复习 ${due} 张 · 去复习`) : null,
       modes,
-      h('h2', { class: 'games-title' }, '用游戏来记'),
-      games,
       actions,
       set.virtual ? null : diagramSection(set),
       h(

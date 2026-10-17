@@ -58,7 +58,6 @@ const FILES = [
   'js/views/fileimport.js',
   'js/views/folder.js',
   'js/views/gamehub.js',
-  'js/views/gamelist.js',
   'js/views/gamequiz.js',
   'js/views/gameshell.js',
   'js/views/gems.js',

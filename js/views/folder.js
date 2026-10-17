@@ -2,7 +2,6 @@
 
 import { h, toast, openDialog, askText, switchRow } from '../dom.js';
 import { FOLDER_PREFIX, makeFolder } from '../store.js';
-import { gameModes } from './gamelist.js';
 import { dueCards } from '../srs.js';
 
 export function renderFolder({ store, go }, id) {
@@ -108,8 +107,6 @@ export function renderFolder({ store, go }, id) {
         mode('学习', '选择题加打字, 答对为止', `${base}/learn`, total > 0),
         mode('测试', '出一套卷子打分', `${base}/test`, total > 0),
       ),
-      h('h2', { class: 'games-title' }, '用游戏来记'),
-      gameModes(combo, base),
       h(
         'div',
         { class: 'row' },

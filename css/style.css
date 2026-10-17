@@ -2419,10 +2419,6 @@ kbd {
   color: var(--muted);
 }
 
-.modes.games {
-  margin-top: 0;
-}
-
 .game-ready h1 {
   margin-top: 0;
 }
