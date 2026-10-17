@@ -1,6 +1,7 @@
-// 复习记录: 每一次答题 (卡片、错题) 都记下来什么时候、记没记得。现在排复习只看每张卡片的当前状态 (srs.js);
-// 攒够了 (几百上千次) 以后, 可以拿这些记录给 FSRS 按自己的情况优化参数, 排得更准。
-//   data.log = { 卡片 id 或 'm:错题 id': [记录, ...] }  (从早到晚)
+// 复习记录: 每一次「翻卡自评」(看了题自己想, 翻过来自己说记不记得) 都记下来什么时候、记没记得。
+// 只记这一种: 选择题能蒙、能靠选项认出来, 游戏、Wordle 也不是真的自己想起来的, 拿来给 FSRS 用不准。
+// 现在排复习只看每张卡片的当前状态 (srs.js); 攒够了 (几百上千次) 以后, 拿这些记录给 FSRS 按自己的情况优化参数。
+//   data.revlog = { 卡片 id: [记录, ...] }  (从早到晚)
 // 一条记录压成一个数, 省地方 (也要同步、备份): 分钟数 × 4 + (评分 - 1)
 //   评分照 FSRS / Anki: 1 忘了 (Again), 3 记得 (Good)。这里只有对 / 错, 所以只有 1 和 3
 
@@ -9,7 +10,6 @@ export const AGAIN = 1;
 export const GOOD = 3;
 const MINUTE = 60 * 1000;
 
-export const mistakeKey = (id) => `m:${id}`;
 export const encodeReview = (t, rating) => Math.floor(t / MINUTE) * 4 + (rating - 1);
 export const decodeReview = (code) => ({ at: Math.floor(code / 4) * MINUTE, rating: (code % 4) + 1 });
 
@@ -19,14 +19,6 @@ const tidy = (list) => [...new Set(list)].sort((a, b) => a - b).slice(-MAX_PER_I
 // 记一次 (直接改 log)
 export function addReview(log, key, t, correct) {
   log[key] = tidy([...(log[key] ?? []), encodeReview(t, correct ? GOOD : AGAIN)]);
-}
-
-// 「我答对了」: 最后一次从忘了改成记得
-export function amendLastReview(log, key) {
-  const list = log[key];
-  if (!list?.length) return;
-  const last = decodeReview(list.at(-1));
-  if (last.rating === AGAIN) list[list.length - 1] = encodeReview(last.at, GOOD);
 }
 
 // 撤销: 去掉最后一次

@@ -227,25 +227,34 @@ test('备份带上文件夹', () => {
   assert.deepEqual(to.allFolders()[0].setIds, [a.id]);
 });
 
-test('答题时排好下次复习, 记今天学过; 存了再读还在', () => {
+test('翻卡自评才排下次复习; 别的答法只算次数和打卡; 存了再读还在', () => {
   const storage = memoryStorage();
   const store = new Store(storage);
   const set = store.putSet(sampleSet());
   const [apple, pear] = set.cards;
   const noon = new Date(2026, 9, 12, 12).getTime();
-  store.recordAnswer(set.id, apple.id, true, { now: noon });
-  store.recordAnswer(set.id, pear.id, false, { now: noon });
+  store.recordAnswer(set.id, apple.id, true, { now: noon, selfRated: true });
+  store.recordAnswer(set.id, pear.id, false, { now: noon, selfRated: true });
+  store.recordAnswer(set.id, apple.id, false, { now: noon + 1000 }); // 选择题答错: 不动复习的日子
   const stats = new Store(storage).getSet(set.id).stats;
-  // FSRS: 第一次答对隔 2 天; 记忆状态 (稳定性 s、难度 d) 存了再读还在
+  // FSRS: 第一次记得隔 2 天; 记忆状态 (稳定性 s、难度 d) 存了再读还在
   assert.equal(stats[apple.id].interval, 2);
   assert.equal(stats[apple.id].due, new Date(2026, 9, 14).getTime());
   assert.ok(stats[apple.id].s > 2 && stats[apple.id].d >= 1);
+  assert.deepEqual([stats[apple.id].right, stats[apple.id].wrong, stats[apple.id].at], [1, 1, noon]);
   assert.equal(stats[pear.id].due, noon + 10 * 60 * 1000);
-  assert.deepEqual(new Store(storage).data.activity, { '2026-10-12': 2 });
+  assert.deepEqual(new Store(storage).data.activity, { '2026-10-12': 3 });
 
-  // 判错了改成对: 复习也按答对排 (至少明天)
+  // 测试里判错了改成对: 只改次数, 不动复习的日子
+  const before = structuredClone(store.getSet(set.id).stats[pear.id]);
   store.amendAnswer(set.id, pear.id);
-  assert.ok(store.getSet(set.id).stats[pear.id].interval >= 1);
+  const after = store.getSet(set.id).stats[pear.id];
+  assert.deepEqual([after.right, after.wrong, after.due], [1, 0, before.due]);
+
+  // 只做过选择题、打字的卡片不排进复习
+  const plum = store.putSet(sampleSet()).cards[0];
+  store.recordAnswer(store.allSets()[0].id, plum.id, true, { now: noon });
+  assert.equal(store.allSets()[0].stats[plum.id].due, undefined);
 });
 
 test('存不进去 (空间满了): 不抛错, 告诉 onSaveError; 编辑保存 (putSet) 才抛错', () => {

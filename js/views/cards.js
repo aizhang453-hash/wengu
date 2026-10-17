@@ -196,7 +196,7 @@ export function renderCards({ store }, id) {
     const stat = set.stats[card.id] ? structuredClone(set.stats[card.id]) : null;
     history.push({ id: card.id, known, wasKnown: set.known.includes(card.id), stat });
     store.setKnown(set.id, card.id, known);
-    store.recordAnswer(set.id, card.id, known); // 也排进以后的复习
+    store.recordAnswer(set.id, card.id, known, { selfRated: true }); // 翻卡自评: 用 FSRS 排进以后的复习
     busy = true;
     cardEl.classList.add(known ? 'fly-right' : 'fly-left');
     setTimeout(() => {

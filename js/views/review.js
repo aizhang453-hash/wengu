@@ -120,7 +120,7 @@ export function renderReview({ store }, setId = null) {
   function grade(ok) {
     if (!flipped || !queue.length) return;
     const item = queue.shift();
-    store.recordAnswer(item.set.id, item.card.id, ok);
+    store.recordAnswer(item.set.id, item.card.id, ok, { selfRated: true });
     if (prefs.sound) playSound(ok ? 'right' : 'wrong');
     if (ok) {
       if (!retried.has(item.card.id)) right++; // 忘过一次的不算「一次就记得」
@@ -137,8 +137,8 @@ export function renderReview({ store }, setId = null) {
 
   // 复习记录攒了多少 (以后按自己的记录优化 FSRS 用)
   function logNote() {
-    const n = reviewCount(store.data.log);
-    return n ? h('p', { class: 'muted small' }, `复习记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 就能按你自己的记录优化。`) : null;
+    const n = reviewCount(store.data.revlog);
+    return n ? h('p', { class: 'muted small' }, `翻卡自评的记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 就能按你自己的记录优化。`) : null;
   }
 
   function finish() {
@@ -150,7 +150,7 @@ export function renderReview({ store }, setId = null) {
           { class: 'summary' },
           h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '✅'),
           h('h2', {}, '今天没有要复习的'),
-          h('p', { class: 'muted' }, '单词卡、学习、测试里答过的卡片, 会照遗忘的规律排到以后某一天再出来: 答对了隔得越来越久, 答错了很快再来。'),
+          h('p', { class: 'muted' }, '在单词卡里 (还有学习里的单词卡题) 翻过来、自己说了会不会的卡片, 会用 FSRS 排到以后某一天再出来: 记得的隔得越来越久, 忘了的很快再来。'),
           tomorrow ? h('p', {}, `明天有 ${tomorrow} 张要复习。`) : null,
           logNote(),
           h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: back }, `回到${backText}`)),

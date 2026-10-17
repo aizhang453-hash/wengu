@@ -39,7 +39,7 @@ function todayPanel(store, sets) {
       { class: 'today-review' },
       due
         ? [h('div', {}, h('strong', {}, `今天该复习 ${due} 张`), h('div', { class: 'muted small' }, '照遗忘的规律排好的, 趁快忘了再看一眼')), h('a', { class: 'btn primary', href: '#/review' }, '开始复习')]
-        : [h('div', {}, h('strong', {}, '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, dueTomorrow(sets) ? `明天有 ${dueTomorrow(sets)} 张` : '答过的卡片会自动排进以后的复习'))],
+        : [h('div', {}, h('strong', {}, '今天没有要复习的 ✓'), h('div', { class: 'muted small' }, dueTomorrow(sets) ? `明天有 ${dueTomorrow(sets)} 张` : '单词卡里翻过、自己说了会不会的卡片, 会排进以后的复习'))],
     ),
     mistakesToday(store),
   );

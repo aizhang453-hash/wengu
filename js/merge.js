@@ -8,7 +8,7 @@
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
 //   文件夹                            听最后改过的那边
 //   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
-//   每一次答题的记录 (revlog)          两边的合起来
+//   翻卡自评的记录 (revlog)            两边的合起来
 
 import { mergeRuns } from './quiz.js';
 import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
@@ -81,6 +81,6 @@ export function mergeData(local, remote) {
     mistakes: mergeList(local.mistakes ?? [], remote.mistakes ?? [], mergeMistake, deleted, MISTAKE_PREFIX),
     activity,
     deleted,
-    log: mergeLogs(local.log, remote.log),
+    revlog: mergeLogs(local.revlog, remote.revlog),
   };
 }

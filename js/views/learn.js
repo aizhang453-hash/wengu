@@ -101,7 +101,7 @@ export function renderLearn({ store }, id) {
   let session = null;
   let phase = 'question'; // goal | question | feedback | round-end | done
   let autoTimer = null;
-  let pending = null; // 这题的结果, 进下一题时记到统计里 { cardId, correct }
+  let pending = null; // 这题的结果, 进下一题时记到统计里 { cardId, correct, selfRated (单词卡题是翻卡自评) }
   let dialog = null;
 
   // ---- 进度条: 左边掌握了几张, 右边一共几张 ----
@@ -170,7 +170,7 @@ export function renderLearn({ store }, id) {
     const q = session.current;
     const level = session.answer(correct);
     store.setLevels(set.id, { [q.card.id]: level });
-    pending = { cardId: q.card.id, correct };
+    pending = { cardId: q.card.id, correct, selfRated: q.type === 'flash' };
     drawProgress();
     if (prefs.sound) playSound(correct ? 'right' : 'wrong');
     phase = 'feedback';
@@ -180,7 +180,7 @@ export function renderLearn({ store }, id) {
   }
 
   function flush() {
-    if (pending) store.recordAnswer(set.id, pending.cardId, pending.correct);
+    if (pending) store.recordAnswer(set.id, pending.cardId, pending.correct, { selfRated: pending.selfRated });
     pending = null;
   }
 

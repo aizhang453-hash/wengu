@@ -2,7 +2,7 @@ import { schedule, dayKey } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
-import { cleanLog, mergeLogs, addReview, amendLastReview, dropLastReview, mistakeKey } from './revlog.js';
+import { cleanLog, mergeLogs, addReview, dropLastReview } from './revlog.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -17,9 +17,10 @@ export function newId() {
 // activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
 // deleted: { 卡片集 id 或 'folder:文件夹 id' 或 'mistake:错题 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
 // mistakes: 错题集 (mistakes.js)
-// log: 每一次答题的记录 (revlog.js), 以后按自己的记录优化复习排法用
+// revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
+//   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, log: {} };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {} };
 }
 
 const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
@@ -171,7 +172,7 @@ export function cleanData(raw) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number(n) > 0) data.activity[day] = Math.floor(Number(n));
     }
   }
-  data.log = cleanLog(raw?.log);
+  data.revlog = cleanLog(raw?.revlog);
   if (raw && Array.isArray(raw.mistakes)) {
     const seen = new Set();
     for (const m of raw.mistakes) {
@@ -367,7 +368,6 @@ export class Store {
     const m = this.getMistake(id);
     if (!m) return null;
     m.review = reviewAfter(m.review, correct, now);
-    addReview(this.data.log, mistakeKey(id), now, correct);
     this.touchActivity(now);
     this.save();
     return m.review;
@@ -460,14 +460,19 @@ export class Store {
   }
 
   // 记一次答对 / 答错 (单词卡、学习、测试、复习都用): 记次数, 排下次哪天复习, 算今天学过
-  recordAnswer(setId, cardId, correct, { save = true, now = Date.now() } = {}) {
+  // 答了一题: 记答对答错几次、今天学过 (打卡)。
+  // selfRated: 翻卡自评 (单词卡、今天的复习、学习里的单词卡题) 才用 FSRS 排下次复习、记进复习记录;
+  // 选择题、打字、测试、游戏只算次数, 不动复习的日子
+  recordAnswer(setId, cardId, correct, { save = true, now = Date.now(), selfRated = false } = {}) {
     const set = this.ownerOf(setId, cardId);
     if (!set || !set.cards.some((c) => c.id === cardId)) return;
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
     if (correct) s.right++;
     else s.wrong++;
-    Object.assign(s, schedule(s, correct, now), { at: now });
-    addReview(this.data.log, cardId, now, correct);
+    if (selfRated) {
+      Object.assign(s, schedule(s, correct, now), { at: now });
+      addReview(this.data.revlog, cardId, now, correct);
+    }
     this.touchActivity(now);
     if (save) this.save();
   }
@@ -478,7 +483,7 @@ export class Store {
     if (!set) return;
     if (stat) set.stats[cardId] = stat;
     else delete set.stats[cardId];
-    dropLastReview(this.data.log, cardId);
+    dropLastReview(this.data.revlog, cardId);
     this.save();
   }
 
@@ -491,14 +496,12 @@ export class Store {
     while (keys.length > 400) delete this.data.activity[keys.shift()];
   }
 
-  // 判错了, 用户说「我答对了」: 把记的一次错改成对
+  // 判错了, 用户说「我答对了」: 把记的一次错改成对 (测试里的; 不是翻卡自评, 不动复习的日子)
   amendAnswer(setId, cardId) {
     const s = this.ownerOf(setId, cardId)?.stats[cardId];
     if (!s || s.wrong === 0) return;
     s.wrong--;
     s.right++;
-    Object.assign(s, schedule(s, true), { at: Date.now() });
-    amendLastReview(this.data.log, cardId);
     this.save();
   }
 
@@ -567,7 +570,7 @@ export class Store {
       if (i === -1) this.data.folders.push(folder);
       else this.data.folders[i] = folder;
     }
-    this.data.log = mergeLogs(this.data.log, incoming.log);
+    this.data.revlog = mergeLogs(this.data.revlog, incoming.revlog);
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
       if (i === -1) this.data.mistakes.push(m);
