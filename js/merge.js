@@ -3,9 +3,12 @@
 //   会了 / 星标 / 学习程度            听最后学过 (progressAt) 的那边
 //   每张卡片的答对答错和复习日子      一张一张比, 取最近答过 (at) 的
 //   游戏最好成绩                      取更好的
+//   题目集每次的成绩                  两边的合起来
 //   打卡                              同一天取多的
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
 //   文件夹                            听最后改过的那边
+
+import { mergeRuns } from './quiz.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -43,6 +46,7 @@ function mergeSet(a, b) {
     learn: progress.learn,
     stats: mergeStats(a.stats, b.stats),
     best: mergeBest(a.best, b.best),
+    runs: mergeRuns(a.runs, b.runs),
     createdAt: Math.min(a.createdAt ?? Infinity, b.createdAt ?? Infinity),
     updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0),
     progressAt: Math.max(a.progressAt ?? 0, b.progressAt ?? 0),

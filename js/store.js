@@ -1,5 +1,6 @@
 import { schedule, dayKey } from './srs.js';
 import { cleanDiagram } from './diagram.js';
+import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -34,7 +35,9 @@ export const FOLDER_PREFIX = 'folder:';
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
 //   stats: { 卡片 id: { right, wrong, interval, ease, due } }  答对答错几次, 下次哪天复习 (srs.js)
-//   best: { match: 毫秒, blast / blocks / gems: 分, wordle: 最长连胜 }  游戏最好成绩
+//   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
+//   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
+//   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
 //   createdAt, updatedAt (改了卡片), progressAt (学习进度变了, 同步时用) }
 export function makeSet(fields = {}) {
   const now = Date.now();
@@ -51,6 +54,8 @@ export function makeSet(fields = {}) {
     stats: {},
     best: {},
     diagram: null, // 标注图 (diagram.js)
+    kind: 'cards',
+    runs: [],
     createdAt: now,
     updatedAt: now,
     progressAt: 0,
@@ -77,6 +82,7 @@ function cleanSet(raw) {
           image: mediaId(c.image),
           termAudio: mediaId(c.termAudio),
           defAudio: mediaId(c.defAudio),
+          ...(raw.kind === 'quiz' ? { q: cleanQuestion(c.q) ?? newQuestion() } : {}),
         }))
     : [];
   const ids = new Set(cards.map((c) => c.id));
@@ -113,6 +119,8 @@ function cleanSet(raw) {
     }),
     best,
     diagram: cleanDiagram(raw.diagram, ids),
+    kind: raw.kind === 'quiz' ? 'quiz' : 'cards',
+    runs: cleanRuns(raw.runs),
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
     progressAt: Number(raw.progressAt) || 0,
@@ -121,7 +129,7 @@ function cleanSet(raw) {
 
 function cleanBest(raw) {
   const best = {};
-  for (const key of ['match', 'blast', 'blocks', 'gems', 'wordle']) {
+  for (const key of ['match', 'blast', 'blocks', 'gems', 'wordle', 'quiz']) {
     const v = Number(raw?.[key]);
     if (Number.isFinite(v) && v > 0) best[key] = v;
   }
@@ -442,6 +450,18 @@ export class Store {
     const better = game === 'match' ? old === undefined || value < old : old === undefined || value > old;
     if (better) set.best[game] = value;
     this.touchActivity();
+    this.save();
+    return better;
+  }
+
+  // 题目集答完一次: 记成绩 (留最近几次), 答了几题算进今天的打卡。限时的破纪录返回 true
+  recordRun(setId, run, now = Date.now()) {
+    const set = this.data.sets.find((s) => s.id === setId);
+    if (!set) return false;
+    set.runs = cleanRuns([{ ...run, at: now }, ...(set.runs ?? [])]);
+    const better = Boolean(run.timed) && run.score > 0 && !(set.best.quiz >= run.score);
+    if (better) set.best.quiz = run.score;
+    for (let i = 0; i < run.total; i++) this.touchActivity(now);
     this.save();
     return better;
   }

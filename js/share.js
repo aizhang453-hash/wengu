@@ -1,6 +1,8 @@
 // 分享链接: 一个卡片集压缩成 #/share/<一串字>, 别人 (或者自己的手机) 点开就能导入。
-// 只带文字 (标题、简介、语言、词、解释), 图片可以带网址 (从 Quizlet 搬来的那种), 自己的图片和录音太大带不了。
+// 只带文字 (标题、简介、语言、词、解释; 题目集还带选项和对错), 图片可以带网址 (从 Quizlet 搬来的那种), 自己的图片和录音太大带不了。
 // 格式: 'z' + base64url(压缩过的 JSON), 浏览器不能压缩时 'j' + base64url(JSON)
+
+import { cleanQuestion, newQuestion } from './quiz.js';
 
 function toB64url(bytes) {
   let bin = '';
@@ -23,7 +25,8 @@ export async function encodeShare(set) {
     t: set.title ?? '',
     d: set.description ?? '',
     l: [set.termLang ?? 'auto', set.defLang ?? 'auto'],
-    c: set.cards.map((c) => (c.imageUrl ? [c.term, c.def, c.imageUrl] : [c.term, c.def])),
+    c: set.cards.map((c) => (c.q ? [c.term, c.def, c.imageUrl ?? '', c.q] : c.imageUrl ? [c.term, c.def, c.imageUrl] : [c.term, c.def])),
+    ...(set.kind === 'quiz' ? { k: 'quiz' } : {}),
   };
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   if (typeof CompressionStream !== 'undefined') {
@@ -36,7 +39,7 @@ export async function encodeShare(set) {
   return `j${toB64url(bytes)}`;
 }
 
-// 返回 { title, description, termLang, defLang, from, cards: [{ term, def, imageUrl? }] }; 坏了返回 null
+// 返回 { title, description, termLang, defLang, from, kind, cards: [{ term, def, imageUrl?, q? }] }; 坏了返回 null
 // from: 'quizlet' 是「一键搬」书签从 Quizlet 读来的, 不然是空的
 export async function decodeShare(text) {
   try {
@@ -53,9 +56,10 @@ export async function decodeShare(text) {
       termLang: str(p.l?.[0]) || 'auto',
       defLang: str(p.l?.[1]) || 'auto',
       from: p.f === 'quizlet' ? 'quizlet' : '',
+      kind: p.k === 'quiz' ? 'quiz' : 'cards',
       cards: p.c
         .filter(Array.isArray)
-        .map(([term, def, imageUrl]) => ({ term: str(term), def: str(def), ...(/^https:\/\//.test(str(imageUrl)) ? { imageUrl } : {}) }))
+        .map(([term, def, imageUrl, q]) => ({ term: str(term), def: str(def), ...(/^https:\/\//.test(str(imageUrl)) ? { imageUrl } : {}), ...(p.k === 'quiz' ? { q: cleanQuestion(q) ?? newQuestion() } : {}) }))
         .filter((c) => c.term || c.def || c.imageUrl),
     };
   } catch {

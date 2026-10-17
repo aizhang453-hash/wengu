@@ -52,6 +52,19 @@ export function renderHome({ store, go }) {
         { class: 'set-grid' },
         sets.map((set) => {
           const total = set.cards.length;
+          if (set.kind === 'quiz') {
+            return h(
+              'li',
+              {},
+              h(
+                'a',
+                { class: 'set-tile quiz-tile', href: `#/set/${encodeURIComponent(set.id)}` },
+                h('span', { class: 'set-tile-title' }, set.title || '未命名题目集'),
+                h('span', { class: 'muted' }, h('span', { class: 'kind-tag' }, '📝 题目集'), ` ${total} 道题`),
+                h('span', { class: 'muted small' }, set.best.quiz ? `最高 ${set.best.quiz} 分 · 答过 ${set.runs.length} 次` : '还没答过'),
+              ),
+            );
+          }
           // 学习里掌握了的, 或者单词卡里标了会了的, 都算会了
           const knownIds = new Set(set.known);
           for (const [cid, level] of Object.entries(set.learn)) if (level === 2) knownIds.add(cid);
@@ -168,6 +181,7 @@ export function renderHome({ store, go }) {
               'div',
               { class: 'row' },
               h('a', { class: 'btn', href: '#/games' }, '🎮 游戏'),
+              h('a', { class: 'btn', href: '#/new-quiz', title: '像 Kahoot 那样每道题自己写选项, 限时答' }, '📝 新建题目集'),
               h('a', { class: 'btn', href: '#/import', title: 'Quizlet 的文字、Excel、CSV、Anki 卡组' }, '导入'),
               h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建'),
             )
@@ -208,6 +222,7 @@ function welcome() {
       { class: 'row' },
       h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建卡片集'),
       h('a', { class: 'btn', href: '#/import' }, '导入 (Quizlet、Excel、Anki)'),
+      h('a', { class: 'btn', href: '#/new-quiz' }, '📝 新建题目集 (像 Kahoot)'),
     ),
     h(
       'details',

@@ -34,7 +34,7 @@ export function exitHref(from, set) {
 
 // 能拿来玩的: 所有卡片集, 再加上文件夹 (里面的卡片集合起来玩)。能玩的在前面
 export function gameChoices(store, key) {
-  const sets = store.allSets();
+  const sets = store.allSets().filter((s) => s.kind !== 'quiz'); // 题目集有自己的答题
   const folders = store
     .allFolders()
     .map((f) => store.getSet(FOLDER_PREFIX + f.id))

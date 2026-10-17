@@ -60,6 +60,8 @@ export function renderShareImport({ store, go }, code) {
       return;
     }
     const withImages = data.cards.filter((c) => c.imageUrl).length;
+    const quiz = data.kind === 'quiz';
+    const unit = quiz ? '道题' : '张卡片';
     const btn = h(
       'button',
       {
@@ -80,10 +82,10 @@ export function renderShareImport({ store, go }, code) {
                 imageFailed++;
               }
             }
-            cards.push(makeCard(c.term, c.def, { image }));
+            cards.push(makeCard(c.term, c.def, { image, ...(c.q ? { q: c.q } : {}) }));
           }
           try {
-            const set = store.putSet({ title: data.title || '分享的卡片集', description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), cards });
+            const set = store.putSet({ title: data.title || (quiz ? '分享的题目集' : '分享的卡片集'), description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), kind: data.kind, cards });
             toast(imageFailed ? `导入好了 (${imageFailed} 张图片拿不到)` : '导入好了');
             go(`#/set/${encodeURIComponent(set.id)}`);
           } catch {
@@ -92,20 +94,20 @@ export function renderShareImport({ store, go }, code) {
           }
         },
       },
-      `导入到我的卡片集 (${data.cards.length} 张)`,
+      quiz ? `导入到我的题目集 (${data.cards.length} 道)` : `导入到我的卡片集 (${data.cards.length} 张)`,
     );
     fill(root, 
-      h('h1', {}, data.title || '分享的卡片集'),
+      h('h1', {}, data.title || (quiz ? '分享的题目集' : '分享的卡片集')),
       data.description ? h('p', { class: 'description' }, data.description) : null,
-      h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '从 Quizlet 读到的卡片集' : '别人分享给你的卡片集'}, ${data.cards.length} 张卡片${withImages ? `, ${withImages} 张带图片` : ''}。导入以后就是你自己的, 可以随便改。`),
+      h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '从 Quizlet 读到的卡片集' : quiz ? '别人分享给你的题目集' : '别人分享给你的卡片集'}, ${data.cards.length} ${unit}${withImages ? `, ${withImages} ${quiz ? '道' : '张'}带图片` : ''}。导入以后就是你自己的, 可以随便改。`),
       h('div', { class: 'row' }, btn, h('a', { class: 'btn', href: '#/' }, '不要')),
-      h('h2', {}, '前面几张'),
+      h('h2', {}, quiz ? '前面几道' : '前面几张'),
       h(
         'ul',
         { class: 'card-list' },
         data.cards.slice(0, 10).map((c) => h('li', { class: 'card-row' }, h('div', { class: 'card-side term' }, rich(c.term, { class: 'text' })), h('div', { class: 'card-side def' }, rich(c.def, { class: 'text' })))),
       ),
-      data.cards.length > 10 ? h('p', { class: 'muted small' }, `还有 ${data.cards.length - 10} 张……`) : null,
+      data.cards.length > 10 ? h('p', { class: 'muted small' }, `还有 ${data.cards.length - 10} ${quiz ? '道' : '张'}……`) : null,
     );
   });
   return { title: '导入分享的卡片集', el: root };

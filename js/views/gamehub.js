@@ -23,7 +23,7 @@ export function renderGames({ store }, key = null) {
     ),
   );
 
-  const hasSets = store.allSets().length > 0;
+  const hasSets = store.allSets().some((s) => s.kind !== 'quiz');
   return {
     title: '游戏',
     el: h(

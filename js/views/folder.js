@@ -24,7 +24,7 @@ export function renderFolder({ store, go }, id) {
       : h('div', { class: 'mode disabled', 'aria-disabled': 'true' }, h('span', { class: 'mode-name' }, name), h('span', { class: 'muted small' }, '先放卡片集进来'));
 
   function addSets() {
-    const others = store.allSets();
+    const others = store.allSets().filter((s) => s.kind !== 'quiz'); // 题目集不放进文件夹
     if (!others.length) return toast('还没有卡片集');
     const picked = new Set(folder.setIds);
     const d = openDialog({
