@@ -506,13 +506,20 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     '加进来',
   );
 
-  // 导入的卡片加到最后 (cards: [{ term, def, image?, termAudio?, defAudio? }])
+  // 从 Anki 搬来的复习记录 (卡片 id → [{ at, rating }]), 保存以后接上
+  const importedReviews = new Map();
+
+  // 导入的卡片加到最后 (cards: [{ term, def, image?, termAudio?, defAudio?, reviews? }])
   function addImported(cards, title = '') {
     // 后面空着的行先去掉, 再加
     while (rows.length && isBlank(rows.at(-1))) {
       rows.pop().li.remove();
     }
-    for (const c of cards) addRow(makeCard(c.term, c.def, { image: c.image || '', termAudio: c.termAudio || '', defAudio: c.defAudio || '' }), { grow: false });
+    for (const c of cards) {
+      const card = makeCard(c.term, c.def, { image: c.image || '', termAudio: c.termAudio || '', defAudio: c.defAudio || '' });
+      if (c.reviews?.length) importedReviews.set(card.id, c.reviews);
+      addRow(card, { grow: false });
+    }
     autoGrowAll(rows.slice(-cards.length).flatMap((r) => [r.termEl, r.defEl]));
     if (title && !titleInput.value.trim()) titleInput.value = title;
     markDirty();
@@ -535,7 +542,13 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     onSets: (list) => {
       const made = [];
       try {
-        for (const g of list) made.push(store.putSet({ title: g.title || '未命名卡片集', cards: g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio })) }));
+        for (const g of list) {
+          const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
+          const set = store.putSet({ title: g.title || '未命名卡片集', cards });
+          // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
+          store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
+          made.push(set);
+        }
       } catch {
         toast(made.length ? `建好了 ${made.length} 个, 后面的存不下了: 浏览器给的空间满了` : '存不下了: 浏览器给的空间满了');
         if (!made.length) return;
@@ -700,8 +713,11 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       toast('存不下了: 浏览器给的空间满了');
       return;
     }
+    // 导入时带着 Anki 复习记录的卡片: 接着 Anki 的进度排复习 (保存前删掉的不算)
+    const resumed = importedReviews.size ? store.importReviews(set.id, [...importedReviews]) : 0;
+    importedReviews.clear();
     dirty = false;
-    toast('保存好了');
+    toast(resumed ? `保存好了, ${resumed} 张接着 Anki 的进度排复习` : '保存好了');
     cleanMedia(store); // 不用的图片、录音删掉
     go(`#/set/${encodeURIComponent(draft.id)}`);
   }

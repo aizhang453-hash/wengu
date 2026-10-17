@@ -1,8 +1,8 @@
-import { schedule, dayKey } from './srs.js';
+import { schedule, replay, dayKey } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
-import { cleanLog, mergeLogs, addReview, dropLastReview } from './revlog.js';
+import { cleanLog, mergeLogs, addReview, addReviews, dropLastReview } from './revlog.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -475,6 +475,23 @@ export class Store {
     }
     this.touchActivity(now);
     if (save) this.save();
+  }
+
+  // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }]]]。按一遍 FSRS 接着 Anki 的进度排,
+  // 也记进复习记录。这里已经复习过的卡片不动排期。返回接上了几张
+  importReviews(setId, entries) {
+    const set = this.data.sets.find((s) => s.id === setId);
+    if (!set) return 0;
+    const ids = new Set(set.cards.map((c) => c.id));
+    let n = 0;
+    for (const [cardId, reviews] of entries) {
+      if (!ids.has(cardId) || !reviews?.length) continue;
+      addReviews(this.data.revlog, cardId, reviews);
+      if (!set.stats[cardId]?.at) set.stats[cardId] = replay(reviews);
+      n++;
+    }
+    if (n) this.save();
+    return n;
   }
 
   // 撤销时把一张卡片的统计恢复成以前的样子 (null 就是以前没有)

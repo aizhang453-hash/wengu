@@ -6032,3 +6032,11 @@ a.pick-row:hover {
   max-height: 80vh;
   margin: 0 auto;
 }
+
+/* 导入 Anki 卡组: 带着复习记录 */
+.history-note {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--good-soft);
+  color: var(--text);
+}

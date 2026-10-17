@@ -31,18 +31,49 @@ function memoryOf(prev) {
   return null; // 第一次答
 }
 
-// 答了一次: 返回 { interval, s, d, due } (调的地方再记上 at)
-export function schedule(prev, correct, now = Date.now()) {
-  const memory = memoryOf(prev);
-  // 隔了几天 (按日子算; 老记录没有 at 的, 当成是按时复习的)
-  const last = Number(prev?.at) || (Number(prev?.due) && Number(prev?.interval) ? Number(prev.due) - Number(prev.interval) * DAY : 0);
+// FSRS 走一步: 上次在 last 复习过 (记忆状态 memory), 现在 now 又复习了, 评分 rating (1 忘了 … 4 简单)
+function step(memory, last, now, rating) {
+  // 隔了几天 (按日子算)
   const elapsed = memory && last ? Math.max(0, Math.round((startOfDay(now) - startOfDay(last)) / DAY)) : 0;
-  const next = fsrs.next_state(memory, elapsed, correct ? Rating.Good : Rating.Again);
-  const s = round(next.stability);
-  const d = round(next.difficulty);
-  if (!correct) return { interval: 0, s, d, due: now + RETRY_MS };
-  const interval = fsrs.next_interval(next.stability, elapsed);
+  return { memory: fsrs.next_state(memory, elapsed, rating), elapsed };
+}
+
+// 走完这一步, 下次哪天复习: 忘了的 10 分钟后再来; 记得的隔几天, 到那天一早就算该复习
+function nextDue({ memory, elapsed }, rating, now) {
+  const s = round(memory.stability);
+  const d = round(memory.difficulty);
+  if (rating === Rating.Again) return { interval: 0, s, d, due: now + RETRY_MS };
+  const interval = fsrs.next_interval(memory.stability, elapsed);
   return { interval, s, d, due: startOfDay(now) + interval * DAY };
+}
+
+// 答了一次 (翻卡自评, 只有记得 / 忘了): 返回 { interval, s, d, due } (调的地方再记上 at)
+export function schedule(prev, correct, now = Date.now()) {
+  const rating = correct ? Rating.Good : Rating.Again;
+  // 老记录没有 at 的, 当成是按时复习的
+  const last = Number(prev?.at) || (Number(prev?.due) && Number(prev?.interval) ? Number(prev.due) - Number(prev.interval) * DAY : 0);
+  return nextDue(step(memoryOf(prev), last, now, rating), rating, now);
+}
+
+// 从头按一遍复习记录 (从 Anki 搬来的, 四个键都有: 1 重来 2 困难 3 良好 4 简单), 算出现在的复习状态:
+// { right, wrong, interval, s, d, due, at }; 没有记录返回 null。隔了好几个月没背的, 多半已经该复习了
+export function replay(reviews) {
+  let memory = null;
+  let last = 0;
+  let lastStep = null;
+  let lastRating = 0;
+  let right = 0;
+  let wrong = 0;
+  for (const { at, rating } of reviews) {
+    lastStep = step(memory, last, at, rating);
+    memory = lastStep.memory;
+    last = at;
+    lastRating = rating;
+    if (rating === Rating.Again) wrong++;
+    else right++;
+  }
+  if (!lastStep) return null;
+  return { right, wrong, ...nextDue(lastStep, lastRating, last), at: last };
 }
 
 export function isDue(stat, now = Date.now()) {

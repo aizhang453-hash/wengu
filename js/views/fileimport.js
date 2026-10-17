@@ -107,9 +107,18 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const sounds = cards.filter((c) => c.termAudio || c.defAudio).length;
       const noDef = cards.filter((c) => !c.def).length;
       const extras = [images ? `${images} 张带图片` : '', sounds ? `${sounds} 张带声音` : '', noDef ? `${noDef} 张没有解释` : ''].filter(Boolean);
+      // Anki 卡组: 带没带学习进度 (复习记录)
+      const withReviews = cards.filter((c) => c.reviews);
+      const reviewCount = withReviews.reduce((n, c) => n + c.reviews.length, 0);
+      const historyNote = !data.history
+        ? null
+        : withReviews.length
+          ? h('p', { class: 'history-note' }, `📈 ${withReviews.length} 张带着 Anki 的复习记录 (一共 ${reviewCount} 次): 导入以后接着 Anki 的进度排复习 (用 FSRS 把记录从头算一遍), 很久没背的会排进今天的复习。`)
+          : h('p', { class: 'muted small' }, '这个卡组没带学习进度。想接着 Anki 的进度背: 在 Anki 里导出卡组时勾上「包含学习进度」。');
       fill(
         previewEl,
         h('p', {}, `${cards.length} 张卡片${extras.length ? ` (${extras.join(', ')})` : ''}。前几张:`),
+        historyNote,
         cards.length > BIG ? h('p', { class: 'muted small' }, '卡片很多, 加进编辑页会很慢, 建议点「直接建成卡片集」(建好以后也能编辑)。') : null,
         h(
           'table',

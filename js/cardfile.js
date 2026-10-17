@@ -12,7 +12,8 @@ export class FileError extends Error {}
 const ext = (name) => String(name).split('.').pop().toLowerCase();
 
 // 返回 { kind: 'text', text } 或者
-// { kind: 'table', title, html, label, sheets: [{ name, columns: [列名], rows: [[字]] }], media }
+// { kind: 'table', title, html, label, sheets: [{ name, columns: [列名], rows: [[字]] }], media, history }
+// Anki 卡组: 每一行 (数组) 上还挂着 reviews (那张卡片在 Anki 里的复习记录); history: { cards, reviews } 一共多少
 export async function readCardFile(file) {
   const name = file.name ?? '';
   const title = name.replace(/\.[^.]+$/, '');
@@ -39,10 +40,12 @@ export async function readCardFile(file) {
       for (const n of list) counts.set(n.model, (counts.get(n.model) ?? 0) + 1);
       const common = [...counts].sort((a, b) => b[1] - a[1])[0][0];
       const columns = list.find((n) => n.model === common)?.fieldNames ?? [];
-      return { name: deck || '卡组', columns, rows: list.map((n) => n.fields) };
+      return { name: deck || '卡组', columns, rows: list.map((n) => Object.assign([...n.fields], { reviews: n.reviews })) };
     });
     sheets.sort((a, b) => a.name.localeCompare(b.name));
-    return { kind: 'table', title: sheets.length === 1 ? lastPart(sheets[0].name) : title, html: true, label: '牌组', sheets, media };
+    const withHistory = notes.filter((n) => n.reviews.length);
+    const history = { cards: withHistory.length, reviews: withHistory.reduce((k, n) => k + n.reviews.length, 0) };
+    return { kind: 'table', title: sheets.length === 1 ? lastPart(sheets[0].name) : title, html: true, label: '牌组', sheets, media, history };
   }
 
   if (e === 'xlsx' || e === 'xlsm' || (isZip && e !== 'csv' && e !== 'txt')) {
@@ -133,7 +136,8 @@ export function columnLabels(sheet, header, html) {
   });
 }
 
-// 表格 → 卡片: [{ term, def, image, termAudio, defAudio }] (图片声音是文件名, 导入时再去拿)
+// 表格 → 卡片: [{ term, def, image, termAudio, defAudio, reviews? }] (图片声音是文件名, 导入时再去拿;
+// reviews 是 Anki 卡组带来的复习记录)
 // extra: 再接到解释后面的一列 (例句之类), 没有写 -1
 export function buildCards(rows, { term, def, extra = -1, header = false, html = false }) {
   const out = [];
@@ -161,7 +165,7 @@ export function buildCards(rows, { term, def, extra = -1, header = false, html =
       defAudio = dr.sounds[0] ?? '';
     }
     if (!t && !d && !image) continue;
-    out.push({ term: t, def: d, image, termAudio, defAudio });
+    out.push({ term: t, def: d, image, termAudio, defAudio, ...(row.reviews?.length ? { reviews: row.reviews } : {}) });
   }
   return out;
 }

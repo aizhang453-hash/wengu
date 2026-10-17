@@ -173,7 +173,10 @@ for (const [kind, file] of [['新版', 'anki-new.apkg'], ['老版 (兼容)', 'an
   test(`Anki: 读${kind}卡组 .apkg (牌组、字段名、图片、声音)`, async () => {
     const { notes, media } = await readApkg(fixture(file));
     assert.equal(notes.length, 7);
-    assert.deepEqual(notes[0], { fields: ['apple [sound:apple.mp3]', '苹果'], model: 'Basic', fieldNames: ['Front', 'Back'], deck: 'Vocab::Unit 1' });
+    const { id, reviews, ...first } = notes[0];
+    assert.deepEqual(first, { fields: ['apple [sound:apple.mp3]', '苹果'], model: 'Basic', fieldNames: ['Front', 'Back'], deck: 'Vocab::Unit 1' });
+    assert.ok(id);
+    assert.deepEqual(reviews, []); // 导出时没勾「包含学习进度」
     assert.deepEqual(notes[4].fieldNames, ['Word', 'Meaning', 'Example']);
     assert.equal(notes[4].deck, 'Vocab::Unit 2');
     assert.equal(notes[6].model, 'Cloze');

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeReview, decodeReview, addReview, dropLastReview, cleanLog, mergeLogs, reviewCount, historyOf, MAX_PER_ITEM, AGAIN, GOOD } from '../js/revlog.js';
+import { encodeReview, decodeReview, addReview, dropLastReview, cleanLog, mergeLogs, reviewCount, historyOf, pack, unpack, MAX_PER_ITEM, AGAIN, GOOD } from '../js/revlog.js';
 import { Store, makeSet, makeCard, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 
@@ -29,18 +29,28 @@ test('记、撤销; 从早到晚排好, 每张最多留最近 200 次', () => {
   dropLastReview(log, 'c1');
   assert.equal(log.c1, undefined);
   for (let i = 0; i < MAX_PER_ITEM + 50; i++) addReview(log, 'c2', t0 + i * MIN, true);
-  assert.equal(log.c2.length, MAX_PER_ITEM);
+  assert.equal(historyOf(log, 'c2').length, MAX_PER_ITEM);
   assert.equal(historyOf(log, 'c2')[0].at, t0 + 50 * MIN);
 });
 
 test('坏的不要; 两台设备的记录合起来, 一样的只算一次', () => {
   assert.deepEqual(cleanLog(null), {});
-  assert.deepEqual(cleanLog({ a: [3, -1, 'x', 1.5, 3], b: 'nope', '': [5] }), { a: [3] });
-  const a = { c1: [encodeReview(t0, GOOD)], c2: [encodeReview(t0, AGAIN)] };
-  const b = { c1: [encodeReview(t0, GOOD), encodeReview(t0 + DAYS(2), GOOD)], c3: [encodeReview(t0, GOOD)] };
+  // v1.17 存的数字数组也认, 换成压缩的
+  assert.deepEqual(cleanLog({ a: [3, -1, 'x', 1.5, 3], b: 5, '': [5], c: [] }), { a: '3' });
+  const a = cleanLog({ c1: [encodeReview(t0, GOOD)], c2: [encodeReview(t0, AGAIN)] });
+  const b = cleanLog({ c1: [encodeReview(t0, GOOD), encodeReview(t0 + DAYS(2), GOOD)], c3: [encodeReview(t0, GOOD)] });
   const merged = mergeLogs(a, b);
-  assert.equal(merged.c1.length, 2);
+  assert.equal(historyOf(merged, 'c1').length, 2);
   assert.equal(reviewCount(merged), 4);
+});
+
+test('压缩: 存成跟上一次差多少, 还原一样; 比直接存数字省一半以上', () => {
+  const codes = Array.from({ length: 30 }, (_, i) => encodeReview(t0 + DAYS(i * 7) + i * MIN, 1 + (i % 4)));
+  assert.deepEqual(unpack(pack(codes)), codes);
+  assert.deepEqual(unpack(pack([...codes].reverse())), codes); // 顺序乱的也排好
+  assert.ok(pack(codes).length < JSON.stringify(codes).length / 2, `${pack(codes).length} vs ${JSON.stringify(codes).length}`);
+  assert.equal(pack([]), '');
+  assert.deepEqual(unpack(''), []);
 });
 
 test('只记翻卡自评: 选择题、游戏、重做错题都不记; 撤销去掉; 存了再读还在', () => {
@@ -63,7 +73,7 @@ test('只记翻卡自评: 选择题、游戏、重做错题都不记; 撤销去�
 test('同步、老数据: 记录两边合起来; v1.16 混着各种答法的 log 不要了', () => {
   const a = cleanData({ revlog: { c1: [encodeReview(t0, GOOD)] } });
   const b = cleanData({ revlog: { c1: [encodeReview(t0 + DAYS(3), AGAIN)] } });
-  assert.equal(mergeData(a, b).revlog.c1.length, 2);
+  assert.equal(historyOf(mergeData(a, b).revlog, 'c1').length, 2);
   const old = cleanData({ log: { c1: [encodeReview(t0, GOOD)] } });
   assert.deepEqual(old.revlog, {});
   assert.equal('log' in old, false);

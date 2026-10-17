@@ -180,7 +180,48 @@ export const mediaType = (name) => MEDIA_TYPES[String(name).split('.').pop().toL
 
 export class AnkiError extends Error {}
 
-// 返回 { notes: [{ fields: [html], model, fieldNames, deck }], media: { has(name), get(name) → Blob | null } }
+// Anki 的一条复习 (revlog): id 是什么时候 (毫秒), ease 是按的哪个键 (1 重来 2 困难 3 良好 4 简单),
+// type 0 学习 1 复习 2 重学 3 筛选牌组 4 手动改的 (重置、改日期) 5 改了排期。
+// 手动改的、改排期的不是真的复习, 不要; 重置 (手动、间隔 0) 那次以前的也不要 (跟 FSRS 优化参数时一样)。
+// 返回 [{ at, rating }], 从早到晚
+export function reviewsOf(rows) {
+  let out = [];
+  for (const r of [...rows].sort((a, b) => Number(a.id) - Number(b.id))) {
+    const type = Number(r.type);
+    const ease = Number(r.ease);
+    const at = Number(r.id);
+    if (type === 4 && Number(r.ivl) === 0) out = [];
+    if (!(type >= 0 && type <= 3) || !(ease >= 1 && ease <= 4) || !(at > 0)) continue;
+    out.push({ at, rating: ease });
+  }
+  return out;
+}
+
+// 每个笔记的复习记录 (导出时勾了「包含学习进度」才有)。一个笔记可能有好几张卡片 (比如正面、反面各一张),
+// 这里一个笔记只变成一张卡片, 用复习得最多的那张的记录。返回 Map(笔记 id → [{ at, rating }])
+function noteReviews(db) {
+  const out = new Map();
+  if (!db.hasTable('revlog')) return out;
+  const cardOf = new Map(db.rows('cards').map((c) => [String(c.id), { nid: String(c.nid), ord: Number(c.ord) || 0 }]));
+  const byCard = new Map();
+  for (const r of db.rows('revlog')) {
+    const cid = String(r.cid);
+    if (!cardOf.has(cid)) continue;
+    if (!byCard.has(cid)) byCard.set(cid, []);
+    byCard.get(cid).push(r);
+  }
+  const best = new Map();
+  for (const [cid, rows] of byCard) {
+    const list = reviewsOf(rows);
+    const { nid, ord } = cardOf.get(cid);
+    const cur = best.get(nid);
+    if (list.length && (!cur || list.length > cur.list.length || (list.length === cur.list.length && ord < cur.ord))) best.set(nid, { list, ord });
+  }
+  for (const [nid, { list }] of best) out.set(nid, list);
+  return out;
+}
+
+// 返回 { notes: [{ id, fields: [html], model, fieldNames, deck, reviews: [{ at, rating }] }], media: { has(name), get(name) → Blob | null } }
 export async function readApkg(bytes) {
   let zip;
   try {
@@ -224,12 +265,15 @@ export async function readApkg(bytes) {
   const deckOf = new Map();
   for (const c of db.rows('cards')) if (!deckOf.has(String(c.nid))) deckOf.set(String(c.nid), String(c.did));
 
+  const reviews = noteReviews(db);
   const notes = db
     .rows('notes')
     .sort((a, b) => a.id - b.id)
     .map((n) => {
       const model = models.get(String(n.mid));
       return {
+        id: String(n.id),
+        reviews: reviews.get(String(n.id)) ?? [],
         fields: String(n.flds ?? '').split('\x1f'),
         model: model?.name ?? '',
         fieldNames: model?.fields ?? [],
