@@ -4051,7 +4051,21 @@ button.pin {
   color: var(--bad);
 }
 
-.renew .sync-steps .row .input {
-  flex: 1 1 220px;
+.expiry-notice.ask {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.expiry-notice.ask strong {
+  color: var(--text);
+}
+
+/* 连接、换密钥时填「哪天过期」 */
+.expiry-field .input[type='date'] {
   width: auto;
+  margin-bottom: 0;
+}
+
+.expiry-field + .row {
+  margin-top: 12px;
 }

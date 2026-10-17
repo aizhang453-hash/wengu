@@ -40,42 +40,38 @@ export function saveConfig(config, storage = globalThis.localStorage) {
 }
 
 // ---- 密钥哪天过期 ----
-// GitHub 的回答里会带着 (github-authentication-token-expiration), 浏览器读得到就用它;
-// 读不到就从连上那天按一年算 (建密钥的链接默认一年), 也可以自己改。还剩两周时提醒去换。
-export const EXPIRY_HEADER = 'github-authentication-token-expiration';
+// 网页读不到: GitHub 回答里虽然带着 (github-authentication-token-expiration), 但不让别的网站的网页看。
+// 所以不猜, 连上 (或换密钥) 时自己填 (GitHub 的密钥列表里写着 Expires on ……), 或者说「不会过期」。
+// 还剩两周时提醒去换。以前的版本按一年猜过 (expirySource: 'guess'), 当作不知道。
 const DAY = 24 * 60 * 60 * 1000;
-export const GUESS_DAYS = 366;
 export const WARN_DAYS = 14;
 
-// "2026-10-12 08:15:04 UTC" / "2026-10-12 08:15:04 +0000" → 毫秒; 看不懂返回 null
-export function parseExpiry(text) {
-  const m = String(text ?? '')
-    .trim()
-    .match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)\s*(UTC|GMT|Z|[+-]\d{2}:?\d{2})?$/i);
+// 日期框里的 "2027-10-12" → 那天晚上 23:59 (本地时间); 没填 / 看不懂返回 null
+export function expiryFromDate(text) {
+  const m = String(text ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
-  let zone = (m[3] ?? 'Z').toUpperCase();
-  if (zone === 'UTC' || zone === 'GMT') zone = 'Z';
-  else if (/^[+-]\d{4}$/.test(zone)) zone = `${zone.slice(0, 3)}:${zone.slice(3)}`;
-  const t = Date.parse(`${m[1]}T${m[2]}${zone}`);
+  const t = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59).getTime();
   return Number.isFinite(t) ? t : null;
 }
 
-// 连上 (或换密钥) 时记的过期日期: GitHub 告诉了就用, 不然按一年算
-export function expiryFor({ fromGitHub = null, hint = null, now = Date.now() } = {}) {
-  if (fromGitHub) return { expiresAt: fromGitHub, expirySource: 'github' };
-  if (hint?.expirySource === 'never') return { expiresAt: null, expirySource: 'never' };
-  if (hint?.expiresAt) return { expiresAt: hint.expiresAt, expirySource: hint.expirySource ?? 'guess' };
-  return { expiresAt: now + GUESS_DAYS * DAY, expirySource: 'guess' };
+// 要存的过期日期: 只要自己填的和「不会过期」; 猜的、坏的都不要 (返回 {})
+export function knownExpiry(e) {
+  if (e?.expirySource === 'never') return { expiresAt: null, expirySource: 'never' };
+  if (e?.expirySource === 'user' && Number(e.expiresAt) > 0) return { expiresAt: Number(e.expiresAt), expirySource: 'user' };
+  return {};
 }
 
-// { at, days (还有几天, 按日历算, 0 是今天), source, warn (该提醒了), expired }; 不知道 / 不会过期返回 null
+// { at, days (还有几天, 按日历算, 0 是今天), warn (该提醒了), expired }; 不知道 / 不会过期返回 null
 export function expiryInfo(config, now = Date.now()) {
-  if (!config?.expiresAt || config.expirySource === 'never') return null;
+  const { expiresAt } = knownExpiry(config);
+  if (!expiresAt) return null;
   const midnight = (t) => new Date(t).setHours(0, 0, 0, 0);
-  const days = Math.round((midnight(config.expiresAt) - midnight(now)) / DAY);
-  const expired = config.expiresAt <= now;
-  return { at: config.expiresAt, days: Math.max(0, days), source: config.expirySource ?? 'guess', warn: days <= WARN_DAYS, expired };
+  const days = Math.round((midnight(expiresAt) - midnight(now)) / DAY);
+  return { at: expiresAt, days: Math.max(0, days), warn: days <= WARN_DAYS, expired: expiresAt <= now };
 }
+
+// 连着同步, 可是不知道密钥哪天过期 (没填、以前猜的): 要提醒去填
+export const expiryUnknown = (config) => Boolean(config) && !knownExpiry(config).expirySource;
 
 // 「用户名/仓库名」或者 https://github.com/用户名/仓库名
 export function parseRepo(text) {
@@ -131,8 +127,6 @@ export class GitHubRepo {
     } catch {
       throw new SyncError('连不上 GitHub, 看看网络', 'network');
     }
-    const expiry = parseExpiry(res.headers?.get?.(EXPIRY_HEADER));
-    if (expiry) this.expiresAt = expiry;
     if (res.status === 401) throw new SyncError('密钥不对, 或者过期了', 'auth');
     if (res.status === 403) {
       if (res.headers.get('x-ratelimit-remaining') === '0') throw new SyncError('同步太频繁了, 过一会儿再试', 'rate');
@@ -319,9 +313,7 @@ export class SyncManager {
         const repo = new GitHubRepo(c);
         const result = await syncOnce({ store: this.store, repo, onApplied: this.onApplied });
         const lastSyncAt = Date.now();
-        // GitHub 告诉了密钥哪天过期 (换过密钥、在 GitHub 上续过期) 就记下来
-        const expiry = repo.expiresAt && repo.expiresAt !== this.config?.expiresAt ? { expiresAt: repo.expiresAt, expirySource: 'github' } : {};
-        saveConfig({ ...this.config, lastSyncAt, ...expiry }, this.storage);
+        saveConfig({ ...this.config, lastSyncAt }, this.storage);
         this.state.lastSyncAt = lastSyncAt;
         this.setStatus('ok');
         return result;

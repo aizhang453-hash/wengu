@@ -4,7 +4,7 @@ import { h, toast, download, today } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
 import { newFolder } from './folder.js';
 import { dueCards, dueTomorrow, streak, lastDays } from '../srs.js';
-import { loadConfig, expiryInfo } from '../sync.js';
+import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 
 const WEEKDAYS = '日一二三四五六';
 
@@ -181,9 +181,13 @@ export function renderHome({ store, go }) {
   };
 }
 
-// 同步用的密钥快过期了 (还剩两周以内): 首页提醒一下
+// 同步用的密钥快过期了 (还剩两周以内): 首页提醒一下; 不知道哪天过期: 提醒去填
 function expiryNotice() {
-  const info = expiryInfo(loadConfig());
+  const config = loadConfig();
+  if (expiryUnknown(config)) {
+    return h('a', { class: 'expiry-notice ask', href: '#/sync' }, h('strong', {}, '同步用的 GitHub 密钥哪天过期?'), h('span', {}, ' 填一下, 快到了提醒你换 →'));
+  }
+  const info = expiryInfo(config);
   if (!info?.warn) return null;
   return h(
     'a',

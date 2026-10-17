@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, parseExpiry, expiryFor, expiryInfo, GitHubRepo, SyncManager, EXPIRY_HEADER, loadConfig } from '../js/sync.js';
+import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, expiryFromDate, knownExpiry, expiryInfo, expiryUnknown, SyncManager, loadConfig } from '../js/sync.js';
 import { Store, makeCard } from '../js/store.js';
 
 function memoryStorage() {
@@ -152,53 +152,64 @@ test('图片录音: 有的传上去, 缺的拿下来', async () => {
 });
 
 // ---- 密钥哪天过期 ----
+// 网页读不到 GitHub 给的过期日期, 只记自己填的; 以前按一年猜的当作不知道
 
 const DAY = 86400000;
 
-test('过期日期: 读 GitHub 给的几种写法, 看不懂的不出错', () => {
-  assert.equal(parseExpiry('2027-10-12 08:15:04 UTC'), Date.UTC(2027, 9, 12, 8, 15, 4));
-  assert.equal(parseExpiry('2027-10-12 08:15:04 +0800'), Date.UTC(2027, 9, 12, 0, 15, 4));
-  assert.equal(parseExpiry('2027-10-12T08:15:04Z'), Date.UTC(2027, 9, 12, 8, 15, 4));
-  assert.equal(parseExpiry(''), null);
-  assert.equal(parseExpiry(null), null);
-  assert.equal(parseExpiry('明天'), null);
+test('过期日期: 日期框的日子 → 那天晚上 23:59, 没填 / 看不懂的不出错', () => {
+  assert.equal(expiryFromDate('2027-10-12'), new Date(2027, 9, 12, 23, 59).getTime());
+  assert.equal(expiryFromDate(''), null);
+  assert.equal(expiryFromDate(null), null);
+  assert.equal(expiryFromDate('明天'), null);
 });
 
-test('过期日期: 连上时 GitHub 说了用它, 没说按一年算, 扫码时用那台设备记的', () => {
+test('过期日期: 只要自己填的和「不会过期」, 猜的不要 (扫码带过来的也一样)', () => {
   const now = Date.UTC(2026, 9, 12);
-  assert.deepEqual(expiryFor({ fromGitHub: now + 30 * DAY, now }), { expiresAt: now + 30 * DAY, expirySource: 'github' });
-  assert.deepEqual(expiryFor({ now }), { expiresAt: now + 366 * DAY, expirySource: 'guess' });
-  assert.deepEqual(expiryFor({ hint: { expiresAt: now + 100 * DAY, expirySource: 'user' }, now }), { expiresAt: now + 100 * DAY, expirySource: 'user' });
-  assert.deepEqual(expiryFor({ hint: { expiresAt: null, expirySource: 'never' }, now }), { expiresAt: null, expirySource: 'never' });
+  assert.deepEqual(knownExpiry({ expiresAt: now + 100 * DAY, expirySource: 'user' }), { expiresAt: now + 100 * DAY, expirySource: 'user' });
+  assert.deepEqual(knownExpiry({ expiresAt: String(now), expirySource: 'user' }), { expiresAt: now, expirySource: 'user' });
+  assert.deepEqual(knownExpiry({ expiresAt: 5, expirySource: 'never' }), { expiresAt: null, expirySource: 'never' });
+  assert.deepEqual(knownExpiry({ expiresAt: now + 366 * DAY, expirySource: 'guess' }), {});
+  assert.deepEqual(knownExpiry({ expiresAt: 'x', expirySource: 'user' }), {});
+  assert.deepEqual(knownExpiry({ expiresAt: undefined, expirySource: undefined }), {});
+  assert.deepEqual(knownExpiry(null), {});
 });
 
-test('过期日期: 还剩两周以内提醒, 过了说过期; 不会过期的不提醒', () => {
+test('过期日期: 还剩两周以内提醒, 过了说过期; 不会过期的、猜的、没填的不提醒', () => {
   const now = Date.UTC(2026, 9, 12);
   assert.equal(expiryInfo(null), null);
   assert.equal(expiryInfo({ expiresAt: null, expirySource: 'never' }), null);
-  assert.deepEqual(expiryInfo({ expiresAt: now + 100 * DAY, expirySource: 'guess' }, now), { at: now + 100 * DAY, days: 100, source: 'guess', warn: false, expired: false });
-  assert.equal(expiryInfo({ expiresAt: now + 14 * DAY, expirySource: 'github' }, now).warn, true);
-  assert.equal(expiryInfo({ expiresAt: now + 15 * DAY, expirySource: 'github' }, now).warn, false);
-  const gone = expiryInfo({ expiresAt: now - DAY, expirySource: 'github' }, now);
+  assert.equal(expiryInfo({ expiresAt: now + 10 * DAY, expirySource: 'guess' }, now), null);
+  assert.deepEqual(expiryInfo({ expiresAt: now + 100 * DAY, expirySource: 'user' }, now), { at: now + 100 * DAY, days: 100, warn: false, expired: false });
+  assert.equal(expiryInfo({ expiresAt: now + 14 * DAY, expirySource: 'user' }, now).warn, true);
+  assert.equal(expiryInfo({ expiresAt: now + 15 * DAY, expirySource: 'user' }, now).warn, false);
+  const gone = expiryInfo({ expiresAt: now - DAY, expirySource: 'user' }, now);
   assert.equal(gone.expired, true);
   assert.equal(gone.warn, true);
   assert.equal(gone.days, 0);
   // 按日历算: 选了 10 天后那天 (晚上 23:59 过期) 就是还有 10 天
   const noon = new Date(2026, 9, 12, 12, 0).getTime();
-  assert.equal(expiryInfo({ expiresAt: new Date(2026, 9, 22, 23, 59).getTime(), expirySource: 'user' }, noon).days, 10);
-  const tonight = expiryInfo({ expiresAt: new Date(2026, 9, 12, 23, 59).getTime(), expirySource: 'user' }, noon);
+  assert.equal(expiryInfo({ expiresAt: expiryFromDate('2026-10-22'), expirySource: 'user' }, noon).days, 10);
+  const tonight = expiryInfo({ expiresAt: expiryFromDate('2026-10-12'), expirySource: 'user' }, noon);
   assert.deepEqual([tonight.days, tonight.expired, tonight.warn], [0, false, true]);
   // 老版本存的设置没有过期日期: 不提醒
   assert.equal(expiryInfo({ owner: 'a', repo: 'b', token: 't' }, now), null);
 });
 
-// 假的 GitHub (fetch): 回答里带不带过期日期
-function fakeFetch({ expiry = null } = {}) {
+test('过期日期: 连着同步但不知道哪天过期 (没填、以前猜的) 要提醒去填', () => {
+  const c = { owner: 'a', repo: 'b', token: 't' };
+  assert.equal(expiryUnknown(null), false);
+  assert.equal(expiryUnknown(c), true);
+  assert.equal(expiryUnknown({ ...c, expiresAt: 1, expirySource: 'guess' }), true);
+  assert.equal(expiryUnknown({ ...c, expiresAt: 1, expirySource: 'user' }), false);
+  assert.equal(expiryUnknown({ ...c, expiresAt: null, expirySource: 'never' }), false);
+});
+
+// 假的 GitHub (fetch)
+function fakeFetch() {
   const files = new Map();
   let n = 0;
   return async (url, opts = {}) => {
     const headers = new Headers({ 'content-type': 'application/json' });
-    if (expiry) headers.set(EXPIRY_HEADER, expiry);
     const path = new URL(url).pathname;
     const name = path.replace(/^\/repos\/[^/]+\/[^/]+\/?(contents\/)?/, '');
     const send = (status, body) => new Response(body === null ? null : JSON.stringify(body), { status, headers });
@@ -213,27 +224,23 @@ function fakeFetch({ expiry = null } = {}) {
   };
 }
 
-test('过期日期: GitHubRepo 从回答里读出来; 同步时记进设置', async () => {
-  const gh = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, fakeFetch({ expiry: '2027-01-05 10:00:00 UTC' }));
-  await gh.check();
-  assert.equal(gh.expiresAt, Date.UTC(2027, 0, 5, 10));
-  const none = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, fakeFetch());
-  await none.check();
-  assert.equal(none.expiresAt, undefined);
-
-  const storage = memoryStorage();
-  storage.setItem('wengu:sync', JSON.stringify({ owner: 'o', repo: 'r', token: 't', expiresAt: 1, expirySource: 'guess' }));
+test('过期日期: 同步不会改掉自己填的日期, 没填的也不会给你猜一个', async () => {
   const realFetch = globalThis.fetch;
-  globalThis.fetch = fakeFetch({ expiry: '2027-03-01 00:00:00 UTC' });
+  globalThis.fetch = fakeFetch();
   try {
-    const store = new Store(memoryStorage());
-    store.putSet({ title: '水果', cards: [makeCard('apple', '苹果')] });
-    const manager = new SyncManager(store, { storage });
-    const result = await manager.sync();
-    assert.equal(result.pushed, true);
-    const c = loadConfig(storage);
-    assert.equal(c.expiresAt, Date.UTC(2027, 2, 1));
-    assert.equal(c.expirySource, 'github');
+    for (const expiry of [{ expiresAt: Date.UTC(2027, 2, 1), expirySource: 'user' }, {}]) {
+      const storage = memoryStorage();
+      storage.setItem('wengu:sync', JSON.stringify({ owner: 'o', repo: 'r', token: 't', ...expiry }));
+      const store = new Store(memoryStorage());
+      store.putSet({ title: '水果', cards: [makeCard('apple', '苹果')] });
+      const manager = new SyncManager(store, { storage });
+      const result = await manager.sync();
+      assert.ok(result);
+      const c = loadConfig(storage);
+      assert.ok(c.lastSyncAt > 0);
+      assert.equal(c.expiresAt, expiry.expiresAt);
+      assert.equal(c.expirySource, expiry.expirySource);
+    }
   } finally {
     globalThis.fetch = realFetch;
   }
