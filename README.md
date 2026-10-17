@@ -266,7 +266,7 @@ Quizlet 要开会员才能用的 (学习模式、测试不限次数, 做标注�
 
 ## 更新记录
 
-现在是 **v1.20**。每一版改了什么见 [CHANGELOG.md](CHANGELOG.md)。
+现在是 **v1.20.1**。每一版改了什么见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 自己在电脑上跑
 

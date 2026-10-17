@@ -86,7 +86,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       fill(termSel, ...options(false));
       fill(defSel, ...options(false));
       fill(extraSel, ...options(true));
-      const g = guessColumns(first.rows, header);
+      const g = guessColumns(first.rows, header, { names: fieldsNamed ? first.columns : null, html });
       termSel.value = String(g.term);
       defSel.value = String(g.def);
       extraSel.value = '-1';

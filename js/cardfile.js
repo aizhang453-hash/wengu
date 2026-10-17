@@ -101,17 +101,21 @@ export function widthOf(rows) {
   return w;
 }
 
-// 猜哪一列是词、哪一列是解释: 有标题按标题, 没有就用前两列有字的
-export function guessColumns(rows, header) {
+// 猜哪一列是词、哪一列是解释: 有标题 (或者 Anki 的字段名 names) 按名字, 没有就用前两列有字的
+// (Anki 里只放图片、声音的字段不算有字)
+export function guessColumns(rows, header, { names = null, html = false } = {}) {
   const width = widthOf(rows);
+  const body = header ? rows.slice(1) : rows;
+  const hasText = (c) => body.some((r) => (html ? htmlToText(String(r[c] ?? '')) : String(r[c] ?? '')).trim());
   const filled = [];
-  for (let c = 0; c < width; c++) if (rows.some((r) => String(r[c] ?? '').trim())) filled.push(c);
+  for (let c = 0; c < width; c++) if (hasText(c)) filled.push(c);
   let term = filled[0] ?? 0;
   let def = filled[1] ?? (filled[0] ?? 0) + 1;
-  if (header && rows[0]) {
+  const labels = names?.length ? names : header ? rows[0] : null;
+  if (labels) {
     const clean = (s) => String(s ?? '').trim().replace(/[:：\s]+$/, '');
-    const t = rows[0].findIndex((c) => TERM_WORDS.test(clean(c)));
-    const d = rows[0].findIndex((c) => DEF_WORDS.test(clean(c)));
+    const t = labels.findIndex((c) => TERM_WORDS.test(clean(c)));
+    const d = labels.findIndex((c) => DEF_WORDS.test(clean(c)));
     if (t >= 0) term = t;
     if (d >= 0 && d !== term) def = d;
     else if (t >= 0) def = filled.find((c) => c !== term) ?? term + 1;
@@ -160,8 +164,12 @@ export function buildCards(rows, { term, def, extra = -1, header = false, html =
     if (html) {
       const tr = mediaRefs(raw(term));
       const dr = mediaRefs(`${raw(def)} ${raw(extra)}`);
-      image = dr.images[0] ?? tr.images[0] ?? '';
-      termAudio = tr.sounds[0] ?? '';
+      // 没选的字段里的: 图片 (Anki 卡组常常单独一个 Image 字段)、只放声音的字段 (一般第一个是词的发音)
+      const others = row.map((_, c) => c).filter((c) => ![term, def, extra].includes(c));
+      const otherImage = others.map((c) => mediaRefs(raw(c)).images[0]).find(Boolean);
+      const otherSound = others.filter((c) => !htmlToText(raw(c)).trim()).map((c) => mediaRefs(raw(c)).sounds[0]).find(Boolean);
+      image = dr.images[0] ?? tr.images[0] ?? otherImage ?? '';
+      termAudio = tr.sounds[0] ?? otherSound ?? '';
       defAudio = dr.sounds[0] ?? '';
     }
     if (!t && !d && !image) continue;

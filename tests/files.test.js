@@ -231,6 +231,21 @@ test('导入 CSV / Excel: 认出标题行, 猜对哪一列是词、哪一列是�
   assert.deepEqual(guessColumns([['', 'a', 'b'], ['', 'c', 'd']], false), { term: 1, def: 2, width: 3 });
 });
 
+test('Anki 卡组: 按字段名猜词和解释, 只有图片 / 声音的字段不当解释; 没选的字段里的图片、词的发音也带上', () => {
+  const names = ['Word', 'Image', 'Sound', 'Meaning', 'Example', 'Sound_Meaning'];
+  const rows = [
+    ['agree', '<img src="agree.jpg">', '[sound:agree.mp3]', 'To <b>agree</b> is to say yes.', 'I agree with you.', '[sound:agree_m.mp3]'],
+    ['arrive', '<img src="arrive.jpg">', '[sound:arrive.mp3]', 'To arrive is to reach a place.', 'We arrived late.', '[sound:arrive_m.mp3]'],
+  ];
+  assert.deepEqual(guessColumns(rows, false, { names, html: true }), { term: 0, def: 3, width: 6 });
+  // 字段名认不出来: 跳过只有图片、声音的字段
+  assert.deepEqual(guessColumns(rows, false, { names: ['A', 'B', 'C', 'D', 'E', 'F'], html: true }), { term: 0, def: 3, width: 6 });
+  const [card] = buildCards(rows, { term: 0, def: 3, extra: 4, html: true });
+  assert.deepEqual([card.term, card.def, card.image, card.termAudio, card.defAudio], ['agree', 'To **agree** is to say yes.\nI agree with you.', 'agree.jpg', 'agree.mp3', '']);
+  // 自己选了图片那个字段当解释, 照旧
+  assert.equal(buildCards(rows, { term: 0, def: 1, html: true })[0].image, 'agree.jpg');
+});
+
 test('导入: 普通 .txt 交给粘贴框; 不支持的格式说清楚', async () => {
   const r = await readCardFile(fileOf('quizlet.txt', new TextEncoder().encode('apple\t苹果\nbanana\t香蕉')));
   assert.deepEqual(r, { kind: 'text', text: 'apple\t苹果\nbanana\t香蕉', title: 'quizlet' });
