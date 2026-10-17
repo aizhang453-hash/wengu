@@ -56,12 +56,15 @@ import { renderMistakeReview } from './views/mistakereview.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
+import { dayKey } from './srs.js';
 
 const store = new Store(globalThis.localStorage, { batch: true });
 // 答题攒着没存的: 离开页面、切到别的应用时马上存 (要在同步之前, 同步看见有改的才会赶紧推)
 window.addEventListener('pagehide', () => store.flush());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') store.flush();
+  // 开着过了一夜再回来: 首页、卡片集页这些「今天」的数字换成今天的
+  else if (current && current.day !== dayKey() && ['home', 'set', 'folder', 'mistakes'].includes(current.page)) render();
 });
 let lastSaveError = 0;
 store.onSaveError = () => {
@@ -170,6 +173,7 @@ function render() {
   else view = missing();
 
   view.page = route.page;
+  view.day = dayKey();
   current = view;
   main.replaceChildren(view.el);
   document.title = view.title ? `${view.title} · 温故` : '温故';

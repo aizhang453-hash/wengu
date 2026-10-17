@@ -10,7 +10,7 @@
 //     createdAt, updatedAt (改了题目) }
 // 重做连对 3 次算掌握, 不再排进复习。
 
-import { schedule, DAY } from './srs.js';
+import { schedule, daysLater } from './srs.js';
 import { grade } from './grade.js';
 
 export const LETTERS = 'ABCDEF';
@@ -22,7 +22,6 @@ export const MAX_IMAGES = 6;
 
 const str = (v) => (typeof v === 'string' ? v : '');
 const index = (v, n) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) < n ? Number(v) : -1);
-const startOfDay = (t) => new Date(t).setHours(0, 0, 0, 0);
 
 export function newMistake(id, now = Date.now()) {
   return { id, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', review: null, createdAt: now, updatedAt: now };
@@ -131,7 +130,7 @@ export const mineLabel = (m) => (m.type === 'input' ? m.mineText : m.mine >= 0 ?
 // ---- 复习 ----
 // 刚记下的错题: 明天开始重做 (今天想做也可以「全部重做」)
 export function firstReview(now = Date.now()) {
-  return { right: 0, wrong: 0, streak: 0, interval: 0, due: startOfDay(now) + DAY, at: 0, mastered: false };
+  return { right: 0, wrong: 0, streak: 0, interval: 0, due: daysLater(now, 1), at: 0, mastered: false };
 }
 
 // 重做了一次: 排下次哪天; 连对 3 次算掌握。答错了, 掌握了的也重新排回来

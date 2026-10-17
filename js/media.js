@@ -36,6 +36,17 @@ export async function putMedia(blob, id = `m_${newId()}`) {
   return id;
 }
 
+// 一下存好几个 (导入 Anki 卡组时几千个): 一次存完比一个一个存快好几倍。返回 id (跟 blobs 一样的顺序)
+export async function putMediaMany(blobs) {
+  const ids = blobs.map(() => `m_${newId()}`);
+  if (!blobs.length) return ids;
+  await run('readwrite', (s) => {
+    const at = Date.now();
+    blobs.forEach((blob, i) => s.put({ blob, at }, ids[i]));
+  });
+  return ids;
+}
+
 export async function getMedia(id) {
   if (!id) return null;
   const rec = await run('readonly', (s) => s.get(id));
@@ -102,9 +113,11 @@ export async function cleanMedia(store) {
 }
 
 // 图片缩小到最长边 max 像素再存, 照片动不动几 MB, 背卡片用不着那么大
-export async function shrinkImage(file, max = 1000) {
+export async function shrinkImage(file, max = 1000, small = 0) {
+  if (file.size < small) return file; // 本来就小的不用打开看 (导入几千张时省很多时间)
+  let bitmap;
   try {
-    const bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(file);
     const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
     if (scale === 1 && file.size < 400_000) return file;
     const canvas = document.createElement('canvas');
@@ -116,6 +129,8 @@ export async function shrinkImage(file, max = 1000) {
     return blob && blob.size < file.size ? blob : file;
   } catch {
     return file;
+  } finally {
+    bitmap?.close?.();
   }
 }
 

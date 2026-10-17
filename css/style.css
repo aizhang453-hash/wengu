@@ -2975,6 +2975,18 @@ a.card-row.search-hit:hover {
   right: 6px;
 }
 
+.folder-move {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 2px;
+}
+
+.folder-move .icon-btn:disabled {
+  opacity: 0.3;
+}
+
 .in-folders {
   margin: -4px 0 8px;
   color: var(--muted);

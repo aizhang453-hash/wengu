@@ -22,12 +22,15 @@ export async function readCardFile(file) {
   if (e === 'numbers') throw new FileError('Numbers 的文件读不了: 在 Numbers 里「导出为」Excel 或 CSV 再导入');
   if (e === 'ods') throw new FileError('.ods 读不了: 「另存为」.xlsx 或 CSV 再导入');
   if (e === 'docx' || e === 'doc' || e === 'pdf') throw new FileError('Word、PDF 读不了: 里面的表格可以直接复制, 粘贴到下面的框里');
-  if (file.size > 300 * 1024 * 1024) throw new FileError('文件太大了 (超过 300MB)');
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  const deck = e === 'apkg' || e === 'colpkg';
+  // Anki 卡组 (连图片声音可能好几百 MB) 不整个读进来; 别的文件太大的不读
+  if (!deck && file.size > 300 * 1024 * 1024) throw new FileError('文件太大了 (超过 300MB)');
+  const lazy = deck && typeof Blob !== 'undefined' && file instanceof Blob;
+  const bytes = lazy ? null : new Uint8Array(await file.arrayBuffer());
+  const isZip = bytes?.[0] === 0x50 && bytes?.[1] === 0x4b;
 
-  if (e === 'apkg' || e === 'colpkg') {
-    const { notes, media } = await readApkg(bytes);
+  if (deck) {
+    const { notes, media } = await readApkg(lazy ? file : bytes);
     // 一个牌组一张表
     const byDeck = new Map();
     for (const n of notes) {
@@ -166,7 +169,9 @@ export function columnLabels(sheet, header, html) {
 // 表格 → 卡片: [{ term, def, image, termAudio, defAudio, reviews? }] (图片声音是文件名, 导入时再去拿;
 // reviews 是 Anki 卡组带来的复习记录)
 // extra: 再接到解释后面的一列 (例句之类), 没有写 -1
-export function buildCards(rows, { term, def, extra = -1, header = false, html = false }) {
+// names: 列名 (Anki 的字段名), 用来找词和解释各自的发音 (Sound_Meaning 跟着 Meaning)
+export function buildCards(rows, { term, def, extra = -1, header = false, html = false, names = null }) {
+  const nameOf = (c) => String(names?.[c] ?? '').trim().toLowerCase();
   const out = [];
   for (const row of rows.slice(header ? 1 : 0)) {
     const raw = (c) => (c >= 0 ? String(row[c] ?? '') : '');
@@ -187,13 +192,18 @@ export function buildCards(rows, { term, def, extra = -1, header = false, html =
     if (html) {
       const tr = mediaRefs(raw(term));
       const dr = mediaRefs(`${raw(def)} ${raw(extra)}`);
-      // 没选的字段里的: 图片 (Anki 卡组常常单独一个 Image 字段)、只放声音的字段 (一般第一个是词的发音)
+      // 没选的字段里的: 图片 (Anki 卡组常常单独一个 Image 字段)、只放声音的字段:
+      // 名字里带着解释那个字段名的 (Sound_Meaning) 是解释的发音; 剩下的第一个 (不是例句的) 是词的发音
       const others = row.map((_, c) => c).filter((c) => ![term, def, extra].includes(c));
       const otherImage = others.map((c) => mediaRefs(raw(c)).images[0]).find(Boolean);
-      const otherSound = others.filter((c) => !htmlToText(raw(c)).trim()).map((c) => mediaRefs(raw(c)).sounds[0]).find(Boolean);
+      const sounds = others.filter((c) => !htmlToText(raw(c)).trim() && mediaRefs(raw(c)).sounds.length);
+      const pairOf = (col) => (nameOf(col) ? sounds.find((c) => nameOf(c) !== nameOf(col) && nameOf(c).includes(nameOf(col))) : undefined);
+      const defSound = pairOf(def);
+      const termSound = pairOf(term) ?? sounds.find((c) => c !== defSound && !/example|sentence|例句/.test(nameOf(c)));
+      const soundIn = (c) => (c === undefined ? undefined : mediaRefs(raw(c)).sounds[0]);
       image = dr.images[0] ?? tr.images[0] ?? otherImage ?? '';
-      termAudio = tr.sounds[0] ?? otherSound ?? '';
-      defAudio = dr.sounds[0] ?? '';
+      termAudio = tr.sounds[0] ?? soundIn(termSound) ?? '';
+      defAudio = dr.sounds[0] ?? soundIn(defSound) ?? '';
     }
     if (!t && !d && !image) continue;
     out.push({ term: t, def: d, image, termAudio, defAudio, ...(row.reviews?.length ? { reviews: row.reviews } : {}) });

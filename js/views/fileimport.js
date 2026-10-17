@@ -4,7 +4,7 @@ import { h, fill, toast } from '../dom.js';
 import { readCardFile, buildCards, guessHeader, guessColumns, columnLabels, widthOf, FileError } from '../cardfile.js';
 import { AnkiError, mediaType } from '../anki.js';
 import { SQLiteError } from '../sqlite.js';
-import { putMedia, shrinkImage } from '../media.js';
+import { putMediaMany, shrinkImage } from '../media.js';
 import { stripMarks } from '../rich.js';
 
 export const ACCEPT = '.xlsx,.xlsm,.csv,.tsv,.txt,.apkg,.colpkg';
@@ -13,8 +13,11 @@ const BIG = 2000; // 卡片多过这么多张, 加进编辑页会很慢, 建议�
 // onText(text, title): 普通文字, 放进粘贴框
 // onCards(cards, title): 加进正在编辑的卡片集 (cards 已经是 { term, def, image, termAudio, defAudio }, 图片声音存好了)
 // onSets([{ title, cards }]): 每个工作表 / 牌组建一个卡片集
-// 后两个还有 { random }: 每天背新词时打乱顺序 (不勾就按文件里的顺序)
+// 后两个还有 { random, failed }: 每天背新词时打乱顺序 (不勾就按文件里的顺序); 几个图片 / 声音拿不到
+// 返回 { el, drop, load, busy() 正在存图片声音, cancel() 离开页面时: 不导入了 }
 export function fileImportPanel({ onText, onCards, onSets }) {
+  let busy = false;
+  let cancelled = false;
   const input = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: () => input.files[0] && load(input.files[0]) });
   const panel = h('div', { class: 'file-panel', hidden: true });
   const pickBtn = h('button', { class: 'btn', type: 'button', onclick: () => input.click() }, '选文件');
@@ -93,7 +96,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
     }
 
     function cardsOf(sheet) {
-      return buildCards(sheet.rows, { term: Number(termSel.value), def: Number(defSel.value), extra: Number(extraSel.value), header: !fieldsNamed && headerBox.checked, html });
+      return buildCards(sheet.rows, { term: Number(termSel.value), def: Number(defSel.value), extra: Number(extraSel.value), header: !fieldsNamed && headerBox.checked, html, names: fieldsNamed ? sheet.columns : null });
     }
 
     function draw() {
@@ -130,22 +133,37 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       );
     }
 
-    // 图片声音存进浏览器, 卡片上换成 id
+    // 图片声音存进浏览器, 卡片上换成 id。几十个一批: 一起读、一起存 (几千个的卡组快好几倍)
     async function withMedia(cards, progress) {
       if (!media) return { cards: cards.map((c) => ({ ...c, image: '', termAudio: '', defAudio: '' })), failed: 0 };
       const saved = new Map();
       const names = [...new Set(cards.flatMap((c) => [c.image, c.termAudio, c.defAudio]).filter(Boolean))];
-      let done = 0;
       let failed = 0;
-      for (const name of names) {
-        progress(`存图片和声音 ${++done}/${names.length}……`);
+      const BATCH = 40;
+      for (let i = 0; i < names.length; i += BATCH) {
+        if (cancelled) throw new DOMException('不导入了', 'AbortError');
+        progress(`存图片和声音 ${Math.min(i + BATCH, names.length)}/${names.length}……`);
+        const batch = names.slice(i, i + BATCH);
+        const blobs = await Promise.all(
+          batch.map(async (name) => {
+            try {
+              const blob = await media.get(name);
+              const type = mediaType(name);
+              if (!blob || !type) return null;
+              // 图片太大的缩小一点 (150KB 以下的不用看)
+              return type.startsWith('image/') && type !== 'image/svg+xml' ? await shrinkImage(blob, 1000, 150_000) : blob;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        const ok = batch.filter((_, k) => blobs[k]);
+        failed += batch.length - ok.length;
         try {
-          const blob = await media.get(name);
-          const type = mediaType(name);
-          if (!blob || !type) throw new Error('没有');
-          saved.set(name, await putMedia(type.startsWith('image/') && type !== 'image/svg+xml' ? await shrinkImage(blob) : blob));
+          const ids = await putMediaMany(blobs.filter(Boolean));
+          ok.forEach((name, k) => saved.set(name, ids[k]));
         } catch {
-          failed++;
+          failed += ok.length; // 存不进去 (浏览器空间满了)
         }
       }
       const pick = (name, kind) => {
@@ -164,20 +182,23 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const btn = { add: addBtn, direct: directBtn, each: eachBtn }[mode];
       const label0 = btn.textContent;
       for (const b of [addBtn, directBtn, eachBtn]) if (b) b.disabled = true;
+      busy = true;
       try {
         const all = groups.flatMap((g) => g.cards);
         const { cards, failed } = await withMedia(all, (t) => (btn.textContent = t));
+        if (cancelled) return;
         let k = 0;
         const done = groups.map((g) => ({ ...g, cards: cards.slice(k, (k += g.cards.length)) }));
-        if (failed) toast(`${failed} 个图片 / 声音拿不到, 跳过了`);
         panel.hidden = true;
-        const opts = { random: randomBox.checked };
+        const opts = { random: randomBox.checked, failed };
         if (mode === 'add') onCards(done[0].cards, done[0].title, opts);
         else onSets(done, opts);
       } catch (e) {
+        if (e.name === 'AbortError') return;
         console.warn(e);
         toast('存不进去, 可能浏览器空间满了');
       } finally {
+        busy = false;
         btn.textContent = label0;
         for (const b of [addBtn, directBtn, eachBtn]) if (b) b.disabled = false;
       }
@@ -224,5 +245,5 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       load(file);
     },
   };
-  return { el, drop, load };
+  return { el, drop, load, busy: () => busy, cancel: () => (cancelled = true) };
 }

@@ -35,6 +35,14 @@ export function startOfDay(t) {
   return d.getTime();
 }
 
+// 过 n 天的那天 0 点 (按日历算; 有夏令时的地方一天不一定 24 小时)
+export function daysLater(t, n) {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + n);
+  return d.getTime();
+}
+
 const round = (x) => Math.round(x * 10000) / 10000;
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 
@@ -58,7 +66,7 @@ function nextDue(algo, { memory, elapsed }, rating, now) {
   const d = round(memory.difficulty);
   if (rating === Rating.Again) return { interval: 0, s, d, due: now + RETRY_MS };
   const interval = algo.next_interval(memory.stability, elapsed);
-  return { interval, s, d, due: startOfDay(now) + interval * DAY };
+  return { interval, s, d, due: daysLater(now, interval) };
 }
 
 // 答了一次 (翻卡自评, 只有记得 / 忘了): 返回 { interval, s, d, due } (调的地方再记上 at)。
@@ -118,7 +126,7 @@ export function dueCards(sets, now = Date.now()) {
 
 // 明天 (到明天晚上为止) 要复习几张, 不算今天已经该复习的
 export function dueTomorrow(sets, now = Date.now()) {
-  const end = startOfDay(now) + 2 * DAY;
+  const end = daysLater(now, 2);
   let n = 0;
   for (const set of sets) {
     for (const card of set.cards) {

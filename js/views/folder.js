@@ -45,7 +45,10 @@ export function renderFolder({ store, go }, id) {
           {
             class: 'btn primary',
             onclick: () => {
-              store.putFolder({ ...folder, setIds: others.map((s) => s.id).filter((sid) => picked.has(sid)) });
+              // 原来的顺序不动 (每天背新词照这个顺序), 新放进来的接在后面
+              const kept = folder.setIds.filter((sid) => picked.has(sid));
+              const added = others.map((s) => s.id).filter((sid) => picked.has(sid) && !kept.includes(sid));
+              store.putFolder({ ...folder, setIds: [...kept, ...added] });
               d.close();
               redraw();
             },
@@ -60,7 +63,7 @@ export function renderFolder({ store, go }, id) {
     ? h(
         'ul',
         { class: 'set-grid' },
-        sets.map((set) =>
+        sets.map((set, i) =>
           h(
             'li',
             { class: 'folder-item' },
@@ -83,6 +86,15 @@ export function renderFolder({ store, go }, id) {
               },
               '✕',
             ),
+            // 挪顺序 (每天背新词照文件夹里的顺序, 一个背完再下一个)
+            sets.length > 1
+              ? h(
+                  'span',
+                  { class: 'folder-move' },
+                  h('button', { class: 'icon-btn', title: '往前挪', 'aria-label': `${set.title || '未命名卡片集'} 往前挪`, disabled: i === 0, onclick: () => (store.moveInFolder(folder.id, set.id, -1), redraw()) }, '↑'),
+                  h('button', { class: 'icon-btn', title: '往后挪', 'aria-label': `${set.title || '未命名卡片集'} 往后挪`, disabled: i === sets.length - 1, onclick: () => (store.moveInFolder(folder.id, set.id, 1), redraw()) }, '↓'),
+                )
+              : null,
           ),
         ),
       )
@@ -153,6 +165,9 @@ export function newFolder(store, then) {
     label: '文件夹叫什么',
     placeholder: '比如「期末考试」',
     okText: '建好了',
-    onOk: (name) => then(store.putFolder(makeFolder(name))),
+    onOk: (name) => {
+      const folder = store.putFolder(makeFolder(name));
+      if (folder) then(folder);
+    },
   });
 }

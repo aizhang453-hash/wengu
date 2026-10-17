@@ -10,12 +10,15 @@ const num = (n) => n.toLocaleString('zh-CN');
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 const days = (s) => (s < 1 ? `${Math.max(1, Math.round(s * 24))} 小时` : `${s < 10 ? s.toFixed(1) : Math.round(s)} 天`);
 
-// 在后台算; 浏览器不支持就在这里算 (会卡一两秒)
-export function runOptimize(histories, current, onProgress) {
+// 在后台算; 浏览器不支持就在这里算 (会卡一两秒)。signal 停了 (关了窗口) 就不算了
+export function runOptimize(histories, current, onProgress, signal = null) {
   return new Promise((resolve, reject) => {
+    const stopped = () => new DOMException('不算了', 'AbortError');
+    if (signal?.aborted) return reject(stopped());
     const here = async () => {
       const { optimize } = await import('../optimize.js');
       await new Promise((r) => setTimeout(r, 50)); // 先让「算着呢」显示出来
+      if (signal?.aborted) throw stopped();
       resolve(optimize(histories, { current, onProgress }));
     };
     let worker;
@@ -25,16 +28,29 @@ export function runOptimize(histories, current, onProgress) {
       here().catch(reject);
       return;
     }
+    const end = () => {
+      worker.terminate();
+      signal?.removeEventListener('abort', abort);
+    };
+    const abort = () => {
+      end();
+      reject(stopped());
+    };
+    signal?.addEventListener('abort', abort);
     let heard = false;
     worker.onmessage = ({ data }) => {
       heard = true;
       if ('progress' in data) return onProgress?.(data.progress);
-      worker.terminate();
+      end();
       if (data.error) reject(new Error(data.error));
       else resolve(data.result);
     };
+    worker.onmessageerror = () => {
+      end();
+      reject(new Error('后台传回来的读不了'));
+    };
     worker.onerror = (e) => {
-      worker.terminate();
+      end();
       if (heard) reject(new Error(e.message || '算不了'));
       else here().catch(reject); // 起不来 (老浏览器不支持这种后台): 在这里算
     };
@@ -60,6 +76,9 @@ export function openOptimizeDialog({ store, onChanged }) {
   else if (have.items < 400) enough = '记录不太多, 算出来的可能不太稳; 攒到 1000 次左右会更准。';
   else enough = '';
 
+  // 关了窗口: 后台还在算的停掉
+  const stop = new AbortController();
+
   async function run() {
     runBtn.disabled = true;
     runBtn.textContent = '算着呢……';
@@ -67,9 +86,10 @@ export function openOptimizeDialog({ store, onChanged }) {
     bar.style.width = '0%';
     fill(resultEl);
     try {
-      const result = await runOptimize(histories, own ? currentParameters() : null, (p) => (bar.style.width = `${Math.round(p * 100)}%`));
+      const result = await runOptimize(histories, own ? currentParameters() : null, (p) => (bar.style.width = `${Math.round(p * 100)}%`), stop.signal);
       showResult(result);
     } catch (e) {
+      if (e.name === 'AbortError') return;
       console.warn(e);
       fill(resultEl, h('p', { class: 'qe-problem' }, '算的时候出错了, 换个浏览器试试?'));
     } finally {
@@ -136,6 +156,7 @@ export function openOptimizeDialog({ store, onChanged }) {
 
   const d = openDialog({
     title: '按我的记录优化复习排法',
+    onClose: () => stop.abort(),
     body: [
       h('p', { class: 'muted small' }, 'FSRS 有 21 个参数, 决定「隔多久再复习、多快会忘」。默认的是很多 Anki 用户的平均; 拿你自己的翻卡自评记录 (连从 Anki 搬来的) 算一套更合你的 (跟 Anki 里的「优化」一样, 在你的浏览器里算)。'),
       h('p', {}, status),

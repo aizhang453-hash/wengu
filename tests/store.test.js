@@ -281,9 +281,11 @@ test('撤销时恢复统计; 删卡片集时清掉它另外记的东西', () => 
   const before = structuredClone(store.getSet(set.id).stats[apple.id]);
   store.recordAnswer(set.id, apple.id, false);
   store.restoreStat(set.id, apple.id, before);
-  assert.deepEqual(store.getSet(set.id).stats[apple.id], before);
+  const { rev, ...restored } = store.getSet(set.id).stats[apple.id];
+  assert.deepEqual(restored, before);
+  assert.ok(rev > 0); // 撤销的时间 (同步时用)
   store.restoreStat(set.id, apple.id, null);
-  assert.equal(store.getSet(set.id).stats[apple.id], undefined);
+  assert.equal(store.getSet(set.id).stats[apple.id].due, undefined); // 又是新词了
 
   storage.setItem(`wengu:cards-session:${set.id}`, '{}');
   storage.setItem(`wengu:learn-goal:${set.id}`, '"cram"');

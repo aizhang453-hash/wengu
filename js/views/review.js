@@ -1,7 +1,7 @@
 // 今天的复习: 到了该复习日子的卡片 (所有卡片集, 或者一个卡片集 / 文件夹), 翻卡片自己说记不记得;
 // 定了计划的卡片集今天的新词也插在里面 (plan.js)。复习每天有上限, 太多时最可能忘的先来
 
-import { h, dialogOpen, icon } from '../dom.js';
+import { h, fill, dialogOpen, icon } from '../dom.js';
 import { stopSpeaking, sayCard } from '../speech.js';
 import { playSound } from '../sound.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
@@ -16,9 +16,19 @@ const PREFS_KEY = 'wengu:review-prefs';
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const MORE = 10; // 「再学几个新词」一次几个
 
-export function renderReview({ store, go }, setId = null) {
-  const scope = setId ? store.getSet(setId) : null;
-  const sets = setId ? store.setsOf(setId) : store.allSets();
+export function renderReview({ store }, setId = null) {
+  // 卡片集这些每次开始、做完时都从 store 现拿: 别的标签页存了、同步回来了, 数据会整个换掉
+  let scope;
+  let sets;
+  let groups; // 定了计划的文件夹 (合起来的): 全部复习时所有的, 只复习一个文件夹时它自己
+  let learnable; // 能学新词的: 定了计划的; 只复习一个卡片集 / 文件夹时, 没定计划也能「再学几个」(文件夹照里面的顺序)
+  function resolve() {
+    scope = setId ? store.getSet(setId) : null;
+    sets = setId ? store.setsOf(setId) : store.allSets();
+    groups = !setId ? store.plannedFolders() : scope?.virtual && scope.plan?.on ? [scope] : [];
+    learnable = setId ? (scope?.virtual ? [scope] : sets.filter((s) => s.kind !== 'quiz')) : [...groups, ...plannedSets(sets)];
+  }
+  resolve();
   const back = scope ? (scope.virtual ? `#/folder/${encodeURIComponent(scope.folderId)}` : `#/set/${encodeURIComponent(scope.id)}`) : '#/';
   const backText = scope ? scope.title || '未命名卡片集' : '首页';
   let prefs = { defFirst: false, sound: true };
@@ -35,10 +45,6 @@ export function renderReview({ store, go }, setId = null) {
     }
   };
 
-  // 定了计划的文件夹 (合起来的): 全部复习时所有的, 只复习一个文件夹时它自己
-  const groups = !setId ? store.plannedFolders() : scope?.virtual && scope.plan?.on ? [scope] : [];
-  // 能学新词的: 定了计划的; 只复习一个卡片集 / 文件夹时, 没定计划也能「再学几个」(文件夹照里面的顺序)
-  const learnable = setId ? (scope?.virtual ? [scope] : sets.filter((s) => s.kind !== 'quiz')) : [...groups, ...plannedSets(sets)];
   let queue = [];
   let total = 0;
   let held = 0; // 超过每天上限、没排进来的
@@ -50,19 +56,26 @@ export function renderReview({ store, go }, setId = null) {
   let freshTotal = 0;
   const sub = h('p', { class: 'muted small review-sub' });
 
+  // 今天的 (每天的上限照算)
+  const todayOf = (cap = store.reviewCap) => todayQueue(sets, { cap, reviewed: reviewedToday(store.allSets()), groups });
+
+  // 计划以外还能学的新词 (卡片集和文件夹都定了计划的, 同一张只算一次); 卡片记在原来的卡片集上
+  function moreCards() {
+    const owner = new Map(sets.flatMap((set) => set.cards.map((c) => [c.id, set])));
+    const seen = new Set();
+    return learnable
+      .flatMap((set) => newCards(set).map((card) => ({ set: owner.get(card.id), card, fresh: true })))
+      .filter((x) => x.set && !seen.has(x.card.id) && seen.add(x.card.id));
+  }
+
   // noCap: 不管每天的上限; more: 计划以外再学几个新词
   function start({ noCap = false, more = 0 } = {}) {
+    resolve();
     if (more) {
-      // 卡片记在原来的卡片集上 (文件夹合起来的找回原来的)
-      const owner = new Map(sets.flatMap((set) => set.cards.map((c) => [c.id, set])));
-      const seen = new Set();
-      queue = learnable
-        .flatMap((set) => newCards(set).map((card) => ({ set: owner.get(card.id), card, fresh: true })))
-        .filter((x) => x.set && !seen.has(x.card.id) && seen.add(x.card.id))
-        .slice(0, more);
-      held = 0;
+      queue = moreCards().slice(0, more);
+      held = todayOf().held; // 超过上限的复习还在, 做完还能接着复习
     } else {
-      const today = todayQueue(sets, { cap: noCap ? Infinity : store.reviewCap, reviewed: reviewedToday(store.allSets()), groups });
+      const today = todayOf(noCap ? Infinity : store.reviewCap);
       queue = mixIn(today.reviews, today.fresh);
       held = today.held;
     }
@@ -177,8 +190,15 @@ export function renderReview({ store, go }, setId = null) {
     draw();
   }
 
+  // 改了每天的上限、复习排法: 正在背的不打断 (只改按钮上的字), 已经做完的重新算一下今天的
+  function settingsChanged() {
+    fill(capBtn, icon('gear', 16), ` 每天最多复习 ${store.reviewCap} 张`);
+    fill(optBtn, store.data.settings.fsrs ? '📈 复习排法: 按我的记录' : '📈 复习排法: 默认');
+    if (!queue.length) start();
+  }
+
   // 复习记录攒了多少, 按自己的记录优化 FSRS 参数
-  const optimizeBtn = (text) => h('button', { class: 'link-btn', onclick: () => openOptimizeDialog({ store, onChanged: () => go(location.hash) }) }, text);
+  const optimizeBtn = (text) => h('button', { class: 'link-btn', onclick: () => openOptimizeDialog({ store, onChanged: settingsChanged }) }, text);
   function logNote() {
     const n = reviewCount(store.data.revlog);
     if (!n) return null;
@@ -204,7 +224,7 @@ export function renderReview({ store, go }, setId = null) {
 
   // 做完了还想背: 不管上限接着复习, 或者计划以外再学几个新词
   function moreButtons() {
-    const left = learnable.reduce((n, set) => n + newToday(set).left, 0);
+    const left = moreCards().length;
     return [
       held ? h('button', { class: 'btn', onclick: () => start({ noCap: true }) }, `接着复习剩下的 ${held} 张`) : null,
       left ? h('button', { class: 'btn', onclick: () => start({ more: MORE }) }, `再学 ${Math.min(MORE, left)} 个新词`) : null,
@@ -212,6 +232,8 @@ export function renderReview({ store, go }, setId = null) {
   }
 
   function finish() {
+    resolve();
+    held = todayOf().held; // 做完以后按现在的算 (复习到上限了, 剩下的都超了)
     const tomorrow = dueTomorrow(sets);
     const backBtn = h('a', { class: 'btn primary', href: back }, `回到${backText}`);
     const heldNote = held ? h('p', {}, `还有 ${held} 张到日子的, 超过了每天最多复习 ${store.reviewCap} 张的上限, 明天先来最可能忘的。想现在接着复习也行。`) : null;
@@ -269,7 +291,9 @@ export function renderReview({ store, go }, setId = null) {
   }
   document.addEventListener('keydown', onKey);
 
-  start();
+  const capBtn = h('button', { class: 'btn small', onclick: () => openCapDialog({ store, onSaved: settingsChanged }) });
+  const optBtn = h('button', { class: 'btn small', onclick: () => openOptimizeDialog({ store, onChanged: settingsChanged }) });
+  settingsChanged();
 
   const options = h(
     'div',
@@ -301,8 +325,8 @@ export function renderReview({ store, go }, setId = null) {
       }),
       ' 音效',
     ),
-    h('button', { class: 'btn small', onclick: () => openCapDialog({ store, onSaved: () => go(location.hash) }) }, icon('gear', 16), ` 每天最多复习 ${store.reviewCap} 张`),
-    h('button', { class: 'btn small', onclick: () => openOptimizeDialog({ store, onChanged: () => go(location.hash) }) }, store.data.settings.fsrs ? '📈 复习排法: 按我的记录' : '📈 复习排法: 默认'),
+    capBtn,
+    optBtn,
   );
 
   return {

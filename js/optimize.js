@@ -17,14 +17,16 @@ const S_MAX = 36500;
 const D_MIN = 1;
 const D_MAX = 10;
 const INIT_S_MAX = 100;
+// 第一次以后的稳定性最小 0.1 天: 排复习用的 ts-fsrs 小于 0.1 的当 0.1 (fsrs-rs 是 0.001), 算的跟用的要一样
+const INIT_S_MIN = 0.1;
 const MIN_PROB = 1e-7;
 const MAX_PROB = 1 - 1e-7;
 const STDDEV = [6.43, 9.66, 17.58, 27.85, 0.57, 0.28, 0.6, 0.12, 0.39, 0.18, 0.33, 0.3, 0.09, 0.16, 0.57, 0.25, 1.03, 0.31, 0.32, 0.14, 0.27];
 const CLAMPS = [
-  [S_MIN, INIT_S_MAX],
-  [S_MIN, INIT_S_MAX],
-  [S_MIN, INIT_S_MAX],
-  [S_MIN, INIT_S_MAX],
+  [INIT_S_MIN, INIT_S_MAX],
+  [INIT_S_MIN, INIT_S_MAX],
+  [INIT_S_MIN, INIT_S_MAX],
+  [INIT_S_MIN, INIT_S_MAX],
   [D_MIN, D_MAX],
   [0.001, 4],
   [0.001, 4],
@@ -170,7 +172,7 @@ export function initialStability(initCards, averageRecall) {
       }
       return sum + Math.abs(s - def) / 16;
     };
-    let low = S_MIN;
+    let low = INIT_S_MIN;
     let high = INIT_S_MAX;
     let best = def;
     for (let k = 0; k < 1000 && high - low > Number.EPSILON; k++) {
@@ -235,7 +237,7 @@ export function smoothAndFill(stability, count) {
     }
     out = [r1, r2, r3, r4];
   }
-  return out.map((x) => clamp(x, S_MIN, INIT_S_MAX));
+  return out.map((x) => clamp(x, INIT_S_MIN, INIT_S_MAX));
 }
 
 // ---- 模型: 一张卡片从头走一遍, 每次隔天复习预测还记得的把握; 要导数时带着对 21 个参数的导数一起走 ----

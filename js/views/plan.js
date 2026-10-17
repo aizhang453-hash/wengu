@@ -43,9 +43,16 @@ export function queueFor(store, set) {
 export function planPanel({ store, go }, set) {
   const info = newToday(set);
   const plan = planOf(set);
-  const { reviews, fresh } = queueFor(store, set);
+  const { reviews, fresh, held } = queueFor(store, set);
   const redraw = () => go(location.hash);
   const text = todayText(reviews.length, fresh.length);
+  const href = `#/review/${encodeURIComponent(set.id)}`;
+  // 今天要背的; 复习到了每天的上限还剩的, 也能接着来
+  const startBtn = text
+    ? h('a', { class: 'btn primary', href }, `开始今天的: ${text}`)
+    : held
+      ? h('a', { class: 'btn', href, title: `超过了每天最多复习 ${store.reviewCap} 张的上限` }, `复习够了, 还有 ${held} 张 · 接着复习`)
+      : null;
   // 卡片集在定了计划的文件夹里: 新词从文件夹一起出, 这里就不单独定了
   const viaFolder = !set.virtual && !info.on ? store.foldersOf(set.id).find((f) => f.plan?.on) : null;
   if (viaFolder) {
@@ -62,7 +69,7 @@ export function planPanel({ store, go }, set) {
         'div',
         { class: 'row' },
         h('a', { class: 'btn', href: `#/folder/${encodeURIComponent(viaFolder.id)}` }, '去文件夹'),
-        text ? h('a', { class: 'btn primary', href: `#/review/${encodeURIComponent(set.id)}` }, `开始今天的: ${text}`) : null,
+        startBtn,
       ),
     );
   }
@@ -87,7 +94,7 @@ export function planPanel({ store, go }, set) {
       'div',
       { class: 'row' },
       info.on || info.left ? h('button', { class: 'btn', onclick: () => openPlanDialog({ store, set, onSaved: redraw }) }, info.on ? '改计划' : '定计划') : null,
-      text ? h('a', { class: 'btn primary', href: `#/review/${encodeURIComponent(set.id)}` }, `开始今天的: ${text}`) : info.on ? h('span', { class: 'done-chip' }, '今天的背完了 ✓') : null,
+      startBtn ?? (info.on ? h('span', { class: 'done-chip' }, '今天的背完了 ✓') : null),
     ),
   );
 }
@@ -106,7 +113,19 @@ function chips(options, value, onpick) {
   return h('div', { class: 'chips', role: 'group' }, btns);
 }
 
-const intOf = (el, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(el.value)) || lo));
+// 框里的整数 (空着、乱填的用 fallback)
+const intOf = (el, lo, hi, fallback) => {
+  const n = Math.round(Number(el.value));
+  return el.value.trim() === '' || !Number.isFinite(n) ? fallback : Math.min(hi, Math.max(lo, n));
+};
+
+// 在框里按回车 = 点保存
+const enterTo = (save) => (e) => {
+  if (e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault();
+    save();
+  }
+};
 
 // 定计划: 每天固定几个, 或者按考试日期算; 新词的顺序
 export function openPlanDialog({ store, set, onSaved }) {
@@ -114,9 +133,9 @@ export function openPlanDialog({ store, set, onSaved }) {
   let mode = plan.exam ? 'exam' : 'fixed';
   let order = plan.order;
   let seed = plan.seed || newSeed();
-  const perDayEl = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_PER_DAY, value: plan.perDay, inputmode: 'numeric', 'aria-label': '每天几个新词', oninput: () => preview() });
-  const examEl = h('input', { class: 'input count wide', type: 'date', value: plan.exam, min: today(), 'aria-label': '考试日期', oninput: () => preview() });
-  const restEl = h('input', { class: 'input count', type: 'number', min: 0, max: MAX_REST, value: plan.rest, inputmode: 'numeric', 'aria-label': '考前几天只复习', oninput: () => preview() });
+  const perDayEl = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_PER_DAY, value: plan.perDay, inputmode: 'numeric', 'aria-label': '每天几个新词', oninput: () => preview(), onkeydown: enterTo(() => save()) });
+  const examEl = h('input', { class: 'input count wide', type: 'date', value: plan.exam, min: today(), 'aria-label': '考试日期', oninput: () => preview(), onkeydown: enterTo(() => save()) });
+  const restEl = h('input', { class: 'input count', type: 'number', min: 0, max: MAX_REST, value: plan.rest, inputmode: 'numeric', 'aria-label': '考前几天只复习', oninput: () => preview(), onkeydown: enterTo(() => save()) });
   const fixedBox = h('div', { class: 'plan-field' }, h('label', {}, '每天 ', perDayEl, ' 个新词'));
   const examBox = h(
     'div',
@@ -129,7 +148,7 @@ export function openPlanDialog({ store, set, onSaved }) {
   const previewEl = h('p', { class: 'plan-preview' });
 
   const draft = () =>
-    cleanPlan({ on: true, perDay: intOf(perDayEl, 1, MAX_PER_DAY), exam: mode === 'exam' ? examEl.value : '', rest: intOf(restEl, 0, MAX_REST), order, seed });
+    cleanPlan({ on: true, perDay: intOf(perDayEl, 1, MAX_PER_DAY, plan.perDay), exam: mode === 'exam' ? examEl.value : '', rest: intOf(restEl, 0, MAX_REST, plan.rest), order, seed });
 
   function preview() {
     fixedBox.hidden = mode === 'exam';
@@ -217,7 +236,13 @@ export function openPlanDialog({ store, set, onSaved }) {
 
 // 每天最多复习几张 (所有卡片集一起算)
 export function openCapDialog({ store, onSaved }) {
-  const input = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_REVIEW_CAP, value: store.reviewCap, inputmode: 'numeric', 'aria-label': '每天最多复习几张' });
+  const save = () => {
+    store.setReviewCap(intOf(input, 1, MAX_REVIEW_CAP, store.reviewCap));
+    d.close();
+    toast(`每天最多复习 ${store.reviewCap} 张`);
+    onSaved?.();
+  };
+  const input = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_REVIEW_CAP, value: store.reviewCap, inputmode: 'numeric', 'aria-label': '每天最多复习几张', onkeydown: enterTo(save) });
   const d = openDialog({
     title: '每天最多复习几张',
     body: [
@@ -226,19 +251,7 @@ export function openCapDialog({ store, onSaved }) {
     ],
     footer: [
       h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
-      h(
-        'button',
-        {
-          class: 'btn primary',
-          onclick: () => {
-            store.setReviewCap(intOf(input, 1, MAX_REVIEW_CAP));
-            d.close();
-            toast(`每天最多复习 ${store.reviewCap} 张`);
-            onSaved?.();
-          },
-        },
-        '保存',
-      ),
+      h('button', { class: 'btn primary', onclick: save }, '保存'),
     ],
   });
   input.select();

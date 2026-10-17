@@ -8,12 +8,12 @@
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
 //   文件夹                            听最后改过的那边 (每天的计划听后改的)
 //   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
-//   翻卡自评的记录 (revlog)            两边的合起来
+//   翻卡自评的记录 (revlog)            两边的合起来, 哪边撤销了的 (undone) 去掉
 //   每天的计划、复习上限              听后改的那边
 
 import { mergeRuns } from './quiz.js';
 import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
-import { mergeLogs } from './revlog.js';
+import { mergeLogs, subtractLogs } from './revlog.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -34,8 +34,9 @@ function mergeStats(a = {}, b = {}) {
       out[id] = s;
       continue;
     }
-    const ta = mine.at ?? 0;
-    const tb = s.at ?? 0;
+    // 最后答的、撤销的那边 (撤销了的比撤销以前同步出去的新)
+    const ta = Math.max(mine.at ?? 0, mine.rev ?? 0);
+    const tb = Math.max(s.at ?? 0, s.rev ?? 0);
     if (tb > ta || (tb === ta && s.right + s.wrong > mine.right + mine.wrong)) out[id] = s;
   }
   return out;
@@ -87,6 +88,7 @@ function mergeList(a, b, mergeOne, deleted, prefix = '') {
 }
 
 export function mergeData(local, remote) {
+  const undone = mergeLogs(local.undone, remote.undone);
   const deleted = { ...local.deleted };
   for (const [id, t] of Object.entries(remote.deleted ?? {})) deleted[id] = Math.max(deleted[id] ?? 0, t);
   const activity = { ...local.activity };
@@ -98,7 +100,8 @@ export function mergeData(local, remote) {
     mistakes: mergeList(local.mistakes ?? [], remote.mistakes ?? [], mergeMistake, deleted, MISTAKE_PREFIX),
     activity,
     deleted,
-    revlog: mergeLogs(local.revlog, remote.revlog),
+    undone,
+    revlog: subtractLogs(mergeLogs(local.revlog, remote.revlog), undone),
     settings: mergeSettings(local.settings, remote.settings),
   };
 }

@@ -1,7 +1,7 @@
 // Anki: 读卡组 (.apkg, 连图片和声音), 读 / 写 Anki 的文字格式 (.txt)。
 // .apkg 是一个 zip: 里面一个 SQLite 数据库 (新版 Anki 还用 zstd 压缩过), 加上图片声音文件。
 
-import { readZip } from './zip.js';
+import { readZip, readZipFile } from './zip.js';
 import { SQLiteDB } from './sqlite.js';
 import { parseCsv } from './csv.js';
 import { parseMarks } from './rich.js';
@@ -23,7 +23,7 @@ export function decodeEntities(s) {
 export function mediaRefs(html) {
   const s = String(html ?? '');
   const images = [...s.matchAll(/<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)].map((m) => decodeEntities(m[1] ?? m[2] ?? m[3]));
-  const sounds = [...s.matchAll(/\[sound:([^\]]+)\]/g)].map((m) => m[1]);
+  const sounds = [...s.matchAll(/\[sound:([^\]]+)\]/g)].map((m) => decodeEntities(m[1]));
   return { images, sounds };
 }
 
@@ -192,6 +192,7 @@ export function reviewsOf(rows) {
     const at = Number(r.id);
     if (type === 4 && Number(r.ivl) === 0) out = [];
     if (!(type >= 0 && type <= 3) || !(ease >= 1 && ease <= 4) || !(at > 0)) continue;
+    if (type === 3 && Number(r.factor) === 0) continue; // 筛选牌组里「不改排期」的突击复习 (Anki 自己的 FSRS 也不算)
     out.push({ at, rating: ease });
   }
   return out;
@@ -221,11 +222,12 @@ function noteReviews(db) {
   return out;
 }
 
+// bytes: 整个文件 (Uint8Array), 或者浏览器的 File / Blob (很大的卡组: 用到哪个文件读哪一段, 不整个读进来)
 // 返回 { notes: [{ id, fields: [html], model, fieldNames, deck, reviews: [{ at, rating }] }], media: { has(name), get(name) → Blob | null } }
 export async function readApkg(bytes) {
   let zip;
   try {
-    zip = readZip(bytes);
+    zip = typeof Blob !== 'undefined' && bytes instanceof Blob ? await readZipFile(bytes) : readZip(bytes);
   } catch {
     throw new AnkiError('不是 Anki 卡组 (.apkg)');
   }
@@ -263,7 +265,8 @@ export async function readApkg(bytes) {
     // 没有就算了, 字段和牌组没名字
   }
   const deckOf = new Map();
-  for (const c of db.rows('cards')) if (!deckOf.has(String(c.nid))) deckOf.set(String(c.nid), String(c.did));
+  // 在筛选牌组 (自定义学习) 里的卡片: 算回原来的牌组 (odid)
+  for (const c of db.rows('cards')) if (!deckOf.has(String(c.nid))) deckOf.set(String(c.nid), String(Number(c.odid) ? c.odid : c.did));
 
   const reviews = noteReviews(db);
   const notes = db

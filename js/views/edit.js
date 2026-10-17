@@ -67,6 +67,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   // 每天背新词时先背哪些 (plan.js): 照卡片的顺序 (导入的就是文件里的顺序), 或者打乱
   const orderSel = h('select', { class: 'input', onchange: markDirty }, h('option', { value: 'set' }, '按卡片的顺序'), h('option', { value: 'random' }, '随机'));
   orderSel.value = planOf(draft).order;
+  const orderAtOpen = orderSel.value;
 
   // ---- 卡片一行一行 ----
   const rowsEl = h('ol', { class: 'edit-rows' });
@@ -514,8 +515,13 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   // 从 Anki 搬来的复习记录 (卡片 id → [{ at, rating }]), 保存以后接上
   const importedReviews = new Map();
 
+  // 存不下的时候说清楚 (size: 一共要存多少字)
+  const tooBig = (size) =>
+    `存不下了: 浏览器给的空间满了${size ? ` (这些一共要 ${(size / 1e6).toFixed(1)} 百万字, 浏览器一般最多给 500 万字左右, iPhone 上更少)` : ''}。可以少导入几个牌组 (上面「牌组」选一个), 或者先删掉用不着的卡片集。`;
+  const mediaNote = (failed) => (failed ? `; ${failed} 个图片 / 声音拿不到, 跳过了` : '');
+
   // 导入的卡片加到最后 (cards: [{ term, def, image?, termAudio?, defAudio?, reviews? }])
-  function addImported(cards, title = '') {
+  function addImported(cards, title = '', failed = 0) {
     // 后面空着的行先去掉, 再加
     while (rows.length && isBlank(rows.at(-1))) {
       rows.pop().li.remove();
@@ -529,7 +535,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     if (title && !titleInput.value.trim()) titleInput.value = title;
     markDirty();
     importBox.open = false;
-    toast(`加进来 ${cards.length} 张卡片, 记得保存`);
+    toast(`加进来 ${cards.length} 张卡片, 记得保存${mediaNote(failed)}`);
     rows.at(-cards.length)?.termEl.scrollIntoView({ block: 'center' });
   }
 
@@ -543,40 +549,44 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       if (title && !titleInput.value.trim()) (titleInput.value = title), markDirty();
       pasteEl.focus();
     },
-    onCards: (cards, title, { random = false } = {}) => {
+    onCards: (cards, title, { random = false, failed = 0 } = {}) => {
       if (random) orderSel.value = 'random';
-      addImported(cards, title);
+      addImported(cards, title, failed);
     },
-    onSets: (list, { random = false } = {}) => {
+    onSets: (list, { random = false, failed = 0 } = {}) => {
       const made = [];
       const folders = [];
-      let full = false;
-      // Anki 的「大牌组::小牌组」: 大牌组建成文件夹, 小牌组是里面的卡片集
-      for (const entry of deckFolders(list)) {
-        const ids = [];
-        try {
-          for (const g of entry.sets) {
-            const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
-            const set = store.putSet({ title: g.title || '未命名卡片集', cards });
-            // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
-            store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
-            if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
-            made.push(set);
-            ids.push(set.id);
+      // 一起存: 存不下就全不要 (不会只建了一半、文件夹没建、复习记录没接上)
+      try {
+        store.transaction(() => {
+          // Anki 的「大牌组::小牌组」: 大牌组建成文件夹, 小牌组是里面的卡片集
+          for (const entry of deckFolders(list)) {
+            const ids = [];
+            for (const g of entry.sets) {
+              const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
+              const set = store.putSet({ title: g.title || '未命名卡片集', cards });
+              // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
+              store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
+              if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
+              made.push(set);
+              ids.push(set.id);
+            }
+            if (entry.folder && ids.length) {
+              const folder = store.putFolder({ ...makeFolder(entry.folder), setIds: ids });
+              if (random) store.setPlan(FOLDER_PREFIX + folder.id, { order: 'random', seed: newSeed() });
+              folders.push(folder);
+            }
           }
-        } catch {
-          full = true;
-        }
-        if (entry.folder && ids.length) {
-          const folder = store.putFolder({ ...makeFolder(entry.folder), setIds: ids });
-          if (random) store.setPlan(FOLDER_PREFIX + folder.id, { order: 'random', seed: newSeed() });
-          folders.push(folder);
-        }
-        if (full) break;
+        });
+      } catch (e) {
+        console.warn(e);
+        toast(tooBig(e.size));
+        return;
       }
-      if (full) toast(made.length ? `建好了 ${made.length} 个, 后面的存不下了: 浏览器给的空间满了` : '存不下了: 浏览器给的空间满了');
       if (!made.length) return;
-      if (!full) toast(folders.length === 1 ? `建好了 ${made.length} 个卡片集, 放进文件夹「${folders[0].name}」` : `建好了 ${made.length} 个卡片集${folders.length ? `, 放进 ${folders.length} 个文件夹` : ''}`);
+      toast(
+        (folders.length === 1 ? `建好了 ${made.length} 个卡片集, 放进文件夹「${folders[0].name}」` : `建好了 ${made.length} 个卡片集${folders.length ? `, 放进 ${folders.length} 个文件夹` : ''}`) + mediaNote(failed),
+      );
       if (!existing && rows.every(isBlank)) dirty = false;
       const inOne = folders.length === 1 && folders[0].setIds.length === made.length;
       go(inOne ? `#/folder/${encodeURIComponent(folders[0].id)}` : made.length === 1 ? `#/set/${encodeURIComponent(made[0].id)}` : '#/');
@@ -732,15 +742,19 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       for (const key of ['known', 'starred', 'learn', 'stats', 'best', 'plan']) set[key] = latest[key];
     }
     const plan = planOf(set);
-    if (orderSel.value !== plan.order) set.plan = { ...plan, order: orderSel.value, seed: orderSel.value === 'random' ? newSeed() : plan.seed, at: Date.now() };
+    // 新词的顺序: 在这里改了才算 (别的地方、别的设备改过的不盖掉)
+    if (orderSel.value !== orderAtOpen && orderSel.value !== plan.order) set.plan = { ...plan, order: orderSel.value, seed: orderSel.value === 'random' ? newSeed() : plan.seed, at: Date.now() };
+    // 卡片和导入时带着的 Anki 复习记录一起存 (保存前删掉的不算), 存不下就都不存
+    let resumed = 0;
     try {
-      store.putSet(set);
-    } catch {
-      toast('存不下了: 浏览器给的空间满了');
+      resumed = store.transaction(() => {
+        store.putSet(set);
+        return importedReviews.size ? store.importReviews(set.id, [...importedReviews]) : 0;
+      });
+    } catch (e) {
+      toast(tooBig(e.size));
       return;
     }
-    // 导入时带着 Anki 复习记录的卡片: 接着 Anki 的进度排复习 (保存前删掉的不算)
-    const resumed = importedReviews.size ? store.importReviews(set.id, [...importedReviews]) : 0;
     importedReviews.clear();
     dirty = false;
     toast(resumed ? `保存好了, ${resumed} 张接着 Anki 的进度排复习` : '保存好了');
@@ -800,9 +814,11 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     title: existing ? `编辑 ${existing.title}` : '新建卡片集',
     el,
     focus: openImport ? pasteEl : existing ? null : titleInput,
-    isDirty: () => dirty,
-    canLeave: () => !dirty || confirm('改的东西还没保存, 确定要走吗?'),
+    // 正在存导入的图片声音时也算没保存 (走了就不导入了)
+    isDirty: () => dirty || fileImport.busy(),
+    canLeave: () => (!dirty && !fileImport.busy()) || confirm(fileImport.busy() ? '还在导入, 走了就不导入了。确定要走吗?' : '改的东西还没保存, 确定要走吗?'),
     cleanup: () => {
+      fileImport.cancel();
       document.removeEventListener('keydown', onEsc);
       recording?.stop();
       player?.pause();

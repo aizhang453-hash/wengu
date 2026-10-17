@@ -194,9 +194,10 @@ export function renderCards({ store }, id) {
     const card = deck[index];
     // 记下标之前的样子, 撤销时恢复 (会不会、答对答错次数、下次复习的日子)
     const stat = set.stats[card.id] ? structuredClone(set.stats[card.id]) : null;
-    history.push({ id: card.id, known, wasKnown: set.known.includes(card.id), stat });
+    const entry = { id: card.id, known, wasKnown: set.known.includes(card.id), stat };
+    history.push(entry);
     store.setKnown(set.id, card.id, known);
-    store.recordAnswer(set.id, card.id, known, { selfRated: true }); // 翻卡自评: 用 FSRS 排进以后的复习
+    entry.code = store.recordAnswer(set.id, card.id, known, { selfRated: true }); // 翻卡自评: 用 FSRS 排进以后的复习
     busy = true;
     cardEl.classList.add(known ? 'fly-right' : 'fly-left');
     setTimeout(() => {
@@ -212,7 +213,7 @@ export function renderCards({ store }, id) {
     if (history.length === 0) return;
     const last = history.pop();
     store.setKnown(set.id, last.id, last.wasKnown);
-    if ('stat' in last) store.restoreStat(set.id, last.id, last.stat);
+    if ('stat' in last) store.restoreStat(set.id, last.id, last.stat, last.code);
     if (!finished) index = Math.max(0, index - 1);
     finished = false;
     flipped = false;

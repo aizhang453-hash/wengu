@@ -242,6 +242,9 @@ test('Anki 卡组: 按字段名猜词和解释, 只有图片 / 声音的字段�
   assert.deepEqual(guessColumns(rows, false, { names: ['A', 'B', 'C', 'D', 'E', 'F'], html: true }), { term: 0, def: 3, width: 6 });
   const [card] = buildCards(rows, { term: 0, def: 3, extra: 4, html: true });
   assert.deepEqual([card.term, card.def, card.image, card.termAudio, card.defAudio], ['agree', 'To **agree** is to say yes.\nI agree with you.', 'agree.jpg', 'agree.mp3', '']);
+  // 有字段名: Sound_Meaning 是解释的发音, Sound 是词的
+  const [named] = buildCards(rows, { term: 0, def: 3, html: true, names });
+  assert.deepEqual([named.termAudio, named.defAudio], ['agree.mp3', 'agree_m.mp3']);
   // 自己选了图片那个字段当解释, 照旧
   assert.equal(buildCards(rows, { term: 0, def: 1, html: true })[0].image, 'agree.jpg');
 });

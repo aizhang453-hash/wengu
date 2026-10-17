@@ -26,6 +26,8 @@ test('Anki 的复习记录: 手动改的、改排期的不算; 重置以前的�
     { id: T0 + 9 * DAY, type: 1, ease: 2, ivl: 9 },
   ];
   assert.deepEqual(days(reviewsOf(rows)), [[0, 3], [5, 3], [9, 2]]);
+  // 筛选牌组里「不改排期」的突击复习 (factor 0) 也不算; 改排期的算
+  assert.deepEqual(days(reviewsOf([...rows, { id: T0 + 7 * DAY + 1, type: 3, ease: 3, ivl: 0, factor: 0 }, { id: T0 + 8 * DAY, type: 3, ease: 4, ivl: 5, factor: 2500 }])), [[0, 3], [5, 3], [8, 4], [9, 2]]);
   const reset = [...rows, { id: T0 + 10 * DAY, type: 4, ease: 0, ivl: 0 }, { id: T0 + 11 * DAY, type: 0, ease: 1, ivl: 0 }];
   assert.deepEqual(days(reviewsOf(reset)), [[11, 1]]);
 });
@@ -36,6 +38,17 @@ test('读带学习进度的 .apkg: 每个笔记一份记录, 正反两张的用�
   assert.deepEqual(days(notes[1].reviews), [[20, 1], [20, 3], [22, 3]]); // 第 10 天重置过
   assert.deepEqual(days(notes[2].reviews), [[0, 3], [8, 1]]);
   assert.deepEqual(notes[3].reviews, []); // 新卡片
+});
+
+test('很大的卡组: 用浏览器的 File 读, 不整个读进来, 读出来一样', async () => {
+  const bytes = fixture('anki-history.apkg');
+  const whole = await readCardFile(fileOf('vocab.apkg', bytes));
+  const file = new File([bytes], 'vocab.apkg');
+  const lazy = await readCardFile(file);
+  assert.deepEqual(lazy.sheets.map((s) => [s.name, s.rows.length]), whole.sheets.map((s) => [s.name, s.rows.length]));
+  assert.deepEqual(lazy.history, whole.history);
+  const name = [...whole.sheets[0].rows.flat().join(' ').matchAll(/\[sound:([^\]]+)\]|src="([^"]+)"/g)].map((m) => m[1] ?? m[2])[0];
+  if (name) assert.deepEqual(new Uint8Array(await (await lazy.media.get(name)).arrayBuffer()), new Uint8Array(await (await whole.media.get(name)).arrayBuffer()));
 });
 
 test('导入 .apkg 变成卡片时带着复习记录, 也告诉一共多少', async () => {

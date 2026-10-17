@@ -2,21 +2,24 @@
 // 从 Anki 搬来的复习记录也放这儿。选择题能蒙、能靠选项认出来, 游戏、Wordle 也不是真的自己想起来的, 不记。
 // 排复习只看每张卡片的当前状态 (srs.js); 攒够了 (几百上千次) 以后, 拿这些记录给 FSRS 按自己的情况优化参数 (optimize.js)。
 //   data.revlog = { 卡片 id: '一张卡片的记录 (压缩过的字)' }
-// 一次复习是一个数: 分钟数 × 4 + (评分 - 1)。评分照 FSRS / Anki: 1 重来 (Again), 2 困难 (Hard), 3 良好 (Good), 4 简单 (Easy);
+// 一次复习是一个数: 秒数 × 4 + (评分 - 1)。评分照 FSRS / Anki: 1 重来 (Again), 2 困难 (Hard), 3 良好 (Good), 4 简单 (Easy);
 // 这里翻卡只有记得 / 忘了 (3 和 1), 从 Anki 搬来的四个都有。
+// (v1.22 以前按分钟记, 一分钟里忘了两次只剩一次、顺序也会乱; 读到老的 (数小于 2e9) 换成秒的)
 // 一张卡片的记录从早到晚, 存成「第一个数, 跟上一个差多少, 差多少……」的 36 进制, 用 . 隔开 —— Anki 搬来的动不动几万次,
-// 浏览器给的地方只有几 MB, 这样比直接存数字省一半。
+// 浏览器给的地方只有几 MB, 这样比直接存数字省四成多。
 
 export const MAX_PER_ITEM = 200; // 一张卡片最多留最近 200 次 (优化参数够用了)
 export const AGAIN = 1;
 export const GOOD = 3;
-const MINUTE = 60 * 1000;
+const SECOND = 1000;
+const LEGACY = 2e9; // 按分钟记的数都比这个小 (到 2900 年), 按秒记的都比这个大 (1985 年以后)
 
-export const encodeReview = (t, rating) => Math.floor(t / MINUTE) * 4 + (rating - 1);
-export const decodeReview = (code) => ({ at: Math.floor(code / 4) * MINUTE, rating: (code % 4) + 1 });
+export const encodeReview = (t, rating) => Math.floor(t / SECOND) * 4 + (rating - 1);
+export const decodeReview = (code) => ({ at: Math.floor(code / 4) * SECOND, rating: (code % 4) + 1 });
 
 const isCode = (x) => Number.isSafeInteger(x) && x > 0;
-const tidy = (list) => [...new Set(list.filter(isCode))].sort((a, b) => a - b).slice(-MAX_PER_ITEM);
+const toSeconds = (code) => (code < LEGACY ? Math.floor(code / 4) * 60 * 4 + (code % 4) : code);
+const tidy = (list) => [...new Set(list.filter(isCode).map(toSeconds))].sort((a, b) => a - b).slice(-MAX_PER_ITEM);
 
 // 一串数 ↔ 存着的字
 export function pack(codes) {
@@ -27,15 +30,18 @@ export function pack(codes) {
 export function unpack(text) {
   if (Array.isArray(text)) return tidy(text); // v1.17 存的是数字
   let sum = 0;
-  return String(text ?? '')
+  const list = String(text ?? '')
     .split('.')
     .filter(Boolean)
     .map((part) => (sum += parseInt(part, 36)));
+  return list.length && list[0] < LEGACY ? tidy(list) : list;
 }
 
-// 记一次 (直接改 log)
+// 记一次 (直接改 log), 返回记下的那个数 (撤销时去掉它)
 export function addReview(log, key, t, correct) {
-  log[key] = pack([...unpack(log[key]), encodeReview(t, correct ? GOOD : AGAIN)]);
+  const code = encodeReview(t, correct ? GOOD : AGAIN);
+  log[key] = pack([...unpack(log[key]), code]);
+  return code;
 }
 
 // 一下记好几次 (从 Anki 搬来的): reviews = [{ at, rating }]
@@ -43,13 +49,38 @@ export function addReviews(log, key, reviews) {
   log[key] = pack([...unpack(log[key]), ...reviews.filter((r) => r.rating >= 1 && r.rating <= 4).map((r) => encodeReview(r.at, r.rating))]);
 }
 
-// 撤销: 去掉最后一次
-export function dropLastReview(log, key) {
+// 撤销: 去掉记下的那一次 (code); 没给就去掉最后一次。返回去掉的那个数
+export function dropReview(log, key, code = null) {
   const list = unpack(log[key]);
-  if (!list.length) return;
-  list.pop();
+  const i = code === null ? list.length - 1 : list.indexOf(toSeconds(code));
+  if (i < 0) return null;
+  const [dropped] = list.splice(i, 1);
   if (list.length) log[key] = pack(list);
   else delete log[key];
+  return dropped;
+}
+
+// 去掉 b 里有的 (撤销了的, 同步时别从另一台设备又合回来)
+export function subtractLogs(a = {}, b = {}) {
+  const out = {};
+  for (const [key, text] of Object.entries(a)) {
+    const drop = new Set(unpack(b[key]));
+    const list = drop.size ? unpack(text).filter((c) => !drop.has(c)) : null;
+    if (!list) out[key] = text;
+    else if (list.length) out[key] = pack(list);
+  }
+  return out;
+}
+
+// 只留 since 以后的 (撤销记录留 120 天就够了)
+export function recentLog(log = {}, since) {
+  const min = encodeReview(since, 1);
+  const out = {};
+  for (const [key, text] of Object.entries(log)) {
+    const list = unpack(text).filter((c) => c >= min);
+    if (list.length) out[key] = pack(list);
+  }
+  return out;
 }
 
 // 存着的、同步来的、备份里的: 只留像记录的 (v1.17 的数字数组也认, 换成压缩的)
@@ -81,16 +112,19 @@ export function historyOf(log, key) {
 }
 
 // 从第一次背起的完整记录 (优化参数、换参数以后重算记忆状态用), 不完整的返回 null:
-// 卡片第一次排进复习的时间 (stats.first) 就是记录里的第一次, 最后一次答的 (stats.at) 就是记录里的最后一次。
-// 没记 first 的 (v1.19 以前开始背的、v1.18 从 Anki 搬来的): 答过的次数跟记录一样多才算 (有记录以前就背过的会多)。
+// 翻卡自评了几次 (stats.n) 跟记录一样多; 第一次排进复习的时间 (stats.first) 就是记录里的第一次;
+// 最后一次答的 (stats.at) 就是记录里的最后一次。
+// 没记 n、first 的 (v1.19 以前开始背的、v1.18 从 Anki 搬来的): 答过的次数跟记录一样多才算 (有记录以前就背过的会多)。
 // 有记录以前就背过的 (v1.17 以前)、太久的被挤掉的 (只留 200 次)、两台设备没合好的都不算
 export function fullHistory(stat, log, key) {
   if (!(stat?.at > 0)) return null;
   const list = historyOf(log, key);
   if (!list.length) return null;
-  const minute = (t) => Math.floor(t / MINUTE);
-  const start = stat.first > 0 ? minute(list[0].at) === minute(stat.first) : stat.right + stat.wrong === list.length;
-  return start && minute(list.at(-1).at) === minute(stat.at) ? list : null;
+  // 同一刻: 老记录只记到分钟 (正好在整分), 那就比分钟
+  const same = (logged, t) => Math.floor(logged / SECOND) === Math.floor(t / SECOND) || (logged % 60000 === 0 && Math.floor(t / 60000) === logged / 60000);
+  if (stat.n > 0 && stat.n !== list.length) return null;
+  const start = stat.first > 0 ? same(list[0].at, stat.first) : stat.n > 0 || stat.right + stat.wrong === list.length;
+  return start && same(list.at(-1).at, stat.at) ? list : null;
 }
 
 // 所有卡片集里有完整记录的卡片的记录: [[{ at, rating }]]
