@@ -6,7 +6,7 @@
 // 复习也有上限 (每天最多几张, 所有卡片集一起算), 太多时先来最可能忘的; 今天看过、忘了又到时候的不算上限。
 // 新词算「今天学的」: 第一次翻卡自评在今天 (stats.first), 在单词卡里翻的也算。
 
-import { DAY, startOfDay, retrievability, isDue } from './srs.js';
+import { DAY, startOfDay, retrievability, isDue, isSuspended, isBuried } from './srs.js';
 
 export const DEFAULT_PER_DAY = 20;
 export const MAX_PER_DAY = 500;
@@ -59,10 +59,10 @@ export function inPlanOrder(set, list) {
   return [...list].sort((a, b) => key.get(a.id) - key.get(b.id));
 }
 
-// 还没背过的卡片, 照计划的顺序
-export function newCards(set) {
+// 还没背过的卡片, 照计划的顺序 (暂停的不要; 今天说了「明天再说」的今天不要, 后面的补上)
+export function newCards(set, now = Date.now()) {
   const stats = set.stats; // 文件夹合起来的每次读都要现算, 只读一次
-  return inPlanOrder(set, set.cards.filter((c) => isNew(stats[c.id])));
+  return inPlanOrder(set, set.cards.filter((c) => isNew(stats[c.id]) && !isSuspended(stats[c.id]) && !isBuried(stats[c.id], now)));
 }
 
 // 考试那天 0 点
@@ -84,8 +84,9 @@ export function newToday(set, now = Date.now()) {
   const stats = set.stats;
   for (const card of set.cards) {
     const stat = stats[card.id];
-    if (isNew(stat)) left++;
-    else if (stat.first >= today0) learned++;
+    if (isNew(stat)) {
+      if (!isSuspended(stat)) left++;
+    } else if (stat.first >= today0) learned++;
   }
   let mode = 'fixed';
   let perDay = plan.perDay;
@@ -143,7 +144,7 @@ export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, r
   for (const set of [...sets, ...groups]) {
     const { today } = newToday(set, now);
     if (!today) continue;
-    for (const card of newCards(set).slice(0, today)) {
+    for (const card of newCards(set, now).slice(0, today)) {
       const home = set.virtual ? owner.get(card.id) : set;
       if (!home || seen.has(card.id)) continue;
       seen.add(card.id);

@@ -111,7 +111,8 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const images = cards.filter((c) => c.image).length;
       const sounds = cards.filter((c) => c.termAudio || c.defAudio).length;
       const noDef = cards.filter((c) => !c.def).length;
-      const extras = [images ? `${images} 张带图片` : '', sounds ? `${sounds} 张带声音` : '', noDef ? `${noDef} 张没有解释` : ''].filter(Boolean);
+      const suspended = cards.filter((c) => c.suspended).length;
+      const extras = [images ? `${images} 张带图片` : '', sounds ? `${sounds} 张带声音` : '', noDef ? `${noDef} 张没有解释` : '', suspended ? `${suspended} 张在 Anki 里暂停了, 这里也暂停` : ''].filter(Boolean);
       // Anki 卡组: 带没带学习进度 (复习记录)
       const withReviews = cards.filter((c) => c.reviews);
       const reviewCount = withReviews.reduce((n, c) => n + c.reviews.length, 0);

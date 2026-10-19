@@ -2,6 +2,7 @@
 
 import { h, fill, openDialog, toast, today } from '../dom.js';
 import { planOf, newToday, todayQueue, reviewedToday, shareOf, newSeed, examTime, cleanPlan, MAX_PER_DAY, MAX_REST, MAX_REVIEW_CAP } from '../plan.js';
+import { DAY, startOfDay, intervalRatio, cleanRetention, DEFAULT_RETENTION, MIN_RETENTION, MAX_RETENTION } from '../srs.js';
 
 export function dateText(t, now = Date.now()) {
   const d = new Date(t);
@@ -10,6 +11,18 @@ export function dateText(t, now = Date.now()) {
 }
 
 const num = (n) => n.toLocaleString('zh-CN');
+
+// 多久以后 (按钮上的「3 天后」): 当天的按分钟, 以后的按天, 再久按月、年
+export function laterText(due, now = Date.now()) {
+  if (due - now < DAY / 2 && startOfDay(due) === startOfDay(now)) return `${Math.max(1, Math.round((due - now) / 60000))} 分钟后`;
+  const days = Math.max(1, Math.round((startOfDay(due) - startOfDay(now)) / DAY));
+  const one = (x) => String(Math.round(x * 10) / 10);
+  if (days < 31) return days === 1 ? '明天' : `${days} 天后`;
+  if (days < 365) return `${one(days / 30)} 个月后`;
+  return `${one(days / 365)} 年后`;
+}
+
+export const percent = (r) => `${Math.round(r * 100)}%`;
 
 // 今天的: 「复习 34 张 + 新词 20 个」
 export function todayText(reviews, fresh) {
@@ -234,6 +247,70 @@ export function openPlanDialog({ store, set, onSaved }) {
         : null,
       h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
       h('button', { class: 'btn primary', onclick: save }, plan.on ? '保存' : '开始按计划背'),
+    ],
+  });
+  preview();
+  return d;
+}
+
+// 想记住的把握 (Anki 的 desired retention): 到该复习那天还记得的把握, 越高复习得越勤
+export function openRetentionDialog({ store, onSaved }) {
+  let value = store.retention;
+  const input = h('input', {
+    class: 'retention-range',
+    type: 'range',
+    min: MIN_RETENTION * 100,
+    max: MAX_RETENTION * 100,
+    step: 1,
+    value: Math.round(value * 100),
+    'aria-label': '想记住的把握',
+    oninput: () => {
+      value = cleanRetention(Number(input.value) / 100);
+      preview();
+    },
+  });
+  const shown = h('strong', { class: 'retention-value' });
+  const previewEl = h('p', { class: 'plan-preview' });
+  const presets = [
+    [0.85, '85% 省时间'],
+    [0.9, '90% 默认'],
+    [0.95, '95% 考前'],
+  ];
+  const presetBtns = presets.map(([r, label]) =>
+    h('button', { class: 'chip', type: 'button', onclick: () => ((value = r), (input.value = String(r * 100)), preview()) }, label),
+  );
+  function preview() {
+    shown.textContent = percent(value);
+    presetBtns.forEach((b, i) => b.classList.toggle('on', presets[i][0] === value));
+    const ratio = intervalRatio(value);
+    const ten = Math.max(1, Math.round(10 * ratio));
+    const lines = [
+      value === DEFAULT_RETENTION
+        ? '到该复习那天, 大约九成还记得 (FSRS、Anki 默认的)。'
+        : `隔的日子大约是 90% 时的 ${ratio.toFixed(ratio < 1 ? 2 : 1)} 倍: 现在隔 10 天的, 以后隔 ${ten} 天。${ratio < 1 ? '复习得更勤, 每天要复习的多一些。' : '每天要复习的少一些。'}`,
+      `到该复习那天, 大约 ${percent(1 - value)} 想不起来 (要重新记)。`,
+    ];
+    if (value >= 0.95) lines.push('太高了每天要复习的会多很多 (把握从 95% 再往上, 多出来的复习越来越不划算), 考前一阵子用用就好。');
+    if (value <= 0.8) lines.push('太低了忘得多, 忘了要重新记, 反而费时间。Anki 建议 85%–95%。');
+    fill(previewEl, ...lines.map((t) => h('span', {}, t)));
+  }
+  const save = () => {
+    store.setRetention(value);
+    d.close();
+    toast(`想记住的把握: ${percent(store.retention)} (下次复习起按这个排)`);
+    onSaved?.();
+  };
+  const d = openDialog({
+    title: '想记住的把握',
+    body: [
+      h('p', { class: 'muted small' }, 'FSRS 按这个算隔几天再复习: 隔到「还有这么大把握记得」的那天。调高复习得勤、记得牢; 调低每天背得少, 但忘得多。所有卡片集一起算, 已经排好的日子不动, 下次复习起按新的排。'),
+      h('div', { class: 'retention-row' }, input, shown),
+      h('div', { class: 'chips', role: 'group' }, presetBtns),
+      previewEl,
+    ],
+    footer: [
+      h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
+      h('button', { class: 'btn primary', onclick: save }, '保存'),
     ],
   });
   preview();

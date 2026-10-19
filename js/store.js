@@ -1,4 +1,4 @@
-import { schedule, replay, dayKey, useParameters } from './srs.js';
+import { schedule, replay, dayKey, useParameters, isLapse, cleanRetention, startOfDay, daysLater, DAY, DEFAULT_RETENTION } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
@@ -25,13 +25,13 @@ export function newId() {
 // revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
 // undone: 撤销了的复习记录 (跟 revlog 一样存), 同步时别从另一台设备又合回来; 留 120 天
-// settings: { reviewsPerDay 每天最多复习几张, at 改的时间 (同步时听后改的),
+// settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
   return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings() };
 }
 
-const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, at: 0, fsrs: null });
+const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
 
 const pair = (v) => (Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) ? v : null);
 
@@ -45,6 +45,7 @@ export function cleanSettings(raw) {
   if (!raw || typeof raw !== 'object') return out;
   const cap = Math.round(Number(raw.reviewsPerDay));
   if (cap >= 1) out.reviewsPerDay = Math.min(MAX_REVIEW_CAP, cap);
+  out.retention = cleanRetention(raw.retention);
   if (Number(raw.at) > 0) out.at = Number(raw.at);
   out.fsrs = cleanFsrs(raw.fsrs);
   if (raw.fsrsAt > 0) out.fsrsAt = Number(raw.fsrsAt); // 换回默认参数的时间 (同步时用)
@@ -71,9 +72,11 @@ export const FOLDER_PREFIX = 'folder:';
 //   known: [卡片 id...]        单词卡里标了「会了」的
 //   starred: [卡片 id...]      星标
 //   learn: { 卡片 id: 0|1|2 }  学习模式的程度 (没学过 / 认得了 / 掌握了)
-//   stats: { 卡片 id: { right, wrong, interval, ease, s, d, due, at, first, n, rev } }  答对答错几次, 记忆状态, 下次哪天复习 (srs.js),
+//   stats: { 卡片 id: { right, wrong, interval, ease, s, d, due, at, first, n, lapses, sus, bury, rev } }
+//          答对答错几次, 记忆状态, 下次哪天复习 (srs.js),
 //          first 第一次排进复习的时间 (算今天学了几个新词), n 从第一次起翻卡自评了几次 (看复习记录全不全),
-//          rev 撤销的时间 (同步时撤销了的比后来同步回来的新)
+//          lapses 背过以后又忘了几次 (8 次以上是难记卡), sus 暂停的时间 (暂停了不排复习), bury 「明天再说」到哪天 0 点,
+//          rev 撤销、暂停这些手动改的时间 (同步时比 at 新的听这边的)
 //   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
 //   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
 //   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
@@ -159,6 +162,9 @@ function cleanSet(raw) {
       if (Number(v.at) > 0) out.at = Number(v.at); // 最后一次答这张的时间 (同步时用)
       if (out.due && Number(v.first) > 0) out.first = Number(v.first);
       if (out.due && Number.isSafeInteger(v.n) && v.n > 0) out.n = v.n;
+      if (Number.isSafeInteger(v.lapses) && v.lapses > 0) out.lapses = v.lapses;
+      if (Number(v.sus) > 0) out.sus = Number(v.sus);
+      if (Number(v.bury) > Date.now()) out.bury = Number(v.bury); // 过了那天的不用留
       if (Number(v.rev) > 0) out.rev = Number(v.rev);
       return out;
     }),
@@ -265,7 +271,7 @@ export class Store {
   // recompute: 参数变了 (别的设备优化过、同步过来的), 有完整记录的卡片按新参数重算记忆状态
   applyParameters({ recompute = false } = {}) {
     const w = this.data.settings.fsrs?.w ?? null;
-    useParameters(w);
+    useParameters(w, this.data.settings.retention);
     const key = JSON.stringify(w);
     if (recompute && this.paramKey !== undefined && key !== this.paramKey) this.recomputeMemory();
     this.paramKey = key;
@@ -447,6 +453,7 @@ export class Store {
   // 新建或整个替换一个卡片集; 卡片删了, 它的「会了」「星标」也跟着去掉
   putSet(set, { touch = true } = {}) {
     const clean = cleanSet(set);
+    this.counts = null;
     if (touch) clean.updatedAt = Date.now();
     const i = this.data.sets.findIndex((s) => s.id === clean.id);
     const prev = this.data.sets[i];
@@ -463,6 +470,7 @@ export class Store {
 
   deleteSet(id) {
     this.data.sets = this.data.sets.filter((s) => s.id !== id);
+    this.counts = null;
     this.data.deleted[id] = Date.now();
     for (const f of this.data.folders) f.setIds = f.setIds.filter((sid) => sid !== id);
     this.save();
@@ -624,45 +632,139 @@ export class Store {
     this.save();
   }
 
-  // 记一次答对 / 答错 (单词卡、学习、测试、复习都用): 记次数, 排下次哪天复习, 算今天学过
+  // 每天有几张要复习 (到期日子错开时挑少的那天), 所有卡片集一起: 数一遍记着 (几万张数一遍要好几毫秒, 手机上更慢),
+  // 答一张改一下 (countDue); 卡片集换了、暂停了、撤销了这些就扔掉重数 (this.counts = null)。
+  // 按「离今天 0 点几天」记: 今天以内的算 0, 以后的四舍五入 (不用一张张换算日期, 夏令时差一小时也还是那天)
+  dayCounts(now = Date.now()) {
+    const today0 = startOfDay(now);
+    if (this.counts?.data !== this.data || this.counts.today0 !== today0) {
+      this.counts = { data: this.data, today0, tomorrow0: daysLater(now, 1), map: new Map() };
+      for (const set of this.data.sets) for (const id in set.stats) this.countDue(set.stats[id], 1);
+    }
+    return this.counts;
+  }
+
+  countDue(stat, delta) {
+    const c = this.counts;
+    if (!c || !(stat?.due > 0) || stat.sus) return;
+    const day = stat.due < c.tomorrow0 ? 0 : Math.round((stat.due - c.today0) / DAY);
+    c.map.set(day, (c.map.get(day) ?? 0) + delta);
+  }
+
+  // 那几天 (0 点的时间) 各有几张要复习: load([时间]) → [张数]; add(due) 又排好一张 (一下排好多张时)
+  dueLoad(now = Date.now()) {
+    return {
+      load: (days) => {
+        const c = this.dayCounts(now);
+        return days.map((t) => c.map.get(t < c.tomorrow0 ? 0 : Math.round((t - c.today0) / DAY)) ?? 0);
+      },
+      add: (due) => this.countDue({ due }, 1),
+    };
+  }
+
+  // 翻卡自评一张, 下次哪天复习 (不记下来; 按钮上写「3 天后」用, 跟点了以后排的一样)
+  nextReview(stat, cardId, correct, now = Date.now(), load = this.dueLoad(now).load) {
+    return schedule(stat, correct, now, { seed: `${cardId}:${stat?.n ?? 0}:${stat?.at ?? 0}`, load });
+  }
+
+  // 两个按钮各排到哪天: { again, good } (每个是 schedule 返回的 { interval, due ... })
+  previewAnswer(setId, cardId, now = Date.now()) {
+    const stat = this.ownerOf(setId, cardId)?.stats[cardId];
+    const { load } = this.dueLoad(now);
+    return { again: this.nextReview(stat, cardId, false, now, load), good: this.nextReview(stat, cardId, true, now, load) };
+  }
+
   // 答了一题: 记答对答错几次、今天学过 (打卡)。
-  // selfRated: 翻卡自评 (单词卡、今天的复习、学习里的单词卡题) 才用 FSRS 排下次复习、记进复习记录;
-  // 选择题、打字、测试、游戏只算次数, 不动复习的日子
+  // selfRated: 翻卡自评 (单词卡、今天的复习、学习里的单词卡题) 才用 FSRS 排下次复习 (日子错开)、记进复习记录、
+  // 数忘了几次 (难记卡); 选择题、打字、测试、游戏只算次数, 不动复习的日子
   recordAnswer(setId, cardId, correct, { save = true, now = Date.now(), selfRated = false } = {}) {
     const set = this.ownerOf(setId, cardId);
     if (!set || !set.cards.some((c) => c.id === cardId)) return;
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
-    if (correct) s.right++;
-    else s.wrong++;
     let code = null;
     if (selfRated) {
+      if (isLapse(s, correct, now)) s.lapses = (s.lapses ?? 0) + 1;
+      const next = this.nextReview(s, cardId, correct, now);
+      this.countDue(s, -1);
       if (!(s.due > 0)) Object.assign(s, { first: now, n: 0 }); // 新词今天开始背
-      Object.assign(s, schedule(s, correct, now), { at: now });
+      Object.assign(s, next, { at: now });
+      this.countDue(s, 1);
       if (s.n >= 0) s.n++;
       code = addReview(this.data.revlog, cardId, now, correct);
     }
+    if (correct) s.right++;
+    else s.wrong++;
     this.touchActivity(now);
     if (save) this.saveSoon();
     return code; // 记进复习记录的那一条 (撤销时用)
   }
 
-  // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }]]]。按一遍 FSRS 接着 Anki 的进度排,
-  // 也记进复习记录。这里已经复习过的卡片不动排期。返回接上了几张
-  importReviews(setId, entries) {
+  // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }], 在 Anki 里暂停了]]。按一遍 FSRS 接着 Anki 的进度排
+  // (到期日子错开, 一起导入的不挤在同一天), 也记进复习记录。这里已经复习过的卡片不动排期。
+  // Anki 里暂停了的这里也暂停。返回接上了几张
+  importReviews(setId, entries, now = Date.now()) {
     const set = this.data.sets.find((s) => s.id === setId);
     if (!set) return 0;
     const ids = new Set(set.cards.map((c) => c.id));
+    const days = this.dueLoad(now);
     let n = 0;
-    for (const [cardId, reviews] of entries) {
-      if (!ids.has(cardId) || !reviews?.length) continue;
-      addReviews(this.data.revlog, cardId, reviews);
-      if (!set.stats[cardId]?.at) {
-        set.stats[cardId] = { ...replay(reviews), first: Math.min(...reviews.map((r) => r.at)), n: historyOf(this.data.revlog, cardId).length };
+    let changed = false;
+    for (const [cardId, reviews, suspended] of entries) {
+      if (!ids.has(cardId)) continue;
+      if (reviews?.length) {
+        addReviews(this.data.revlog, cardId, reviews);
+        if (!set.stats[cardId]?.at) {
+          set.stats[cardId] = { ...replay(reviews, { seed: cardId, load: days.load }), first: Math.min(...reviews.map((r) => r.at)), n: historyOf(this.data.revlog, cardId).length };
+          if (!set.stats[cardId].lapses) delete set.stats[cardId].lapses;
+          days.add(set.stats[cardId].due);
+        }
+        n++;
+        changed = true;
       }
+      if (suspended && !set.stats[cardId]?.sus) {
+        set.stats[cardId] = { right: 0, wrong: 0, ...set.stats[cardId], sus: now };
+        changed = true;
+      }
+    }
+    this.counts = null;
+    if (changed) this.save();
+    return n;
+  }
+
+  // 暂停 / 不暂停几张卡片 (暂停了不排复习、不当新词出, 记录都留着)。返回改了几张
+  suspend(setId, cardIds, on = true, now = Date.now()) {
+    let n = 0;
+    for (const cardId of cardIds) {
+      const set = this.ownerOf(setId, cardId);
+      if (!set?.cards.some((c) => c.id === cardId)) continue;
+      const stat = (set.stats[cardId] ??= { right: 0, wrong: 0 });
+      if (Boolean(stat.sus) === on) continue;
+      if (on) stat.sus = now;
+      else delete stat.sus;
+      stat.rev = now;
       n++;
     }
+    this.counts = null;
     if (n) this.save();
     return n;
+  }
+
+  // 今天先不背这张, 明天再说 (Anki 的「搁置」)
+  bury(setId, cardId, now = Date.now()) {
+    const set = this.ownerOf(setId, cardId);
+    if (!set?.cards.some((c) => c.id === cardId)) return;
+    Object.assign((set.stats[cardId] ??= { right: 0, wrong: 0 }), { bury: daysLater(now, 1), rev: now });
+    this.counts = null;
+    this.save();
+  }
+
+  // 撤销暂停、明天再说: 一张卡片的统计换回以前的样子 (复习记录不动)
+  putStat(setId, cardId, stat, now = Date.now()) {
+    const set = this.ownerOf(setId, cardId);
+    if (!set) return;
+    set.stats[cardId] = { ...(stat ?? { right: 0, wrong: 0 }), rev: now };
+    this.counts = null;
+    this.save();
   }
 
   // 每天的计划 (plan.js): 改几项, 别的照旧。setId 是「folder:文件夹 id」时定在文件夹上
@@ -690,6 +792,17 @@ export class Store {
     this.save();
   }
 
+  get retention() {
+    return this.data.settings.retention;
+  }
+
+  // 想记住的把握 (0.70–0.97): 下次复习起按新的排 (已经排好的日子不动, 跟 Anki 一样)
+  setRetention(r, now = Date.now()) {
+    this.data.settings = cleanSettings({ ...this.data.settings, retention: r, at: now });
+    this.applyParameters();
+    this.save();
+  }
+
   // 换 FSRS 参数 (按自己的记录优化出来的; null 换回默认的)。有完整记录的卡片按新参数重算记忆状态 (稳定性、难度),
   // 排好的复习日子不动 (下次复习起按新的排)。返回重算了几张
   setParameters(fsrs, now = Date.now()) {
@@ -707,6 +820,7 @@ export class Store {
     const set = this.ownerOf(setId, cardId);
     if (!set) return;
     set.stats[cardId] = { ...(stat ?? { right: 0, wrong: 0 }), rev: now };
+    this.counts = null;
     const dropped = dropReview(this.data.revlog, cardId, code);
     if (dropped !== null) this.data.undone[cardId] = pack([...unpack(this.data.undone[cardId]), dropped]);
     this.save();
@@ -774,6 +888,7 @@ export class Store {
   // 返回 { added, replaced }
   importBackup(text) {
     const incoming = cleanData(JSON.parse(text));
+    this.counts = null;
     let added = 0;
     let replaced = 0;
     for (const set of incoming.sets) {

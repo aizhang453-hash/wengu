@@ -7,27 +7,48 @@
 // 答对: 隔 interval 天, 到那天一早就算该复习; 答错: 10 分钟后再来 (今天再练一下)。
 // 以前 (v1.14 以前) 按 interval / ease 记的, 第一次换算成 FSRS 的稳定性、难度, 不用从头来。
 // 参数默认是 FSRS 的 (很多 Anki 用户的平均); 按自己的复习记录优化过 (optimize.js) 就用自己的 (useParameters)。
+// 「到该复习那天还记得的把握」默认 90%, 能调 (跟 Anki 的 desired retention 一样): 调高复习得勤, 调低每天背得少。
 // 错题集一直用默认的 (做题跟背单词不一样, 记录也不算在一起)。
+// 暂停了的 (stats.sus) 不排复习; 「明天再说」的 (stats.bury, 到那天 0 点) 今天不出。
 
-import { FSRSAlgorithm, generatorParameters, Rating } from './vendor/fsrs.js';
+import { FSRSAlgorithm, generatorParameters, get_fuzz_range, Rating } from './vendor/fsrs.js';
 
 export const DAY = 24 * 60 * 60 * 1000;
 const RETRY_MS = 10 * 60 * 1000;
-export const RETENTION = 0.9; // 到该复习那天还记得的把握
+export const DEFAULT_RETENTION = 0.9;
+export const MIN_RETENTION = 0.7;
+export const MAX_RETENTION = 0.97;
+export const LEECH = 8; // 忘了几次算难记卡 (跟 Anki 一样), 以后每多忘一半 (4 次) 再提醒一次
 
-const make = (w) => new FSRSAlgorithm(generatorParameters({ request_retention: RETENTION, enable_fuzz: false, enable_short_term: true, w }));
+// 想记住的把握: 0.70–0.97, 两位小数; 不对的用默认的
+export function cleanRetention(r) {
+  const n = Math.round(Number(r) * 100) / 100;
+  return n >= MIN_RETENTION && n <= MAX_RETENTION ? n : DEFAULT_RETENTION;
+}
+
+const make = (w, retention = DEFAULT_RETENTION) => new FSRSAlgorithm(generatorParameters({ request_retention: retention, enable_fuzz: false, enable_short_term: true, w }));
 const defaults = make();
 let fsrs = defaults;
 
 const goodParameters = (w) => Array.isArray(w) && w.length === 21 && w.every(Number.isFinite);
 
-// 换成自己的参数 (21 个数); 不对的、null 就用默认的
-export function useParameters(w) {
-  fsrs = goodParameters(w) ? make(w) : defaults;
+// 换成自己的参数 (21 个数; 不对的、null 就用默认的) 和想记住的把握
+export function useParameters(w, retention = DEFAULT_RETENTION) {
+  const own = goodParameters(w);
+  const r = cleanRetention(retention);
+  fsrs = own || r !== DEFAULT_RETENTION ? make(own ? w : undefined, r) : defaults;
 }
 
-// 现在用的参数
+// 现在用的参数、想记住的把握
 export const currentParameters = () => [...fsrs.parameters.w];
+export const currentRetention = () => fsrs.parameters.request_retention;
+
+// 把握换成 r, 间隔大约是 90% 时的几倍 (按现在的参数: 遗忘曲线 R = (1 + factor·t/s)^-decay)
+export function intervalRatio(r, w = currentParameters()) {
+  const decay = -w[20];
+  const days = (x) => Math.pow(x, 1 / decay) - 1;
+  return days(r) / days(DEFAULT_RETENTION);
+}
 
 export function startOfDay(t) {
   const d = new Date(t);
@@ -60,36 +81,81 @@ function step(algo, memory, last, now, rating) {
   return { memory: algo.next_state(memory, elapsed, rating), elapsed };
 }
 
-// 走完这一步, 下次哪天复习: 忘了的 10 分钟后再来; 记得的隔几天, 到那天一早就算该复习
-function nextDue(algo, { memory, elapsed }, rating, now) {
+// 一个数变成 0–1 之间的「随机」数, 同一个 seed 每次一样
+function random(seed) {
+  let x = 2166136261;
+  for (let i = 0; i < seed.length; i++) x = Math.imul(x ^ seed.charCodeAt(i), 16777619);
+  x = Math.imul(x ^ (x >>> 15), 0x2c1b3c6d);
+  x = Math.imul(x ^ (x >>> 12), 0x297a2d39);
+  return ((x ^ (x >>> 15)) >>> 0) / 4294967296;
+}
+
+// 到期日子错开 (跟 Anki 一样): 同一天背的一批卡片间隔一模一样, 就会同一天一起到期。隔 3 天以上的在前后几天里挑一天
+// (范围照 Anki: ts-fsrs 的 get_fuzz_range, 隔得越久范围越大)。挑哪天由 seed 定 (每次一样: 按钮上写的跟点了以后排的一样);
+// 给了 load (那几天已经有几张要复习) 就像 Anki 的负载均衡: 要复习的少的那天、隔得短一点的, 更容易挑中
+export function spreadInterval(interval, elapsed, { seed = '', load = null, max = 36500 } = {}) {
+  if (!seed || interval < 2.5) return interval;
+  const { min_ivl: lo, max_ivl: hi } = get_fuzz_range(interval, elapsed, max);
+  if (hi <= lo) return lo;
+  const days = [];
+  for (let d = lo; d <= hi; d++) days.push(d);
+  const counts = load ? load(days) : null;
+  const weights = days.map((d, i) => (counts ? 1 / ((counts[i] + 1) ** 2 * d) : 1));
+  let x = random(seed) * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < days.length; i++) {
+    x -= weights[i];
+    if (x < 0) return days[i];
+  }
+  return hi;
+}
+
+// 走完这一步, 下次哪天复习: 忘了的 10 分钟后再来; 记得的隔几天, 到那天一早就算该复习。
+// spread: { seed, load } 到期日子错开 (load 拿那几天的 0 点问有几张: load([时间]) → [张数])
+function nextDue(algo, { memory, elapsed }, rating, now, spread = {}) {
   const s = round(memory.stability);
   const d = round(memory.difficulty);
   if (rating === Rating.Again) return { interval: 0, s, d, due: now + RETRY_MS };
-  const interval = algo.next_interval(memory.stability, elapsed);
+  const load = spread.load ? (days) => spread.load(days.map((n) => daysLater(now, n))) : null;
+  const interval = spreadInterval(algo.next_interval(memory.stability, elapsed), elapsed, { seed: spread.seed, load, max: algo.parameters.maximum_interval });
   return { interval, s, d, due: daysLater(now, interval) };
 }
 
+// 老记录没有 at 的, 当成是按时复习的
+const lastReview = (prev) => Number(prev?.at) || (Number(prev?.due) && Number(prev?.interval) ? Number(prev.due) - Number(prev.interval) * DAY : 0);
+const daysBetween = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / DAY);
+
 // 答了一次 (翻卡自评, 只有记得 / 忘了): 返回 { interval, s, d, due } (调的地方再记上 at)。
-// own: false 用默认参数 (错题集)
-export function schedule(prev, correct, now = Date.now(), { own = true } = {}) {
+// own: false 用默认参数 (错题集); seed、load: 到期日子错开 (不给就不错开)
+export function schedule(prev, correct, now = Date.now(), { own = true, seed = '', load = null } = {}) {
   const algo = own ? fsrs : defaults;
   const rating = correct ? Rating.Good : Rating.Again;
-  // 老记录没有 at 的, 当成是按时复习的
-  const last = Number(prev?.at) || (Number(prev?.due) && Number(prev?.interval) ? Number(prev.due) - Number(prev.interval) * DAY : 0);
-  return nextDue(algo, step(algo, memoryOf(prev), last, now, rating), rating, now);
+  return nextDue(algo, step(algo, memoryOf(prev), lastReview(prev), now, rating), rating, now, { seed, load });
 }
 
+// 这次忘了算不算「忘了一次」(Anki 的 lapse): 已经排到以后某一天、隔了至少一天来复习, 想不起来了。
+// 新词第一次不会、忘了以后当天再练又忘了的不算
+export function isLapse(prev, correct, now = Date.now()) {
+  return !correct && Number(prev?.due) > 0 && Number(prev?.interval) >= 1 && daysBetween(lastReview(prev), now) >= 1;
+}
+
+// 忘了 lapses 次: 该不该提醒「难记卡」(第 8 次、12 次、16 次……)
+export const leechAlert = (lapses) => lapses >= LEECH && (lapses - LEECH) % (LEECH / 2) === 0;
+
 // 从头按一遍复习记录 (从 Anki 搬来的, 四个键都有: 1 重来 2 困难 3 良好 4 简单), 算出现在的复习状态:
-// { right, wrong, interval, s, d, due, at }; 没有记录返回 null。隔了好几个月没背的, 多半已经该复习了
-export function replay(reviews) {
+// { right, wrong, lapses, interval, s, d, due, at }; 没有记录返回 null。隔了好几个月没背的, 多半已经该复习了。
+// spread: 最后排的日子错开 (seed、load, 见 schedule)
+export function replay(reviews, spread = {}) {
   let memory = null;
   let last = 0;
   let lastStep = null;
   let lastRating = 0;
   let right = 0;
   let wrong = 0;
+  let lapses = 0;
   for (const { at, rating } of reviews) {
     lastStep = step(fsrs, memory, last, at, rating);
+    // 隔了一天以上来复习、上次记得的, 这次忘了算忘了一次 (Anki 当天的学习步骤里按重来不算)
+    if (rating === Rating.Again && memory && lastRating !== Rating.Again && lastStep.elapsed >= 1) lapses++;
     memory = lastStep.memory;
     last = at;
     lastRating = rating;
@@ -97,7 +163,7 @@ export function replay(reviews) {
     else right++;
   }
   if (!lastStep) return null;
-  return { right, wrong, ...nextDue(fsrs, lastStep, lastRating, last), at: last };
+  return { right, wrong, lapses, ...nextDue(fsrs, lastStep, lastRating, last, spread), at: last };
 }
 
 // 现在还记得的把握 (0–1): 稳定性越大、隔得越短越高。今天的复习先来最可能忘的
@@ -108,8 +174,12 @@ export function retrievability(stat, now = Date.now()) {
   return fsrs.forgetting_curve(Math.max(0, (now - last) / DAY), s);
 }
 
+export const isSuspended = (stat) => Number(stat?.sus) > 0;
+export const isBuried = (stat, now = Date.now()) => Number(stat?.bury) > now;
+
+// 该复习了 (暂停的、今天先不背的不算)
 export function isDue(stat, now = Date.now()) {
-  return Boolean(stat?.due) && stat.due <= now;
+  return Boolean(stat?.due) && stat.due <= now && !isSuspended(stat) && !isBuried(stat, now);
 }
 
 // 所有该复习的卡片: [{ set, card, due }], 越早该复习的越前
@@ -124,14 +194,16 @@ export function dueCards(sets, now = Date.now()) {
   return out.sort((a, b) => a.due - b.due);
 }
 
-// 明天 (到明天晚上为止) 要复习几张, 不算今天已经该复习的
+// 明天 (到明天晚上为止) 要复习几张, 不算今天已经该复习的 (今天说了「明天再说」的算明天的)
 export function dueTomorrow(sets, now = Date.now()) {
   const end = daysLater(now, 2);
   let n = 0;
   for (const set of sets) {
     for (const card of set.cards) {
-      const due = set.stats[card.id]?.due;
-      if (due && due > now && due < end) n++;
+      const stat = set.stats[card.id];
+      const due = stat?.due;
+      if (!due || isSuspended(stat)) continue;
+      if ((due > now && due < end) || (due <= now && isBuried(stat, now))) n++;
     }
   }
   return n;

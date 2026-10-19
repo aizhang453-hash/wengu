@@ -121,6 +121,7 @@ export function renderFolder({ store, go }, id) {
         'div',
         { class: 'row' },
         h('button', { class: 'btn primary', onclick: addSets }, '＋ 放卡片集进来'),
+        h('a', { class: 'btn', href: `#/stats/${encodeURIComponent(combo.id)}` }, '📊 统计'),
         h(
           'button',
           {

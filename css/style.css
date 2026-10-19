@@ -3266,7 +3266,7 @@ a.card-row.search-hit:hover {
   font-weight: 600;
 }
 
-.opt-table tbody tr:last-child {
+.opt-table:not(.stats-table) tbody tr:last-child {
   color: var(--accent);
 }
 
@@ -6386,4 +6386,311 @@ a.pick-row:hover {
   border-radius: 8px;
   background: var(--good-soft);
   color: var(--text);
+}
+
+/* ---- 今天的复习: 按钮上多久再来、难记卡、明天再背 / 暂停 ---- */
+.judge-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+
+.next-ivl {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.review-aside {
+  gap: 18px;
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+.review-aside .link-btn {
+  color: var(--muted);
+}
+
+.leech-badge {
+  margin-left: 6px;
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.practice-badge {
+  margin-left: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.leech-note {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--bad);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.leech-note p {
+  margin: 6px 0 8px;
+}
+
+.retention-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.retention-range {
+  flex: 1;
+  min-width: 0;
+}
+
+.retention-value {
+  min-width: 3em;
+  font-size: 1.3rem;
+  text-align: right;
+}
+
+.icon-btn.pause {
+  color: var(--border);
+}
+
+.icon-btn.pause.on {
+  color: var(--mid);
+}
+
+.paused-badge {
+  background: var(--mid-soft);
+  color: var(--mid);
+}
+
+/* ---- 统计 ---- */
+.stats-page .page-head {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stats-scope {
+  max-width: 100%;
+  width: auto;
+}
+
+.stats-card {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.stats-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.stat-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.stat-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-fig strong {
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bars {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 140px;
+  margin: 10px 0 4px;
+}
+
+.bar-col {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bar-track {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--new);
+}
+
+.bar.zero {
+  background: var(--border);
+}
+
+.bar-label {
+  height: 1.3em;
+  overflow: visible;
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.bars.dense {
+  gap: 1px;
+}
+
+.cal-wrap {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cal-days {
+  display: grid;
+  flex: none;
+  grid-template-rows: repeat(7, 11px);
+  gap: 2px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 11px;
+}
+
+.cal-grid {
+  display: grid;
+  grid-auto-columns: 11px;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  gap: 2px;
+}
+
+.cal-cell {
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.cal-cell.l1 {
+  background: color-mix(in srgb, var(--good) 30%, var(--surface-2));
+}
+
+.cal-cell.l2 {
+  background: color-mix(in srgb, var(--good) 55%, var(--surface-2));
+}
+
+.cal-cell.l3 {
+  background: color-mix(in srgb, var(--good) 78%, var(--surface-2));
+}
+
+.cal-cell.l4 {
+  background: var(--good);
+}
+
+.stats-table td.low {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.stats-table td.fine {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.state-bar {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.state-seg {
+  min-width: 2px;
+}
+
+.state-legend {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.state-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+.state-seg.new,
+.state-dot.new {
+  background: var(--new);
+}
+
+.state-seg.learning,
+.state-dot.learning {
+  background: var(--bad);
+}
+
+.state-seg.young,
+.state-dot.young {
+  background: color-mix(in srgb, var(--good) 55%, var(--surface));
+}
+
+.state-seg.mature,
+.state-dot.mature {
+  background: var(--good);
+}
+
+.state-seg.suspended,
+.state-dot.suspended {
+  background: var(--mid);
+}
+
+.stats-list {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stats-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.stats-card-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stats-card-row .row {
+  flex: none;
+}
+
+@media (max-width: 560px) {
+  .stats-card-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

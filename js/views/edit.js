@@ -512,7 +512,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     '加进来',
   );
 
-  // 从 Anki 搬来的复习记录 (卡片 id → [{ at, rating }]), 保存以后接上
+  // 从 Anki 搬来的复习记录、暂停了没有 (卡片 id → [[{ at, rating }], 暂停了]), 保存以后接上
   const importedReviews = new Map();
 
   // 存不下的时候说清楚 (size: 一共要存多少字)
@@ -528,7 +528,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     }
     for (const c of cards) {
       const card = makeCard(c.term, c.def, { image: c.image || '', termAudio: c.termAudio || '', defAudio: c.defAudio || '' });
-      if (c.reviews?.length) importedReviews.set(card.id, c.reviews);
+      if (c.reviews?.length || c.suspended) importedReviews.set(card.id, [c.reviews, c.suspended]);
       addRow(card, { grow: false });
     }
     autoGrowAll(rows.slice(-cards.length).flatMap((r) => [r.termEl, r.defEl]));
@@ -566,7 +566,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
               const cards = g.cards.map((c) => makeCard(c.term, c.def, { image: c.image, termAudio: c.termAudio, defAudio: c.defAudio }));
               const set = store.putSet({ title: g.title || '未命名卡片集', cards });
               // 带着 Anki 复习记录的: 接着 Anki 的进度排复习
-              store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews]));
+              store.importReviews(set.id, cards.map((card, i) => [card.id, g.cards[i].reviews, g.cards[i].suspended]));
               if (random) store.setPlan(set.id, { order: 'random', seed: newSeed() });
               made.push(set);
               ids.push(set.id);
@@ -749,7 +749,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     try {
       resumed = store.transaction(() => {
         store.putSet(set);
-        return importedReviews.size ? store.importReviews(set.id, [...importedReviews]) : 0;
+        return importedReviews.size ? store.importReviews(set.id, [...importedReviews].map(([id, [reviews, suspended]]) => [id, reviews, suspended])) : 0;
       });
     } catch (e) {
       toast(tooBig(e.size));

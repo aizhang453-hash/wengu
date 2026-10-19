@@ -223,7 +223,8 @@ function noteReviews(db) {
 }
 
 // bytes: 整个文件 (Uint8Array), 或者浏览器的 File / Blob (很大的卡组: 用到哪个文件读哪一段, 不整个读进来)
-// 返回 { notes: [{ id, fields: [html], model, fieldNames, deck, reviews: [{ at, rating }] }], media: { has(name), get(name) → Blob | null } }
+// 返回 { notes: [{ id, fields: [html], model, fieldNames, deck, reviews: [{ at, rating }], suspended }], media: { has(name), get(name) → Blob | null } }
+// (suspended: 这个笔记的卡片在 Anki 里都暂停了)
 export async function readApkg(bytes) {
   let zip;
   try {
@@ -265,8 +266,12 @@ export async function readApkg(bytes) {
     // 没有就算了, 字段和牌组没名字
   }
   const deckOf = new Map();
-  // 在筛选牌组 (自定义学习) 里的卡片: 算回原来的牌组 (odid)
-  for (const c of db.rows('cards')) if (!deckOf.has(String(c.nid))) deckOf.set(String(c.nid), String(Number(c.odid) ? c.odid : c.did));
+  const active = new Set(); // 有卡片没暂停的笔记 (queue -1 是暂停了)
+  for (const c of db.rows('cards')) {
+    // 在筛选牌组 (自定义学习) 里的卡片: 算回原来的牌组 (odid)
+    if (!deckOf.has(String(c.nid))) deckOf.set(String(c.nid), String(Number(c.odid) ? c.odid : c.did));
+    if (Number(c.queue) !== -1) active.add(String(c.nid));
+  }
 
   const reviews = noteReviews(db);
   const notes = db
@@ -281,6 +286,7 @@ export async function readApkg(bytes) {
         model: model?.name ?? '',
         fieldNames: model?.fields ?? [],
         deck: decks.get(deckOf.get(String(n.id))) ?? '',
+        suspended: deckOf.has(String(n.id)) && !active.has(String(n.id)),
       };
     });
   if (notes.length === 1 && /^Please update to the latest Anki version/.test(notes[0].fields[0])) {

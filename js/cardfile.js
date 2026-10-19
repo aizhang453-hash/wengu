@@ -43,7 +43,7 @@ export async function readCardFile(file) {
       for (const n of list) counts.set(n.model, (counts.get(n.model) ?? 0) + 1);
       const common = [...counts].sort((a, b) => b[1] - a[1])[0][0];
       const columns = list.find((n) => n.model === common)?.fieldNames ?? [];
-      return { name: deck || '卡组', columns, rows: list.map((n) => Object.assign([...n.fields], { reviews: n.reviews })) };
+      return { name: deck || '卡组', columns, rows: list.map((n) => Object.assign([...n.fields], { reviews: n.reviews, suspended: Boolean(n.suspended) })) };
     });
     sheets.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); // 2.Book 在 10.Book 前面
     const withHistory = notes.filter((n) => n.reviews.length);
@@ -206,7 +206,7 @@ export function buildCards(rows, { term, def, extra = -1, header = false, html =
       defAudio = dr.sounds[0] ?? soundIn(defSound) ?? '';
     }
     if (!t && !d && !image) continue;
-    out.push({ term: t, def: d, image, termAudio, defAudio, ...(row.reviews?.length ? { reviews: row.reviews } : {}) });
+    out.push({ term: t, def: d, image, termAudio, defAudio, ...(row.reviews?.length ? { reviews: row.reviews } : {}), ...(row.suspended ? { suspended: true } : {}) });
   }
   return out;
 }

@@ -11,6 +11,7 @@
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
+//   #/stats               统计 (#/stats/<卡片集或 folder:文件夹>: 只看那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
 //   #/set/<id>            一个卡片集
 //   #/set/<id>/edit       编辑
@@ -43,6 +44,7 @@ import { renderDiagramPractice } from './views/diagram.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
+import { renderStats } from './views/stats.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
@@ -64,7 +66,7 @@ window.addEventListener('pagehide', () => store.flush());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') store.flush();
   // 开着过了一夜再回来: 首页、卡片集页这些「今天」的数字换成今天的
-  else if (current && current.day !== dayKey() && ['home', 'set', 'folder', 'mistakes'].includes(current.page)) render();
+  else if (current && current.day !== dayKey() && ['home', 'set', 'folder', 'mistakes', 'stats'].includes(current.page)) render();
 });
 let lastSaveError = 0;
 store.onSaveError = () => {
@@ -95,6 +97,7 @@ function parse(hash) {
   }
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
   if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
+  if (parts[0] === 'stats') return { page: 'stats', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
@@ -167,6 +170,7 @@ function render() {
   else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id);
+  else if (route.page === 'stats') view = renderStats(ctx, route.id);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);
@@ -222,7 +226,7 @@ const syncer = new SyncManager(store, {
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
   onApplied: () => {
-    if (['home', 'set', 'folder', 'search', 'games', 'mistakes'].includes(current?.page)) {
+    if (['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats'].includes(current?.page)) {
       const y = window.scrollY;
       render();
       window.scrollTo(0, y);
@@ -236,7 +240,7 @@ store.onChange = () => syncer.changed();
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  if (['home', 'set', 'folder', 'games', 'mistakes'].includes(current?.page)) {
+  if (['home', 'set', 'folder', 'games', 'mistakes', 'stats'].includes(current?.page)) {
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);

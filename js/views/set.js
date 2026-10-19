@@ -1,6 +1,7 @@
 // 一个卡片集: 选学习方式, 看所有卡片
 
-import { h, toast, download, openDialog, switchRow } from '../dom.js';
+import { h, toast, download, openDialog, switchRow, icon } from '../dom.js';
+import { isSuspended, LEECH } from '../srs.js';
 import { formatCards } from '../parse.js';
 import { stripMarks } from '../rich.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
@@ -27,27 +28,60 @@ export function renderSet({ store, go }, id) {
     };
   }
   const base = `#/set/${encodeURIComponent(set.id)}`;
-  let onlyStarred = false;
+  let filter = 'all'; // all 全部 | starred 星标 | suspended 暂停的 | leech 难记卡
 
   const listEl = h('ul', { class: 'card-list' });
-  const filterAll = h('button', { class: 'chip on', onclick: () => setFilter(false) }, '全部');
-  const filterStar = h('button', { class: 'chip', onclick: () => setFilter(true) }, '');
+  const filters = {
+    all: h('button', { class: 'chip on', onclick: () => setFilter('all') }, '全部'),
+    starred: h('button', { class: 'chip', onclick: () => setFilter('starred') }, ''),
+    leech: h('button', { class: 'chip', title: `忘了 ${LEECH} 次以上的`, onclick: () => setFilter('leech') }, ''),
+    suspended: h('button', { class: 'chip', title: '暂停了的不排进复习', onclick: () => setFilter('suspended') }, ''),
+  };
 
-  function setFilter(starred) {
-    onlyStarred = starred;
-    filterAll.classList.toggle('on', !starred);
-    filterStar.classList.toggle('on', starred);
+  function setFilter(kind) {
+    filter = kind;
+    for (const [k, b] of Object.entries(filters)) b.classList.toggle('on', k === kind);
     drawList();
   }
 
   function drawList() {
     const starred = new Set(set.starred);
+    const stats = set.stats;
     const pinNumber = new Map(pinnedCards(set).map((p) => [p.cardId, p.number]));
-    filterStar.textContent = `★ 星标 (${starred.size})`;
-    const cards = onlyStarred ? set.cards.filter((c) => starred.has(c.id)) : set.cards;
+    const match = {
+      all: () => true,
+      starred: (c) => starred.has(c.id),
+      leech: (c) => stats[c.id]?.lapses >= LEECH,
+      suspended: (c) => isSuspended(stats[c.id]),
+    };
+    const counts = Object.fromEntries(Object.keys(match).map((k) => [k, k === 'all' ? set.cards.length : set.cards.filter(match[k]).length]));
+    filters.starred.textContent = `★ 星标 (${counts.starred})`;
+    filters.leech.textContent = `🐌 难记卡 (${counts.leech})`;
+    filters.suspended.textContent = `⏸ 暂停的 (${counts.suspended})`;
+    // 没有难记卡、暂停的就不显示那个 (正在看的除外)
+    filters.leech.hidden = !counts.leech && filter !== 'leech';
+    filters.suspended.hidden = !counts.suspended && filter !== 'suspended';
+    const cards = set.cards.filter(match[filter]);
     listEl.replaceChildren(
       ...(cards.length
         ? cards.map((card) => {
+            const stat = stats[card.id];
+            const paused = isSuspended(stat);
+            const pause = h(
+              'button',
+              {
+                class: `icon-btn pause${paused ? ' on' : ''}`,
+                title: paused ? '暂停了 (不排进复习), 点一下恢复' : '暂停: 不排进复习 (记录都留着)',
+                'aria-label': '暂停',
+                'aria-pressed': String(paused),
+                onclick: () => {
+                  store.suspend(set.id, [card.id], !paused);
+                  toast(paused ? '恢复了, 照常排进复习' : '暂停了, 不排进复习');
+                  drawList();
+                },
+              },
+              icon('pause', 14),
+            );
             const star = h(
               'button',
               {
@@ -76,13 +110,21 @@ export function renderSet({ store, go }, id) {
                 'div',
                 { class: 'card-row-tools' },
                 pinNumber.has(card.id) ? h('span', { class: 'pin-badge', title: '标注图上的点' }, `📍${pinNumber.get(card.id)}`) : null,
-                levelBadge(set.learn[card.id]),
+                stat?.lapses >= LEECH ? h('span', { class: 'badge leech-badge', title: `复习时忘了 ${stat.lapses} 次` }, '难记卡') : null,
+                paused ? h('span', { class: 'badge paused-badge' }, '暂停了') : levelBadge(set.learn[card.id]),
                 editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: drawList })),
+                pause,
                 star,
               ),
             );
           })
-        : [h('li', { class: 'muted empty-note' }, onlyStarred ? '还没有加星标的卡片。点卡片右边的 ★ 加星标。' : '还没有卡片。')]),
+        : [
+            h(
+              'li',
+              { class: 'muted empty-note' },
+              { all: '还没有卡片。', starred: '还没有加星标的卡片。点卡片右边的 ★ 加星标。', leech: '没有难记卡了。', suspended: '没有暂停的卡片了。' }[filter],
+            ),
+          ]),
     );
   }
 
@@ -122,6 +164,7 @@ export function renderSet({ store, go }, id) {
     h('button', { class: 'btn', disabled: total === 0, onclick: () => openShareDialog(set) }, '分享'),
     h('button', { class: 'btn', disabled: total === 0, onclick: () => printSet(set) }, '打印'),
     h('button', { class: 'btn', onclick: () => pickFolders() }, '📁 加到文件夹'),
+    h('a', { class: 'btn', href: `#/stats/${encodeURIComponent(set.id)}` }, '📊 统计'),
     h(
       'button',
       {
@@ -218,7 +261,7 @@ export function renderSet({ store, go }, id) {
         'div',
         { class: 'list-head' },
         h('h2', {}, `卡片 (${total})`),
-        h('div', { class: 'row' }, filterAll, filterStar),
+        h('div', { class: 'row' }, filters.all, filters.starred, filters.leech, filters.suspended),
       ),
       listEl,
     ),
@@ -233,6 +276,8 @@ function progressLine(set) {
   const parts = [`${total} 张卡片`];
   const scheduled = set.cards.filter((c) => set.stats[c.id]?.due > 0).length;
   if (scheduled) parts.push(`排进复习的 ${scheduled} 张`);
+  const paused = set.cards.filter((c) => isSuspended(set.stats[c.id])).length;
+  if (paused) parts.push(`暂停 ${paused} 张`);
   if (mastered || learning) parts.push(`学习: 掌握 ${mastered} 张, 认得 ${learning} 张`);
   if (set.known.length) parts.push(`单词卡: 会了 ${set.known.length} 张`);
   return parts.join(' · ');
