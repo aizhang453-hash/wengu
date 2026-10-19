@@ -1,16 +1,22 @@
 // 多设备同步: 存在你自己的 GitHub 私有仓库里。
-//   wengu.json         卡片集、文件夹、打卡、删除记录
-//   media/<id>.<后缀>  图片、录音
+//   wengu.json                  卡片集、文件夹、打卡、删除记录
+//   media/packs/<包>.wgp        图片、录音, 一个包装好多个 (几 MB 一包; 见 encodePack)
+//   media/index.json            哪个包里有哪些: { version: 1, packs: { 包: [图片录音 id] } }
+//   media/<id>.<后缀>           v1.26 以前一个一个传的图片、录音 (还认, 不再这样传)
 // 每台设备填一次「仓库 + 密钥」(密钥只能改这一个仓库), 之后打开、改动、回到页面时自动同步。
-// 同步: 拿下仓库里的 → 跟本机的合并 (merge.js) → 补齐图片录音 → 推上去。
+// 同步: 拿下仓库里的 → 跟本机的合并 (merge.js) → 推上去 → 补齐图片录音 (本机缺的拿下来, 仓库缺的打包传上去)。
+// 卡片先推: Anki 卡组动不动上万个图片录音, 等传完才推卡片, 别的设备半天看不到 (图片录音没到之前先不显示, 下次同步再拿)。
 // 推的时候发现别的设备刚推过 (sha 对不上), 重新拿、重新合并再推。
+// 以前一个文件一次提交, 上万个文件 GitHub 嫌太快不让传, 列文件夹也只给前 1000 个 (以为没传过, 再传就出错), 所以改成打包。
 
-import { cleanData } from './store.js';
+import { cleanData, newId } from './store.js';
 import { mergeData } from './merge.js';
-import { usedMediaIds, getMedia, putMedia } from './media.js';
+import { usedMediaIds, getMedia, putMedia, mediaKeys } from './media.js';
 
 export const CONFIG_KEY = 'wengu:sync';
 export const DATA_PATH = 'wengu.json';
+export const INDEX_PATH = 'media/index.json';
+export const PACK_BYTES = 8 * 1024 * 1024; // 一包大概多大 (base64 以后 11 MB 左右, GitHub 一个文件最多 100 MB)
 const DEFAULT_API = 'https://api.github.com';
 
 export class SyncError extends Error {
@@ -100,10 +106,6 @@ export function b64ToUtf8(b64) {
   return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
-async function blobToB64(blob) {
-  return bytesToB64(new Uint8Array(await blob.arrayBuffer()));
-}
-
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
 const TYPE = Object.fromEntries(Object.entries(EXT).map(([t, e]) => [e, t]));
 export const extOf = (type) => EXT[String(type).split(';')[0]] ?? 'bin';
@@ -128,8 +130,12 @@ export class GitHubRepo {
       throw new SyncError('连不上 GitHub, 看看网络', 'network');
     }
     if (res.status === 401) throw new SyncError('密钥不对, 或者过期了', 'auth');
+    if (res.status === 429) throw new SyncError('GitHub 嫌传得太快了, 过几分钟自动接着传', 'rate');
     if (res.status === 403) {
       if (res.headers.get('x-ratelimit-remaining') === '0') throw new SyncError('同步太频繁了, 过一会儿再试', 'rate');
+      // 一下传太多 (secondary rate limit) 也是 403, 不是密钥的事
+      const text = await res.text().catch(() => '');
+      if (/rate limit|abuse/i.test(text) || res.headers.get('retry-after')) throw new SyncError('GitHub 嫌传得太快了, 过几分钟自动接着传', 'rate');
       throw new SyncError('密钥没有改这个仓库的权限 (建密钥时「内容」要选「读写」)', 'auth');
     }
     if (res.status === 404) {
@@ -165,11 +171,41 @@ export class GitHubRepo {
     return new Blob([await res.arrayBuffer()], { type: typeOf(path) });
   }
 
+  // 一个文件夹里的文件名。用 git trees 接口: contents 接口一个文件夹最多只给 1000 个
   async list(dir) {
-    const res = await this.call('GET', `/contents/${dir}`);
-    if (!res) return [];
-    const items = await res.json();
-    return Array.isArray(items) ? items.filter((x) => x.type === 'file').map((x) => x.name) : [];
+    const entries = await this.tree(dir);
+    return entries.filter((x) => x.type === 'blob').map((x) => x.path);
+  }
+
+  // 默认分支 (main), 记着
+  async branch() {
+    const key = `${this.owner}/${this.repo}`;
+    if (!branches.has(key)) branches.set(key, (await this.check()).default_branch || 'main');
+    return branches.get(key);
+  }
+
+  // 文件夹 dir 里的东西 (一层): [{ path, type: 'blob' | 'tree', sha }]。按 sha 记着 (同一个 sha 内容不会变)
+  async tree(dir) {
+    const get = async (ref) => {
+      if (trees.has(ref)) return trees.get(ref);
+      let res;
+      try {
+        res = await this.call('GET', `/git/trees/${encodeURIComponent(ref)}`);
+      } catch (e) {
+        if (e.kind === 'conflict') return []; // 仓库是空的
+        throw e;
+      }
+      const list = res ? ((await res.json()).tree ?? []) : [];
+      if (/^[0-9a-f]{40}$/.test(ref)) trees.set(ref, list);
+      return list;
+    };
+    let entries = await get(await this.branch());
+    for (const part of dir.split('/').filter(Boolean)) {
+      const sub = entries.find((x) => x.path === part && x.type === 'tree');
+      if (!sub) return [];
+      entries = await get(sub.sha);
+    }
+    return entries;
   }
 
   async write(path, base64, sha, message) {
@@ -178,17 +214,161 @@ export class GitHubRepo {
   }
 }
 
-// 本机的图片录音 (测试时可以换成假的)
-const localMedia = { get: (id) => getMedia(id).catch(() => null), put: (blob, id) => putMedia(blob, id) };
+const branches = new Map(); // 仓库 → 默认分支
+const trees = new Map(); // git tree 的 sha → 里面的东西
+
+// 本机的图片录音 (测试时可以换成假的); keys: 本机有哪些 (一下拿全, 不用一个一个问)
+const localMedia = { get: (id) => getMedia(id).catch(() => null), put: (blob, id) => putMedia(blob, id), keys: () => mediaKeys().catch(() => null) };
+
+// ---- 图片录音的包 ----
+// 「WGP1」+ 4 个字节的头有多长 + 头 (JSON: [{ id, type, size }]) + 一个接一个的文件
+const MAGIC = [0x57, 0x47, 0x50, 0x31];
+
+export async function encodePack(items) {
+  const datas = await Promise.all(items.map(async ({ blob }) => new Uint8Array(await blob.arrayBuffer())));
+  const head = new TextEncoder().encode(JSON.stringify(items.map(({ id, blob }, i) => ({ id, type: blob.type || '', size: datas[i].length }))));
+  const out = new Uint8Array(8 + head.length + datas.reduce((n, d) => n + d.length, 0));
+  out.set(MAGIC, 0);
+  new DataView(out.buffer).setUint32(4, head.length);
+  out.set(head, 8);
+  let at = 8 + head.length;
+  for (const d of datas) {
+    out.set(d, at);
+    at += d.length;
+  }
+  return out;
+}
+
+// 包 → [{ id, blob }]; 不是包、坏了的返回 []
+export function decodePack(bytes) {
+  if (bytes.length < 8 || MAGIC.some((b, i) => bytes[i] !== b)) return [];
+  const len = new DataView(bytes.buffer, bytes.byteOffset).getUint32(4);
+  let head;
+  try {
+    head = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + len)));
+  } catch {
+    return [];
+  }
+  const out = [];
+  let at = 8 + len;
+  for (const { id, type, size } of Array.isArray(head) ? head : []) {
+    if (typeof id !== 'string' || !(size >= 0) || at + size > bytes.length) break;
+    out.push({ id, blob: new Blob([bytes.slice(at, at + size)], { type: String(type ?? '') }) });
+    at += size;
+  }
+  return out;
+}
+
+export function cleanIndex(raw) {
+  const packs = {};
+  for (const [name, ids] of Object.entries(raw?.packs ?? {})) {
+    if (/^p_[\w-]+$/.test(name) && Array.isArray(ids)) packs[name] = ids.filter((id) => typeof id === 'string');
+  }
+  return { version: 1, packs };
+}
+
+async function readIndex(repo) {
+  const f = await repo.readText(INDEX_PATH);
+  if (!f) return { sha: undefined, index: cleanIndex(null) };
+  try {
+    return { sha: f.sha, index: cleanIndex(JSON.parse(f.text)) };
+  } catch {
+    return { sha: f.sha, index: cleanIndex(null) };
+  }
+}
+
+// 记上新传的包 (别的设备同时也记了: 重新拿、合起来再写)
+async function addToIndex(repo, state, name, ids) {
+  for (let attempt = 0; ; attempt++) {
+    const index = { ...state.index, packs: { ...state.index.packs, [name]: ids } };
+    try {
+      const sha = await repo.write(INDEX_PATH, utf8ToB64(JSON.stringify(index)), state.sha, '温故: 图片 / 录音的目录');
+      Object.assign(state, { sha, index });
+      return;
+    } catch (e) {
+      if (e.kind !== 'conflict' || attempt >= 3) throw e;
+      Object.assign(state, await readIndex(repo));
+    }
+  }
+}
+
+// 图片录音: 本机缺的拿下来 (老的一个一个的、包里的), 仓库缺的打包传上去。
+// progress(字): 传 / 拿到哪了。返回 { downloaded, uploaded }
+export async function syncMedia({ store, repo, media = localMedia, progress = () => {} }) {
+  const needed = new Set(usedMediaIds(store.data));
+  if (!needed.size) return { downloaded: 0, uploaded: 0 };
+  const keys = media.keys ? await media.keys() : null;
+  const local = keys ? new Set(keys) : new Set();
+  if (!keys) for (const id of needed) if (await media.get(id)) local.add(id);
+
+  // 仓库里有哪些: 老的一个一个的文件, 包里的
+  const where = new Map(); // id → { file } | { pack }
+  for (const name of await repo.list('media')) {
+    const m = /^(m_[\w-]+)\.[a-z0-9]+$/.exec(name);
+    if (m) where.set(m[1], { file: `media/${name}` });
+  }
+  const state = await readIndex(repo);
+  for (const [pack, ids] of Object.entries(state.index.packs)) for (const id of ids) if (!where.has(id)) where.set(id, { pack });
+
+  // 拿下来: 一个包拿一次, 里面用得着的都存上
+  let downloaded = 0;
+  const missing = [...needed].filter((id) => !local.has(id) && where.has(id));
+  const byPack = new Map();
+  for (const id of missing) {
+    const w = where.get(id);
+    if (w.file) {
+      progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
+      const blob = await repo.readBlob(w.file);
+      if (blob) {
+        await media.put(blob, id);
+        downloaded++;
+      }
+    } else byPack.set(w.pack, [...(byPack.get(w.pack) ?? []), id]);
+  }
+  for (const [pack, ids] of byPack) {
+    progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
+    const blob = await repo.readBlob(`media/packs/${pack}.wgp`);
+    if (!blob) continue;
+    const want = new Set(ids);
+    for (const item of decodePack(new Uint8Array(await blob.arrayBuffer()))) {
+      if (!want.has(item.id)) continue;
+      await media.put(item.blob, item.id);
+      downloaded++;
+    }
+  }
+
+  // 传上去: 几 MB 一包, 传好一包记一下目录 (中途断了, 传好的不用再传)
+  const toSend = [...needed].filter((id) => local.has(id) && !where.has(id));
+  let uploaded = 0;
+  let batch = [];
+  let bytes = 0;
+  const flushPack = async () => {
+    if (!batch.length) return;
+    progress(`传图片录音 ${uploaded + batch.length}/${toSend.length}`);
+    const name = `p_${newId()}`;
+    await repo.write(`media/packs/${name}.wgp`, bytesToB64(await encodePack(batch)), undefined, `温故: 图片 / 录音 (${batch.length} 个)`);
+    await addToIndex(repo, state, name, batch.map((x) => x.id));
+    uploaded += batch.length;
+    batch = [];
+    bytes = 0;
+  };
+  for (const id of toSend) {
+    const blob = await media.get(id);
+    if (!blob) continue;
+    if (bytes && bytes + blob.size > PACK_BYTES) await flushPack();
+    batch.push({ id, blob });
+    bytes += blob.size;
+  }
+  await flushPack();
+  return { downloaded, uploaded };
+}
 
 const canonical = (data) => JSON.stringify(cleanData(data));
 
-// 同步一次。返回 { changed: 本机数据变了没有, pushed, downloaded, uploaded }
-export async function syncOnce({ store, repo, media = localMedia, onApplied = null, now = Date.now }) {
+// 同步一次: 先合并、推卡片, 再补齐图片录音。返回 { changed: 本机数据变了没有, pushed, downloaded, uploaded }
+export async function syncOnce({ store, repo, media = localMedia, onApplied = null, now = Date.now, progress = () => {} }) {
   let changed = false;
   let pushed = false;
-  let downloaded = 0;
-  let uploaded = 0;
   for (let attempt = 0; ; attempt++) {
     const remote = await repo.readText(DATA_PATH);
     let remoteData = null;
@@ -208,26 +388,6 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
       }
     }
 
-    // 图片录音: 本机缺的拿下来, 仓库缺的传上去 (先传, 别的设备拿到数据时图片已经在了)
-    const needed = new Set(usedMediaIds(store.data));
-    if (needed.size) {
-      const files = await repo.list('media');
-      const remoteNames = new Map(files.map((name) => [name.replace(/\.[^.]+$/, ''), name]));
-      for (const id of needed) {
-        const mine = await media.get(id);
-        if (!mine && remoteNames.has(id)) {
-          const blob = await repo.readBlob(`media/${remoteNames.get(id)}`);
-          if (blob) {
-            await media.put(blob, id);
-            downloaded++;
-          }
-        } else if (mine && !remoteNames.has(id)) {
-          await repo.write(`media/${id}.${extOf(mine.type)}`, await blobToB64(mine), undefined, '温故: 图片 / 录音');
-          uploaded++;
-        }
-      }
-    }
-
     const out = canonical(store.data);
     if (remote && canonical(JSON.parse(remote.text)) === out) break; // 仓库里已经是最新的
     try {
@@ -239,6 +399,7 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
       throw e;
     }
   }
+  const { downloaded, uploaded } = await syncMedia({ store, repo, media, progress });
   return { changed, pushed, downloaded, uploaded };
 }
 
@@ -311,7 +472,7 @@ export class SyncManager {
     this.running = (async () => {
       try {
         const repo = new GitHubRepo(c);
-        const result = await syncOnce({ store: this.store, repo, onApplied: this.onApplied });
+        const result = await syncOnce({ store: this.store, repo, onApplied: this.onApplied, progress: (text) => this.setStatus('syncing', text) });
         const lastSyncAt = Date.now();
         saveConfig({ ...this.config, lastSyncAt }, this.storage);
         this.state.lastSyncAt = lastSyncAt;

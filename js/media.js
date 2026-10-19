@@ -53,6 +53,11 @@ export async function getMedia(id) {
   return rec?.blob ?? null;
 }
 
+// 本机存着哪些 (id), 一下拿全 (同步时上万个也不用一个一个问)
+export async function mediaKeys() {
+  return run('readonly', (s) => s.getAllKeys());
+}
+
 export async function deleteMedia(id) {
   urls.delete(id);
   await run('readwrite', (s) => s.delete(id));

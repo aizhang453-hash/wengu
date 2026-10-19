@@ -222,7 +222,7 @@ const syncer = new SyncManager(store, {
     badge.className = `sync-badge ${warn ? 'error' : status}`;
     const text = warn ? '密钥快过期' : ({ syncing: '同步中', ok: '已同步', error: '同步出错', idle: '同步' }[status] ?? '');
     badge.replaceChildren(h('span', { class: 'sync-icon', 'aria-hidden': 'true' }, icon(status === 'error' || warn ? 'alert' : status === 'syncing' ? 'refresh' : 'cloud', 18)), h('span', { class: 'sync-text' }, text));
-    badge.title = status === 'error' ? `同步出错: ${message}` : warn ? (expiry.expired ? '同步用的密钥可能已经过期了, 点这里换' : expiry.days === 0 ? '同步用的密钥今天过期, 点这里换' : `同步用的密钥还有 ${expiry.days} 天过期, 点这里换`) : `多设备同步: ${text}`;
+    badge.title = status === 'error' ? `同步出错: ${message}` : status === 'syncing' && message ? `多设备同步: ${message}` : warn ? (expiry.expired ? '同步用的密钥可能已经过期了, 点这里换' : expiry.days === 0 ? '同步用的密钥今天过期, 点这里换' : `同步用的密钥还有 ${expiry.days} 天过期, 点这里换`) : `多设备同步: ${text}`;
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
   onApplied: () => {

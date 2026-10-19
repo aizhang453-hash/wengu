@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, expiryFromDate, knownExpiry, expiryInfo, expiryUnknown, SyncManager, loadConfig } from '../js/sync.js';
+import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, INDEX_PATH, PACK_BYTES, encodePack, decodePack, GitHubRepo, expiryFromDate, knownExpiry, expiryInfo, expiryUnknown, SyncManager, loadConfig } from '../js/sync.js';
 import { Store, makeCard } from '../js/store.js';
 
 function memoryStorage() {
@@ -138,8 +138,11 @@ test('图片录音: 有的传上去, 缺的拿下来', async () => {
   const mediaA = fakeMedia({ m_img1: new Blob(['PNGDATA'], { type: 'image/png' }), m_aud1: new Blob(['WEBM'], { type: 'audio/webm' }) });
   const r1 = await syncOnce({ store: a, repo, media: mediaA });
   assert.equal(r1.uploaded, 2);
-  assert.ok(repo.files.has('media/m_img1.png'));
-  assert.ok(repo.files.has('media/m_aud1.webm'));
+  // 打成一包, 目录里记着
+  const packs = [...repo.files.keys()].filter((k) => k.startsWith('media/packs/'));
+  assert.equal(packs.length, 1);
+  const index = JSON.parse(b64ToUtf8(repo.files.get(INDEX_PATH).data));
+  assert.deepEqual(Object.values(index.packs), [['m_img1', 'm_aud1']]);
 
   const mediaB = fakeMedia();
   const r2 = await syncOnce({ store: b, repo, media: mediaB });
@@ -149,6 +152,110 @@ test('图片录音: 有的传上去, 缺的拿下来', async () => {
   // 再同步不重复传
   const r3 = await syncOnce({ store: b, repo, media: mediaB });
   assert.equal(r3.uploaded + r3.downloaded, 0);
+});
+
+const bytesOf = (blob) => blob.arrayBuffer().then((b) => [...new Uint8Array(b)]);
+
+test('图片录音的包: 打包、拆包一样; 不是包、坏了的不出错', async () => {
+  const items = [
+    { id: 'm_a', blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }) },
+    { id: 'm_b', blob: new Blob([], { type: 'audio/mpeg' }) },
+    { id: 'm_c', blob: new Blob(['中文'], { type: '' }) },
+  ];
+  const back = decodePack(await encodePack(items));
+  assert.deepEqual(back.map((x) => [x.id, x.blob.type, x.blob.size]), [['m_a', 'image/jpeg', 3], ['m_b', 'audio/mpeg', 0], ['m_c', '', 6]]);
+  assert.deepEqual(await bytesOf(back[0].blob), [1, 2, 3]);
+  assert.deepEqual(decodePack(new Uint8Array([1, 2, 3])), []);
+  const cut = (await encodePack(items)).slice(0, -2); // 少了最后两个字节: 前面的还在
+  assert.deepEqual(decodePack(cut).map((x) => x.id), ['m_a', 'm_b']);
+});
+
+test('同步: 上万个图片录音 —— 卡片先推上去; 几 MB 一包; 中途 GitHub 不让传了, 下次接着传, 不重复', async () => {
+  const repo = fakeRepo();
+  const a = device();
+  const big = (n) => new Blob([new Uint8Array(n)], { type: 'audio/mpeg' });
+  const cards = Array.from({ length: 6 }, (_, i) => makeCard(`w${i}`, `d${i}`, { termAudio: `m_s${i}` }));
+  a.putSet({ title: '大卡组', cards });
+  const mediaA = fakeMedia(Object.fromEntries(cards.map((c, i) => [`m_s${i}`, big(Math.floor(PACK_BYTES / 2.5))])));
+  // 传第二包时 GitHub 不让传了
+  const write = repo.write;
+  let packWrites = 0;
+  repo.write = async (path, ...rest) => {
+    if (path.startsWith('media/packs/') && ++packWrites === 2) throw Object.assign(new Error('GitHub 嫌传得太快了'), { kind: 'rate' });
+    return write(path, ...rest);
+  };
+  await assert.rejects(syncOnce({ store: a, repo, media: mediaA }), /太快/);
+  // 卡片已经推上去了
+  assert.equal(JSON.parse(b64ToUtf8(repo.files.get(DATA_PATH).data)).sets[0].cards.length, 6);
+  const r = await syncOnce({ store: a, repo, media: mediaA });
+  const index = JSON.parse(b64ToUtf8(repo.files.get(INDEX_PATH).data));
+  const ids = Object.values(index.packs).flat();
+  assert.equal(r.uploaded, 4); // 第一包的 2 个不再传
+  assert.deepEqual(ids.sort(), cards.map((_, i) => `m_s${i}`).sort());
+  assert.ok(Object.keys(index.packs).length >= 3); // 一包最多大概 8 MB
+  // 另一台设备一包一包拿下来
+  const b = device();
+  const mediaB = fakeMedia();
+  const rb = await syncOnce({ store: b, repo, media: mediaB });
+  assert.equal(rb.downloaded, 6);
+  assert.equal(mediaB.map.get('m_s3').size, Math.floor(PACK_BYTES / 2.5));
+});
+
+test('同步: v1.26 以前一个一个传的图片还认; 两台设备同时传包, 目录不会盖掉别人的', async () => {
+  const repo = fakeRepo();
+  repo.files.set('media/m_old.png', { sha: 'x1', data: btoa('OLDPNG') });
+  const a = device();
+  const b = device();
+  a.putSet({ title: '老图', cards: [makeCard('old', '老', { image: 'm_old' }), makeCard('a', 'A', { image: 'm_a1' })] });
+  b.putSet({ title: '新图', cards: [makeCard('b', 'B', { image: 'm_b1' })] });
+  const mediaA = fakeMedia({ m_a1: new Blob(['A1'], { type: 'image/png' }) });
+  const mediaB = fakeMedia({ m_b1: new Blob(['B1'], { type: 'image/png' }) });
+  const write = repo.write;
+  let raced = false;
+  repo.write = async (path, ...rest) => {
+    // a 写目录之前, b 先传完了一包、写了目录
+    if (path === INDEX_PATH && !raced) {
+      raced = true;
+      await syncOnce({ store: b, repo, media: mediaB });
+    }
+    return write(path, ...rest);
+  };
+  const r = await syncOnce({ store: a, repo, media: mediaA });
+  assert.equal(r.downloaded, 1);
+  assert.equal(await mediaA.map.get('m_old').text(), 'OLDPNG');
+  const index = JSON.parse(b64ToUtf8(repo.files.get(INDEX_PATH).data));
+  assert.deepEqual(Object.values(index.packs).flat().sort(), ['m_a1', 'm_b1']);
+});
+
+// 假的 GitHub 接口 (fetch): routes = { '方法 路径': (body) => [状态, json] }
+function routeFetch(routes) {
+  return async (url, { method, body }) => {
+    const path = url.replace('https://api.github.com/repos/o/r', '');
+    const route = routes[`${method} ${path}`];
+    const [status, json, headers = {}] = route ? route(body && JSON.parse(body)) : [404, {}];
+    return { status, ok: status < 300, headers: { get: (k) => headers[k] ?? null }, json: async () => json, text: async () => JSON.stringify(json) };
+  };
+}
+
+test('GitHub: 文件夹里上千个文件都列得出来 (contents 接口只给 1000 个); 传太快了说清楚, 不说成密钥不对', async () => {
+  const media = 'a'.repeat(40);
+  const files = Array.from({ length: 1500 }, (_, i) => ({ path: `m_${i}.mp3`, type: 'blob', sha: `b${i}` }));
+  const repo = new GitHubRepo(
+    { owner: 'o', repo: 'r', token: 't' },
+    routeFetch({
+      'GET ': () => [200, { default_branch: 'main', private: true }],
+      'GET /git/trees/main': () => [200, { tree: [{ path: 'media', type: 'tree', sha: media }, { path: 'wengu.json', type: 'blob', sha: 'x' }] }],
+      [`GET /git/trees/${media}`]: () => [200, { tree: [...files, { path: 'packs', type: 'tree', sha: 'c'.repeat(40) }] }],
+      'PUT /contents/wengu.json': () => [403, { message: 'You have exceeded a secondary rate limit.' }],
+      'PUT /contents/x.json': () => [403, { message: 'Resource not accessible by personal access token' }],
+    }),
+  );
+  assert.equal((await repo.list('media')).length, 1500);
+  assert.deepEqual(await repo.list('nothing'), []);
+  await assert.rejects(repo.write('wengu.json', '', 'x', ''), (e) => e.kind === 'rate');
+  await assert.rejects(repo.write('x.json', '', 'x', ''), (e) => e.kind === 'auth');
+  const empty = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, routeFetch({ 'GET /git/trees/main': () => [409, { message: 'Git Repository is empty.' }] }));
+  assert.deepEqual(await empty.list('media'), []); // 空仓库 (默认分支上面记着了)
 });
 
 // ---- 密钥哪天过期 ----

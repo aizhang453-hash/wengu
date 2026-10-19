@@ -88,7 +88,7 @@ test('同步: 标注图的图也传上去、拿下来', async () => {
   const card = makeCard('北京', '首都');
   a.putSet({ title: '地图', cards: [card], diagram: { image: 'm_map1', pins: [{ cardId: card.id, x: 0.5, y: 0.5 }] } });
   await syncOnce({ store: a, repo, media: media({ m_map1: new Blob(['MAPPNG'], { type: 'image/png' }) }) });
-  assert.ok(files.has('media/m_map1.png'));
+  assert.ok([...files.keys()].some((k) => k.startsWith('media/packs/'))); // 打包传上去
   const b = new Store(memoryStorage());
   const mb = media();
   const r = await syncOnce({ store: b, repo, media: mb });

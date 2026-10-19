@@ -162,7 +162,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
   const expiryEl = h('div', { class: 'sync-expiry' });
   const draw = () => {
     const st = syncer.state;
-    const label = { syncing: '同步中……', ok: '同步好了', error: `出错了: ${st.message}`, idle: '等着同步', off: '没开' }[st.status] ?? '';
+    const label = { syncing: `同步中……${st.message ? ` ${st.message}` : ''}`, ok: '同步好了', error: `出错了: ${st.message}`, idle: '等着同步', off: '没开' }[st.status] ?? '';
     statusEl.className = `sync-status ${st.status}`;
     fill(statusEl, h('strong', {}, label), h('div', { class: 'muted small' }, `上次同步: ${timeAgo(loadConfig()?.lastSyncAt)}`));
     drawExpiry();
