@@ -6694,3 +6694,17 @@ a.pick-row:hover {
     align-items: stretch;
   }
 }
+
+/* 同步页: 清理旧历史 */
+.history-points {
+  margin: 8px 0;
+  padding-left: 1.2em;
+}
+
+.history-points li {
+  margin: 4px 0;
+}
+
+.sync-msg.ok {
+  color: var(--good);
+}

@@ -215,6 +215,32 @@ export class GitHubRepo {
     return entries;
   }
 
+  // 存了几个版本 (提交): 每页一个, 看最后一页是第几页
+  async commitCount() {
+    const res = await this.call('GET', '/commits?per_page=1');
+    if (!res) return 0;
+    const last = /[?&]page=(\d+)>; rel="last"/.exec(res.headers.get('link') ?? '');
+    return last ? Number(last[1]) : (await res.json()).length;
+  }
+
+  // 清理旧历史: 新建一个没有上一个版本的提交 (内容跟现在一模一样), 分支换成它 (强推), 以前的版本就没了。
+  // 只有一个版本的不用清, 返回 false; 这中间别的设备推过 (分支动了) 抛 conflict, 什么都不改
+  async squash(message) {
+    const branch = encodeURIComponent(await this.branch());
+    const headOf = async () => {
+      const ref = await this.call('GET', `/git/ref/heads/${branch}`);
+      return ref ? (await ref.json()).object.sha : null;
+    };
+    const head = await headOf();
+    if (!head) return false; // 空仓库
+    const commit = await (await this.call('GET', `/git/commits/${head}`)).json();
+    if (!commit.parents?.length) return false;
+    const fresh = await (await this.call('POST', '/git/commits', { body: { message, tree: commit.tree.sha, parents: [] } })).json();
+    if ((await headOf()) !== head) throw new SyncError('别的设备刚同步过', 'conflict');
+    await this.call('PATCH', `/git/refs/heads/${branch}`, { body: { sha: fresh.sha, force: true } });
+    return true;
+  }
+
   // 一次提交改好几个文件, 不管多少个都只算一次提交 (git 的接口)。
   // changes: { 路径: null 删掉 | Uint8Array | 字 }; expect: { 路径: 现在应该是的 sha }。
   // 别的设备这中间改过 (expect 对不上、分支动了) 抛 conflict, 什么都不改。返回 { 路径: 新的 sha }
@@ -582,6 +608,42 @@ export class SyncManager {
       this.timer = null;
       this.sync();
     }, ms);
+  }
+
+  // 清理仓库的旧历史 (同步页上的按钮): 先同步一次 (仓库里是所有设备最新的), 再只留现在这一个版本。
+  // 别的设备正好推了: 再同步、再清 (最多三次)。返回 { squashed: 清了没有 (只有一个版本的不用清) }, 出错返回 { error }
+  async cleanHistory() {
+    const c = this.config;
+    if (!c) return { error: '没连着同步' };
+    while (this.running) await this.running;
+    this.setStatus('syncing', '清理旧历史');
+    this.running = (async () => {
+      try {
+        const repo = new GitHubRepo(c);
+        let squashed = false;
+        for (let attempt = 0; ; attempt++) {
+          await syncOnce({ store: this.store, repo, onApplied: this.onApplied, progress: (text) => this.setStatus('syncing', text) });
+          try {
+            squashed = await repo.squash('温故: 清理旧历史 (只留现在的)');
+            break;
+          } catch (e) {
+            if (e.kind !== 'conflict' || attempt >= 2) throw e;
+          }
+        }
+        const lastSyncAt = Date.now();
+        saveConfig({ ...this.config, lastSyncAt }, this.storage);
+        this.state.lastSyncAt = lastSyncAt;
+        this.setStatus('ok');
+        return { squashed };
+      } catch (e) {
+        const message = e instanceof SyncError ? e.message : '清理出错了';
+        this.setStatus('error', message, e instanceof SyncError ? e.kind : 'other');
+        return { error: message };
+      } finally {
+        this.running = null;
+      }
+    })();
+    return this.running;
   }
 
   async sync() {

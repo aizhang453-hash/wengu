@@ -309,6 +309,66 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
     h('p', { class: 'muted small' }, '旧的密钥可以在 ', h('a', { href: TOKENS_URL, target: '_blank', rel: 'noopener' }, 'GitHub 的密钥列表'), ' 里删掉 (Delete)。'),
   );
 
+  // ---- 清理旧历史 ----
+  const historyInfo = h('p', { class: 'small' }, '看一下仓库多大……');
+  const historyMsg = h('p', { class: 'sync-msg', 'aria-live': 'polite' });
+  let versions = 0;
+  const loadHistoryInfo = async () => {
+    try {
+      const repo = new GitHubRepo(loadConfig());
+      const [info, count] = await Promise.all([repo.check(), repo.commitCount()]);
+      versions = count;
+      const mb = (info.size ?? 0) / 1024;
+      historyInfo.textContent = `仓库现在大约 ${mb < 1 ? '不到 1' : Math.round(mb)} MB, 存了 ${count.toLocaleString('zh-CN')} 个版本 (这个大小 GitHub 隔一阵子才更新)。`;
+    } catch (e) {
+      historyInfo.textContent = e instanceof SyncError ? `看不了: ${e.message}` : '看不了仓库多大';
+    }
+  };
+  const cleanBtn = h(
+    'button',
+    {
+      class: 'btn',
+      onclick: async () => {
+        if (!confirm(`只留现在这一个版本, 以前的${versions > 1 ? ` ${(versions - 1).toLocaleString('zh-CN')} 个` : ''}版本都清掉? 清了就退不回以前的版本了。现在的卡片、进度、图片录音都不动。`)) return;
+        cleanBtn.disabled = true;
+        historyMsg.textContent = '先同步一次, 再清理……';
+        const r = await syncer.cleanHistory();
+        cleanBtn.disabled = false;
+        historyMsg.classList.toggle('ok', !r.error);
+        historyMsg.textContent = r.error
+          ? `没清理: ${r.error}`
+          : r.squashed
+            ? '清理好了: 只剩现在这一个版本。GitHub 一般要过几天才真正腾出地方, 那时上面的大小才会变小。'
+            : '只有一个版本, 不用清理。';
+        if (r.squashed) toast('旧历史清理好了');
+        loadHistoryInfo();
+      },
+    },
+    '清理旧历史',
+  );
+  const historyBox = h(
+    'details',
+    { class: 'howto history-clean', ontoggle: (e) => e.target.open && loadHistoryInfo() },
+    h('summary', {}, '清理仓库的旧历史'),
+    h(
+      'p',
+      { class: 'small' },
+      '每同步一次, GitHub 就把仓库存成一个新版本, 以前的版本都留着 —— 连删掉的卡片集用过的图片录音也还在旧版本里。',
+      '旧版本不会同步到电脑、平板上, 不占设备的地方, 只占 GitHub 那边的。',
+    ),
+    historyInfo,
+    h(
+      'ul',
+      { class: 'small history-points' },
+      h('li', {}, h('strong', {}, '清理做什么: '), '先同步一次, 再只留现在这一个版本, 以前的全部清掉。'),
+      h('li', {}, h('strong', {}, '不动什么: '), '现在的卡片、进度、复习记录、图片录音都不动; 别的设备照常同步, 不用重新连。'),
+      h('li', {}, h('strong', {}, '要知道: '), '清了就退不回以前的版本了 (平时用不到; 万一哪天同步把东西弄乱了, 旧版本是最后的退路)。想保险, 清之前先在首页「导出备份」。'),
+      h('li', {}, h('strong', {}, '什么时候清: '), '不清也没关系, GitHub 私有仓库 1 GB 以内都没事; 删掉过大卡组、仓库到了几百 MB 再清就行。'),
+    ),
+    h('div', { class: 'row' }, cleanBtn),
+    historyMsg,
+  );
+
   draw();
   const unsub = syncer.subscribe?.(draw);
 
@@ -339,6 +399,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
     ),
     qrBox,
     renew,
+    historyBox,
   );
   return { title: '多设备同步', el: root, focus: renew.open ? newToken : null, cleanup: () => unsub?.() };
 }

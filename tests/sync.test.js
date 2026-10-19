@@ -333,6 +333,34 @@ test('删不用的图片录音时另一台设备正好也在改: 这次不删, �
   assert.ok(![...repo.files.keys()].some((k) => k.startsWith('media/packs/')));
 });
 
+test('GitHub: 清理旧历史 —— 只留现在的 (内容一样、没有上一个版本, 强推); 只有一个版本不用清; 这中间别人推了就不清', async () => {
+  const calls = [];
+  let head = 'H1';
+  let parents = ['H0'];
+  const routes = {
+    'GET ': () => [200, { default_branch: 'main' }],
+    'GET /commits?per_page=1': () => [200, [{}], { link: '<https://api.github.com/repos/o/r/commits?per_page=1&page=2>; rel="next", <https://api.github.com/repos/o/r/commits?per_page=1&page=1250>; rel="last"' }],
+    'GET /git/ref/heads/main': () => [200, { object: { sha: head } }],
+    'GET /git/commits/H1': () => [200, { tree: { sha: 'TREE' }, parents }],
+    'POST /git/commits': (body) => (calls.push(['commit', body.tree, body.parents]), [201, { sha: 'NEW' }]),
+    'PATCH /git/refs/heads/main': (body) => (calls.push(['ref', body.sha, body.force]), [200, {}]),
+  };
+  const repo = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, routeFetch(routes));
+  assert.equal(await repo.commitCount(), 1250);
+  assert.equal(await repo.squash('清理'), true);
+  assert.deepEqual(calls, [['commit', 'TREE', []], ['ref', 'NEW', true]]);
+  // 只有一个版本
+  calls.length = 0;
+  parents = [];
+  assert.equal(await repo.squash('清理'), false);
+  assert.equal(calls.length, 0);
+  // 新建好提交、还没换分支的时候别的设备推了: 不换
+  parents = ['H0'];
+  routes['POST /git/commits'] = () => ((head = 'H2'), [201, { sha: 'NEW2' }]);
+  await assert.rejects(repo.squash('清理'), (e) => e.kind === 'conflict');
+  assert.ok(!calls.some((c) => c[0] === 'ref'));
+});
+
 // 假的 GitHub 接口 (fetch): routes = { '方法 路径': (body) => [状态, json] }
 function routeFetch(routes) {
   return async (url, { method, body }) => {
