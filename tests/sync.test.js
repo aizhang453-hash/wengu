@@ -43,6 +43,28 @@ function fakeRepo() {
       files.set(path, { sha: `sha${++n}`, data });
       return `sha${n}`;
     },
+    // 一次提交改好几个 (GitHubRepo.commit 一样): null 删掉; expect 对不上就冲突
+    async commit(changes, message, expect = {}) {
+      if (repo.beforeCommit) {
+        const hook = repo.beforeCommit;
+        repo.beforeCommit = null;
+        await hook();
+      }
+      for (const [path, sha] of Object.entries(expect)) {
+        if (files.get(path)?.sha !== sha) throw Object.assign(new Error('conflict'), { kind: 'conflict' });
+      }
+      repo.commits = (repo.commits ?? 0) + 1;
+      const shas = {};
+      for (const [path, value] of Object.entries(changes)) {
+        if (value === null) files.delete(path);
+        else {
+          const data = typeof value === 'string' ? utf8ToB64(value) : btoa(String.fromCharCode(...value));
+          files.set(path, { sha: `sha${++n}`, data });
+          shas[path] = `sha${n}`;
+        }
+      }
+      return shas;
+    },
   };
   return repo;
 }
@@ -227,6 +249,90 @@ test('同步: v1.26 以前一个一个传的图片还认; 两台设备同时传�
   assert.deepEqual(Object.values(index.packs).flat().sort(), ['m_a1', 'm_b1']);
 });
 
+test('删掉的卡片集用过的图片录音: 过一天从仓库删掉 (还用着的不删); 一包一半以上没用了重新打包; 又用上了就不删', async () => {
+  const HOUR = 3600e3;
+  let t = Date.now();
+  const clock = () => t;
+  const repo = fakeRepo();
+  repo.files.set('media/m_old1.png', { sha: 'x1', data: btoa('OLD1') }); // v1.26 以前一个一个传的
+  repo.files.set('media/m_old2.png', { sha: 'x2', data: btoa('OLD2') });
+  const a = device();
+  const keep = a.putSet({ title: '留着', cards: [makeCard('k1', '', { image: 'm_k1' }), makeCard('k2', '', { image: 'm_old2' })] });
+  const gone = a.putSet({ title: '要删的', cards: [makeCard('g1', '', { image: 'm_g1' }), makeCard('g2', '', { image: 'm_g2' }), makeCard('o1', '', { image: 'm_old1' })] });
+  const half = a.putSet({ title: '删一半', cards: ['h1', 'h2', 'h3', 'h4'].map((w) => makeCard(w, '', { image: `m_${w}` })) });
+  const blob = (s) => new Blob([s], { type: 'image/png' });
+  const media = fakeMedia(Object.fromEntries(['m_k1', 'm_g1', 'm_g2', 'm_h1', 'm_h2', 'm_h3', 'm_h4'].map((id) => [id, blob(id)])));
+  // 分三次传, 三个包: 「留着」的、「要删的」的、「删一半」的
+  const sets = [keep, gone, half];
+  for (const s of sets) {
+    const only = device();
+    only.putSet(a.getSet(s.id));
+    await syncOnce({ store: only, repo, media, now: clock });
+  }
+  await syncOnce({ store: a, repo, media, now: clock });
+  const index = () => JSON.parse(b64ToUtf8(repo.files.get(INDEX_PATH).data));
+  const packFiles = () => [...repo.files.keys()].filter((k) => k.startsWith('media/packs/')).length;
+  assert.equal(packFiles(), 3);
+
+  a.deleteSet(gone.id);
+  const halfSet = a.getSet(half.id);
+  a.putSet({ ...halfSet, cards: halfSet.cards.slice(0, 1) }); // 删一半里只留 h1 (删了 3/4)
+  let r = await syncOnce({ store: a, repo, media, now: clock });
+  assert.equal(r.removed, 0); // 先记下, 不马上删
+  assert.deepEqual(Object.keys(index().unused).sort(), ['m_g1', 'm_g2', 'm_h2', 'm_h3', 'm_h4', 'm_old1']);
+  assert.ok(repo.files.has('media/m_old1.png'));
+
+  t += 25 * HOUR;
+  r = await syncOnce({ store: a, repo, media, now: clock });
+  assert.equal(r.removed, 6);
+  assert.ok(!repo.files.has('media/m_old1.png'));
+  assert.ok(repo.files.has('media/m_old2.png')); // 还用着
+  assert.equal(packFiles(), 2); // 「要删的」整包删了; 「删一半」重新打包, 只剩 h1
+  assert.deepEqual(Object.values(index().packs).flat().sort(), ['m_h1', 'm_k1']);
+  assert.deepEqual(index().unused, {});
+  // 另一台设备还拿得到留着的
+  const b = device();
+  const mb = fakeMedia();
+  await syncOnce({ store: b, repo, media: mb, now: clock });
+  assert.deepEqual([...mb.map.keys()].sort(), ['m_h1', 'm_k1', 'm_old2']);
+  assert.equal(await mb.map.get('m_h1').text(), 'm_h1');
+
+  // 记下没用了、还没到一天又用上了 (别的设备又加回来): 不删
+  const k = a.getSet(keep.id);
+  a.putSet({ ...k, cards: k.cards.slice(0, 1) });
+  await syncOnce({ store: a, repo, media, now: clock });
+  assert.deepEqual(Object.keys(index().unused), ['m_old2']);
+  a.putSet({ ...a.getSet(keep.id), cards: [...a.getSet(keep.id).cards, makeCard('back', '', { image: 'm_old2' })] });
+  t += 25 * HOUR;
+  r = await syncOnce({ store: a, repo, media, now: clock });
+  assert.equal(r.removed, 0);
+  assert.ok(repo.files.has('media/m_old2.png'));
+  assert.deepEqual(index().unused, {});
+});
+
+test('删不用的图片录音时另一台设备正好也在改: 这次不删, 什么都不坏, 下次再删', async () => {
+  let t = Date.now();
+  const repo = fakeRepo();
+  const a = device();
+  const s = a.putSet({ title: '要删的', cards: [makeCard('g', '', { image: 'm_g' })] });
+  const media = fakeMedia({ m_g: new Blob(['G'], { type: 'image/png' }) });
+  await syncOnce({ store: a, repo, media, now: () => t });
+  a.deleteSet(s.id);
+  await syncOnce({ store: a, repo, media, now: () => t });
+  t += 25 * 3600e3;
+  // 提交之前, 别的设备改了目录
+  repo.beforeCommit = async () => {
+    const f = repo.files.get(INDEX_PATH);
+    repo.files.set(INDEX_PATH, { ...f, sha: 'other' });
+  };
+  const r = await syncOnce({ store: a, repo, media, now: () => t });
+  assert.equal(r.removed, 0);
+  assert.ok([...repo.files.keys()].some((k) => k.startsWith('media/packs/')));
+  const r2 = await syncOnce({ store: a, repo, media, now: () => t });
+  assert.equal(r2.removed, 1);
+  assert.ok(![...repo.files.keys()].some((k) => k.startsWith('media/packs/')));
+});
+
 // 假的 GitHub 接口 (fetch): routes = { '方法 路径': (body) => [状态, json] }
 function routeFetch(routes) {
   return async (url, { method, body }) => {
@@ -256,6 +362,38 @@ test('GitHub: 文件夹里上千个文件都列得出来 (contents 接口只给 
   await assert.rejects(repo.write('x.json', '', 'x', ''), (e) => e.kind === 'auth');
   const empty = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, routeFetch({ 'GET /git/trees/main': () => [409, { message: 'Git Repository is empty.' }] }));
   assert.deepEqual(await empty.list('media'), []); // 空仓库 (默认分支上面记着了)
+});
+
+test('GitHub: 一次提交删好几个、加一个、改目录 (git 接口); 目录被别人改了、分支动了就不提交', async () => {
+  const media = 'd'.repeat(40);
+  const calls = [];
+  let refStatus = 200;
+  const routes = {
+    'GET ': () => [200, { default_branch: 'main' }],
+    'GET /git/ref/heads/main': () => [200, { object: { sha: 'HEAD1' } }],
+    'GET /git/commits/HEAD1': () => [200, { tree: { sha: 'e'.repeat(40) } }],
+    [`GET /git/trees/${'e'.repeat(40)}`]: () => [200, { tree: [{ path: 'media', type: 'tree', sha: media }] }],
+    [`GET /git/trees/${media}`]: () => [200, { tree: [{ path: 'index.json', type: 'blob', sha: 'IDX1' }] }],
+    'POST /git/blobs': (body) => (calls.push(['blob', body.encoding, body.content.length]), [201, { sha: `B${calls.length}` }]),
+    'POST /git/trees': (body) => (calls.push(['tree', body.base_tree, body.tree]), [201, { sha: 'T2' }]),
+    'POST /git/commits': (body) => (calls.push(['commit', body.parents, body.tree]), [201, { sha: 'C2' }]),
+    'PATCH /git/refs/heads/main': (body) => (calls.push(['ref', body.sha, body.force]), refStatus === 200 ? [200, {}] : [422, { message: 'Update is not a fast forward' }]),
+  };
+  const repo = new GitHubRepo({ owner: 'o', repo: 'r', token: 't' }, routeFetch(routes));
+  const shas = await repo.commit({ 'media/m_1.png': null, 'media/packs/p_new.wgp': new Uint8Array([1, 2, 3]), 'media/index.json': '{"version":1}' }, '整理', { 'media/index.json': 'IDX1' });
+  assert.deepEqual(Object.keys(shas), ['media/packs/p_new.wgp', 'media/index.json']);
+  const tree = calls.find((c) => c[0] === 'tree');
+  assert.equal(tree[1], 'e'.repeat(40));
+  assert.deepEqual(tree[2][0], { path: 'media/m_1.png', mode: '100644', type: 'blob', sha: null });
+  assert.deepEqual(calls.find((c) => c[0] === 'commit').slice(1), [['HEAD1'], 'T2']);
+  assert.deepEqual(calls.at(-1), ['ref', 'C2', undefined]); // 不强推
+  // 目录被别人改了: 不提交
+  calls.length = 0;
+  await assert.rejects(repo.commit({ 'media/index.json': '{}' }, 'x', { 'media/index.json': 'OLD' }), (e) => e.kind === 'conflict');
+  assert.equal(calls.length, 0);
+  // 分支动了 (不是接着最新的): 冲突
+  refStatus = 422;
+  await assert.rejects(repo.commit({ 'media/m_2.png': null }, 'x', {}), (e) => e.kind === 'conflict');
 });
 
 // ---- 密钥哪天过期 ----

@@ -8,7 +8,7 @@ import { reviewedToday, newToday, planOf, shareOf } from '../plan.js';
 import { planLine, todayAll, openCapDialog } from './plan.js';
 import { openOptimizeDialog } from './optimize.js';
 import { reviewCount } from '../revlog.js';
-import { FOLDER_PREFIX } from '../store.js';
+import { FOLDER_PREFIX, COLLAPSED_KEY } from '../store.js';
 import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 import { dueMistakes } from '../mistakes.js';
 
@@ -45,7 +45,6 @@ function todayPanel(store, sets, go) {
 
 // 今天要背的, 像 Anki 的牌组列表: 每个卡片集 (文件夹下面列着里面的) 今天几个新词、几张复习、几张积压,
 // 「背」只背那一个 (张数跟表上一样: 先所有卡片集一起排好每天的上限, 最可能忘的先来, 再看各占几张)
-const COLLAPSED_KEY = 'wengu:home-collapsed';
 function loadCollapsed() {
   try {
     return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]'));

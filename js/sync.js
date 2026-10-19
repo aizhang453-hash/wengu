@@ -1,8 +1,9 @@
 // 多设备同步: 存在你自己的 GitHub 私有仓库里。
 //   wengu.json                  卡片集、文件夹、打卡、删除记录
 //   media/packs/<包>.wgp        图片、录音, 一个包装好多个 (几 MB 一包; 见 encodePack)
-//   media/index.json            哪个包里有哪些: { version: 1, packs: { 包: [图片录音 id] } }
+//   media/index.json            哪个包里有哪些: { version: 1, packs: { 包: [图片录音 id] }, unused: { id: 哪天开始没用的 } }
 //   media/<id>.<后缀>           v1.26 以前一个一个传的图片、录音 (还认, 不再这样传)
+// 删掉的卡片集、卡片用过的图片录音, 过一天 (万一别的设备还要) 从仓库删掉, 好几个一起一次提交; 一包里一半以上没用了就重新打包。
 // 每台设备填一次「仓库 + 密钥」(密钥只能改这一个仓库), 之后打开、改动、回到页面时自动同步。
 // 同步: 拿下仓库里的 → 跟本机的合并 (merge.js) → 推上去 → 补齐图片录音 (本机缺的拿下来, 仓库缺的打包传上去)。
 // 卡片先推: Anki 卡组动不动上万个图片录音, 等传完才推卡片, 别的设备半天看不到 (图片录音没到之前先不显示, 下次同步再拿)。
@@ -17,6 +18,8 @@ export const CONFIG_KEY = 'wengu:sync';
 export const DATA_PATH = 'wengu.json';
 export const INDEX_PATH = 'media/index.json';
 export const PACK_BYTES = 8 * 1024 * 1024; // 一包大概多大 (base64 以后 11 MB 左右, GitHub 一个文件最多 100 MB)
+export const GRACE_MS = 24 * 60 * 60 * 1000; // 没用的图片录音过多久从仓库删掉
+const DELETES_PER_COMMIT = 1000;
 const DEFAULT_API = 'https://api.github.com';
 
 export class SyncError extends Error {
@@ -184,8 +187,9 @@ export class GitHubRepo {
     return branches.get(key);
   }
 
-  // 文件夹 dir 里的东西 (一层): [{ path, type: 'blob' | 'tree', sha }]。按 sha 记着 (同一个 sha 内容不会变)
-  async tree(dir) {
+  // 文件夹 dir 里的东西 (一层): [{ path, type: 'blob' | 'tree', sha }]; root: 从哪个提交 / 树开始 (默认分支最新的)。
+  // 按 sha 记着 (同一个 sha 内容不会变; 只记最近几个, 上万个文件的列表很大)
+  async tree(dir, root = null) {
     const get = async (ref) => {
       if (trees.has(ref)) return trees.get(ref);
       let res;
@@ -196,16 +200,51 @@ export class GitHubRepo {
         throw e;
       }
       const list = res ? ((await res.json()).tree ?? []) : [];
-      if (/^[0-9a-f]{40}$/.test(ref)) trees.set(ref, list);
+      if (/^[0-9a-f]{40}$/.test(ref)) {
+        trees.set(ref, list);
+        if (trees.size > 12) trees.delete(trees.keys().next().value);
+      }
       return list;
     };
-    let entries = await get(await this.branch());
+    let entries = await get(root ?? (await this.branch()));
     for (const part of dir.split('/').filter(Boolean)) {
       const sub = entries.find((x) => x.path === part && x.type === 'tree');
       if (!sub) return [];
       entries = await get(sub.sha);
     }
     return entries;
+  }
+
+  // 一次提交改好几个文件, 不管多少个都只算一次提交 (git 的接口)。
+  // changes: { 路径: null 删掉 | Uint8Array | 字 }; expect: { 路径: 现在应该是的 sha }。
+  // 别的设备这中间改过 (expect 对不上、分支动了) 抛 conflict, 什么都不改。返回 { 路径: 新的 sha }
+  async commit(changes, message, expect = {}) {
+    const branch = encodeURIComponent(await this.branch());
+    const ref = await this.call('GET', `/git/ref/heads/${branch}`);
+    if (!ref) throw new SyncError('别的设备刚同步过', 'conflict');
+    const head = (await ref.json()).object.sha;
+    const base = (await (await this.call('GET', `/git/commits/${head}`)).json()).tree.sha;
+    for (const [path, sha] of Object.entries(expect)) {
+      const dir = path.split('/').slice(0, -1).join('/');
+      const now = (await this.tree(dir, base)).find((x) => x.path === path.split('/').pop())?.sha;
+      if (now !== sha) throw new SyncError('别的设备刚同步过', 'conflict');
+    }
+    const tree = [];
+    const shas = {};
+    for (const [path, value] of Object.entries(changes)) {
+      if (value === null) {
+        tree.push({ path, mode: '100644', type: 'blob', sha: null });
+        continue;
+      }
+      const content = typeof value === 'string' ? utf8ToB64(value) : bytesToB64(value);
+      const blob = await (await this.call('POST', '/git/blobs', { body: { content, encoding: 'base64' } })).json();
+      tree.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
+      shas[path] = blob.sha;
+    }
+    const newTree = await (await this.call('POST', '/git/trees', { body: { base_tree: base, tree } })).json();
+    const newCommit = await (await this.call('POST', '/git/commits', { body: { message, tree: newTree.sha, parents: [head] } })).json();
+    await this.call('PATCH', `/git/refs/heads/${branch}`, { body: { sha: newCommit.sha } }); // 不是接着上一个提交的 (别人刚推过): 422 → conflict
+    return shas;
   }
 
   async write(path, base64, sha, message) {
@@ -264,7 +303,9 @@ export function cleanIndex(raw) {
   for (const [name, ids] of Object.entries(raw?.packs ?? {})) {
     if (/^p_[\w-]+$/.test(name) && Array.isArray(ids)) packs[name] = ids.filter((id) => typeof id === 'string');
   }
-  return { version: 1, packs };
+  const unused = {};
+  for (const [id, t] of Object.entries(raw?.unused ?? {})) if (Number(t) > 0) unused[id] = Number(t);
+  return { version: 1, packs, unused };
 }
 
 async function readIndex(repo) {
@@ -294,9 +335,9 @@ async function addToIndex(repo, state, name, ids) {
 
 // 图片录音: 本机缺的拿下来 (老的一个一个的、包里的), 仓库缺的打包传上去。
 // progress(字): 传 / 拿到哪了。返回 { downloaded, uploaded }
-export async function syncMedia({ store, repo, media = localMedia, progress = () => {} }) {
+export async function syncMedia({ store, repo, media = localMedia, progress = () => {}, now = Date.now }) {
   const needed = new Set(usedMediaIds(store.data));
-  if (!needed.size) return { downloaded: 0, uploaded: 0 };
+  if (!needed.size && !repo.commit) return { downloaded: 0, uploaded: 0, removed: 0 };
   const keys = media.keys ? await media.keys() : null;
   const local = keys ? new Set(keys) : new Set();
   if (!keys) for (const id of needed) if (await media.get(id)) local.add(id);
@@ -360,8 +401,90 @@ export async function syncMedia({ store, repo, media = localMedia, progress = ()
     bytes += blob.size;
   }
   await flushPack();
-  return { downloaded, uploaded };
+  // 仓库里不用了的删掉 (needed 是刚合并好、推上去的, 是所有设备最新的)
+  const removed = repo.commit ? await cleanRemote({ repo, state, where, needed, now: now(), progress }) : 0;
+  return { downloaded, uploaded, removed };
 }
+
+// 仓库里没用了的图片录音 (删掉的卡片集、卡片、错题的): 先记下哪天开始没用的, 过一天还没用上就删掉 (万一别的设备还要)。
+// 老的一个一个的直接删; 包: 整包都没用了删掉, 一半以上没用了重新打包 (剩下的装一个新包)。好几个一起一次提交,
+// 目录也在同一个提交里改。另一台设备同时在改: 这次不删了, 下次再说。返回删掉了几个
+async function cleanRemote({ repo, state, where, needed, now, progress }) {
+  const unused = { ...state.index.unused };
+  let changed = false;
+  for (const id of Object.keys(unused)) {
+    if (needed.has(id) || !where.has(id)) {
+      delete unused[id];
+      changed = true;
+    }
+  }
+  for (const id of where.keys()) {
+    if (!needed.has(id) && !(id in unused)) {
+      unused[id] = now;
+      changed = true;
+    }
+  }
+  const ripe = new Set(Object.keys(unused).filter((id) => now - unused[id] >= GRACE_MS));
+  if (!ripe.size) {
+    if (!changed) return 0;
+    const index = { ...state.index, unused };
+    try {
+      state.sha = await repo.write(INDEX_PATH, utf8ToB64(JSON.stringify(index)), state.sha, '温故: 图片 / 录音的目录');
+      state.index = index;
+    } catch (e) {
+      if (e.kind !== 'conflict') throw e; // 别的设备刚改了目录: 下次再记
+    }
+    return 0;
+  }
+  const original = state.index.packs;
+  const deadPacks = [];
+  const repack = [];
+  for (const [name, ids] of Object.entries(original)) {
+    const dead = ids.filter((id) => ripe.has(id)).length;
+    if (dead && dead === ids.length) deadPacks.push(name);
+    else if (dead && dead * 2 >= ids.length) repack.push(name);
+  }
+  let packs = { ...original };
+  const gone = new Set(); // 真的从仓库删掉了的
+  // 提交成功了才算删掉了 (dropping: 这次删掉的 id)
+  const commit = async (changes, message, dropping) => {
+    const done = new Set([...gone, ...dropping]);
+    const index = { ...state.index, packs, unused: without(unused, done) };
+    const shas = await repo.commit({ ...changes, [INDEX_PATH]: JSON.stringify(index) }, message, { [INDEX_PATH]: state.sha });
+    Object.assign(state, { sha: shas[INDEX_PATH], index });
+    for (const id of dropping) gone.add(id);
+  };
+  try {
+    for (const name of repack) {
+      progress('整理仓库里的图片录音');
+      const blob = await repo.readBlob(`media/packs/${name}.wgp`);
+      if (!blob) continue;
+      const keep = decodePack(new Uint8Array(await blob.arrayBuffer())).filter((x) => !ripe.has(x.id));
+      const changes = { [`media/packs/${name}.wgp`]: null };
+      packs = { ...packs };
+      delete packs[name];
+      if (keep.length) {
+        const fresh = `p_${newId()}`;
+        changes[`media/packs/${fresh}.wgp`] = await encodePack(keep);
+        packs[fresh] = keep.map((x) => x.id);
+      }
+      await commit(changes, '温故: 整理图片 / 录音', original[name].filter((id) => ripe.has(id)));
+    }
+    const deletes = [...[...ripe].filter((id) => where.get(id)?.file).map((id) => [where.get(id).file, [id]]), ...deadPacks.map((name) => [`media/packs/${name}.wgp`, original[name], name])];
+    for (let i = 0; i < deletes.length; i += DELETES_PER_COMMIT) {
+      progress('清掉仓库里不用的图片录音');
+      const chunk = deletes.slice(i, i + DELETES_PER_COMMIT);
+      packs = { ...packs };
+      for (const [, , pack] of chunk) if (pack) delete packs[pack];
+      await commit(Object.fromEntries(chunk.map(([path]) => [path, null])), `温故: 删掉不用的图片 / 录音 (${chunk.length} 个文件)`, chunk.flatMap(([, ids]) => ids));
+    }
+  } catch (e) {
+    if (e.kind !== 'conflict') throw e; // 别的设备正在改: 下次再删
+  }
+  return gone.size;
+}
+
+const without = (obj, ids) => Object.fromEntries(Object.entries(obj).filter(([id]) => !ids.has(id)));
 
 const canonical = (data) => JSON.stringify(cleanData(data));
 
@@ -399,8 +522,8 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
       throw e;
     }
   }
-  const { downloaded, uploaded } = await syncMedia({ store, repo, media, progress });
-  return { changed, pushed, downloaded, uploaded };
+  const { downloaded, uploaded, removed } = await syncMedia({ store, repo, media, progress, now });
+  return { changed, pushed, downloaded, uploaded, removed };
 }
 
 // 什么时候同步: 打开时、改了以后 (等几秒攒一攒)、回到页面时、开着时每隔几分钟、离开页面时

@@ -261,8 +261,12 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// 没有卡片用的图片、录音 (比如编辑时加了又没保存), 过一会儿删掉
-setTimeout(() => cleanMedia(store), 5000);
+// 没有卡片用的图片、录音 (比如编辑时加了又没保存、别的设备删了卡片集), 过一会儿删掉;
+// 已经没有了的卡片集在浏览器里另外记的东西 (背到哪了、学哪些……) 也删掉
+setTimeout(() => {
+  cleanMedia(store);
+  store.pruneLocal();
+}, 5000);
 
 // v1.9 的 AI 功能去掉了: 以前存过的 API 密钥也从浏览器里删掉
 try {

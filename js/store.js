@@ -66,6 +66,11 @@ export function makeFolder(name = '') {
 
 export const FOLDER_PREFIX = 'folder:';
 
+// 每个卡片集 (文件夹) 在浏览器里另外记的: wengu:<哪种>:<卡片集 id 或 folder:文件夹 id>
+const LOCAL_KINDS = ['cards-session', 'learn-goal', 'learn-scope', 'wordle'];
+const LOCAL_KEY = new RegExp(`^wengu:(${LOCAL_KINDS.join('|')}):(.+)$`);
+export const COLLAPSED_KEY = 'wengu:home-collapsed'; // 首页收起了的文件夹
+
 // 一个卡片集:
 // { id, title, description, termLang, defLang,
 //   cards: [{ id, term, def, image, termAudio, defAudio }]  (图片、录音是 media.js 里的 id, 没有就是 '')
@@ -477,13 +482,36 @@ export class Store {
     this.forgetLocal(id);
   }
 
-  // 这个卡片集 (或文件夹) 在浏览器里另外记的东西: 单词卡背到哪了、学习目标
+  // 这个卡片集 (或文件夹) 在浏览器里另外记的东西: 单词卡背到哪了、学习目标、学哪些、Wordle 连胜
   forgetLocal(id) {
     try {
-      for (const key of [`wengu:cards-session:${id}`, `wengu:learn-goal:${id}`]) this.storage?.removeItem(key);
+      for (const kind of LOCAL_KINDS) this.storage?.removeItem(`wengu:${kind}:${id}`);
     } catch {
       // 删不掉就算了
     }
+  }
+
+  // 已经没有了的卡片集、文件夹 (别的设备删的, 同步过来) 另外记的东西也删掉; 首页收起的文件夹也是。返回删了几个
+  pruneLocal() {
+    const s = this.storage;
+    if (!s || typeof s.key !== 'function') return 0;
+    const ids = new Set([...this.data.sets.map((x) => x.id), ...this.data.folders.map((f) => FOLDER_PREFIX + f.id)]);
+    const drop = [];
+    try {
+      for (let i = 0; i < s.length; i++) {
+        const m = LOCAL_KEY.exec(s.key(i) ?? '');
+        if (m && !ids.has(m[2])) drop.push(m[0]);
+      }
+      for (const key of drop) s.removeItem(key);
+      const collapsed = JSON.parse(s.getItem(COLLAPSED_KEY) ?? 'null');
+      if (Array.isArray(collapsed)) {
+        const kept = collapsed.filter((id) => ids.has(FOLDER_PREFIX + id));
+        if (kept.length < collapsed.length) s.setItem(COLLAPSED_KEY, JSON.stringify(kept));
+      }
+    } catch {
+      // 删不掉就算了
+    }
+    return drop.length;
   }
 
   // ---- 错题集 ----

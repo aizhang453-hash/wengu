@@ -110,7 +110,9 @@ export async function cleanMedia(store) {
       };
       req.onerror = () => reject(req.error);
     });
-    for (const id of old) await deleteMedia(id);
+    // 一次删完 (删掉一个大卡组时上万个, 一个一个删要好久)
+    for (const id of old) urls.delete(id);
+    if (old.length) await run('readwrite', (s) => old.forEach((id) => s.delete(id)));
     return old.length;
   } catch {
     return 0;

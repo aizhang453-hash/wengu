@@ -104,8 +104,18 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// 换新版本时: 存着的不在名单里的 (以前版本的文件、带 ? 的网址) 删掉, 不会越存越多
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  const keep = new Set(FILES.map((f) => new URL(f, self.location).href));
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then(async (cache) => {
+        for (const req of await cache.keys()) if (!keep.has(req.url)) await cache.delete(req);
+      })
+      .catch(() => {})
+      .then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener('fetch', (event) => {
