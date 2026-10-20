@@ -172,7 +172,7 @@ function retentionSection(store, sets, log, now, redraw) {
   const target = store.retention;
   return section(
     '记住率',
-    h('p', { class: 'muted small' }, '到日子 (隔了一天以上) 来复习时还记得的比例 (Anki 的 True Retention)。当天又练的、新词第一次背的不算。'),
+    h('p', { class: 'muted small' }, '到日子 (隔了一天以上) 来复习时还记得的比例。当天又练的、新词第一次背的不算。'),
     h(
       'table',
       { class: 'opt-table stats-table' },

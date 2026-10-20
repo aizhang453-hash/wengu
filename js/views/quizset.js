@@ -64,7 +64,7 @@ export function renderQuizSet({ store, go }, set) {
     el: h(
       'section',
       { class: 'quiz-set' },
-      h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
+      h('a', { class: 'back', href: '#/' }, '← 主页'),
       h('h1', {}, set.title || '未命名题目集'),
       set.description ? h('p', { class: 'description' }, set.description) : null,
       h('p', { class: 'muted' }, `📝 题目集 · ${total} 道题`),

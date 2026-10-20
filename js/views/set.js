@@ -251,7 +251,7 @@ export function renderSet({ store, go }, id) {
     el: h(
       'section',
       {},
-      h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
+      h('a', { class: 'back', href: '#/' }, '← 主页'),
       h('h1', {}, set.title || '未命名卡片集'),
       set.description ? h('p', { class: 'description' }, set.description) : null,
       progressEl,

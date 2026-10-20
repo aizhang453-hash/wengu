@@ -141,7 +141,7 @@ export function renderMistakes({ store }) {
     el: h(
       'section',
       { class: 'mistakes-page' },
-      h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
+      h('a', { class: 'back', href: '#/' }, '← 主页'),
       h('div', { class: 'page-head' }, h('h1', {}, '📕 错题集'), h('a', { class: 'btn primary', href: '#/mistakes/new' }, '＋ 记一道错题')),
       h('p', { class: 'muted' }, '做错的题 (比如 SAT) 打字记下来: 题目、选项、对的答案、当时选的、为什么错。过几天重做, 做对了隔得越来越久, 连对 3 次算掌握。'),
       hero,

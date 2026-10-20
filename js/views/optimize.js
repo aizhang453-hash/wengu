@@ -69,7 +69,7 @@ export function openOptimizeDialog({ store, onChanged }) {
 
   const status = own
     ? `现在用的: 按你的记录优化过的参数 (${dateText(own.at)}, 用了 ${num(own.items)} 次复习)`
-    : '现在用的: FSRS 的默认参数 (很多 Anki 用户的平均)';
+    : '现在用的: FSRS 的默认参数 (很多人的平均)';
   let enough;
   if (have.items < MIN_ITEMS) enough = `能用的记录还太少 (隔天以后的复习只有 ${have.items} 次), 多背几天再来。`;
   else if (have.items < MIN_TRAIN) enough = '记录还不多, 只能估出「第一次背完能记几天」, 别的参数先用默认的。';
@@ -158,7 +158,7 @@ export function openOptimizeDialog({ store, onChanged }) {
     title: '按我的记录优化复习排法',
     onClose: () => stop.abort(),
     body: [
-      h('p', { class: 'muted small' }, 'FSRS 有 21 个参数, 决定「隔多久再复习、多快会忘」。默认的是很多 Anki 用户的平均; 拿你自己的翻卡自评记录 (连从 Anki 搬来的) 算一套更合你的 (跟 Anki 里的「优化」一样, 在你的浏览器里算)。'),
+      h('p', { class: 'muted small' }, 'FSRS 有 21 个参数, 决定「隔多久再复习、多快会忘」。默认的是很多人的平均; 拿你自己的翻卡自评记录 (连从 Anki 搬来的) 算一套更合你的 (在你的浏览器里算)。'),
       h('p', {}, status),
       h('p', {}, `能用的记录: ${num(have.cards)} 张卡片, 一共 ${num(have.reviews)} 次复习 (隔天以后的 ${num(have.items)} 次)。`),
       h('p', { class: 'muted small' }, '只用从第一次背起都记着的卡片 (在这一版以前背过的、只记了一部分的不算)。'),

@@ -223,7 +223,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       h('div', { class: 'row' }, addBtn, directBtn, eachBtn),
       // Anki 里大牌组下面分小牌组的
       eachBtn && sheets.some((s) => s.name.includes('::'))
-        ? h('p', { class: 'muted small' }, `「${eachBtn.textContent}」照 Anki 的样子建: 大牌组变成文件夹, 小牌组变成里面的卡片集。文件夹里能合起来学, 也能给整个大牌组定每天背多少 (照顺序一个小牌组一个小牌组来)。`)
+        ? h('p', { class: 'muted small' }, `「${eachBtn.textContent}」这样建: 大牌组变成文件夹, 小牌组变成里面的卡片集。文件夹里能合起来学, 也能给整个大牌组定每天背多少 (照顺序一个小牌组一个小牌组来)。`)
         : null,
     );
     panel.hidden = false;

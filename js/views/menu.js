@@ -1,4 +1,4 @@
-// 左边的菜单 (像 Quizlet): 顶上的 ☰ 点开, 所有地方都在这里 ——
+// 左边的菜单: 顶上的 ☰ 点开, 所有地方都在这里 ——
 // 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 游戏、新建、导入、题目集; 你的文件夹; 多设备同步
 
 import { h, icon } from '../dom.js';
@@ -76,8 +76,8 @@ export function setupMenu({ store, go, syncer }) {
         title('学习、新建'),
         item('#/games', 'game', '游戏', { match: starts('#/games') }),
         item('#/new', 'plus', '新建卡片集'),
-        item('#/import', 'import', '导入', { sub: 'Quizlet、Excel、Anki' }),
-        item('#/new-quiz', 'quiz', '新建题目集', { sub: '像 Kahoot, 每题自己写选项' }),
+        item('#/import', 'import', '导入'),
+        item('#/new-quiz', 'quiz', '新建题目集', { sub: '选择题、判断题, 限时答' }),
         sep(),
         title('你的文件夹'),
         folderItems,

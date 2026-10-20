@@ -353,7 +353,7 @@ export function renderHome({ store, go }) {
       h(
         'div',
         { class: 'page-head' },
-        h('h1', {}, '我的卡片集'),
+        h('h1', {}, '学习中心'),
         sets.length
           ? h(
               'div',
@@ -392,13 +392,13 @@ function welcome() {
   return h(
     'div',
     { class: 'welcome' },
-    h('p', { class: 'lead' }, '温故而知新。建一个卡片集, 一面写词, 一面写解释, 就可以开始背了。'),
+    h('p', { class: 'lead' }, '温故而知新。背卡片、按遗忘的规律复习、做测验、记错题、玩学习游戏, 都在这里。先建一个卡片集, 或者把已有的导入进来。'),
     h(
       'div',
       { class: 'row' },
       h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建卡片集'),
       h('a', { class: 'btn', href: '#/import' }, '导入 (Quizlet、Excel、Anki)'),
-      h('a', { class: 'btn', href: '#/new-quiz' }, '📝 新建题目集 (像 Kahoot)'),
+      h('a', { class: 'btn', href: '#/new-quiz' }, '📝 新建题目集'),
     ),
     h(
       'details',

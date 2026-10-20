@@ -287,12 +287,12 @@ export function openRetentionDialog({ store, onSaved }) {
     const ten = Math.max(1, Math.round(10 * ratio));
     const lines = [
       value === DEFAULT_RETENTION
-        ? '到该复习那天, 大约九成还记得 (FSRS、Anki 默认的)。'
+        ? '到该复习那天, 大约九成还记得 (默认的)。'
         : `隔的日子大约是 90% 时的 ${ratio.toFixed(ratio < 1 ? 2 : 1)} 倍: 现在隔 10 天的, 以后隔 ${ten} 天。${ratio < 1 ? '复习得更勤, 每天要复习的多一些。' : '每天要复习的少一些。'}`,
       `到该复习那天, 大约 ${percent(1 - value)} 想不起来 (要重新记)。`,
     ];
     if (value >= 0.95) lines.push('太高了每天要复习的会多很多 (把握从 95% 再往上, 多出来的复习越来越不划算), 考前一阵子用用就好。');
-    if (value <= 0.8) lines.push('太低了忘得多, 忘了要重新记, 反而费时间。Anki 建议 85%–95%。');
+    if (value <= 0.8) lines.push('太低了忘得多, 忘了要重新记, 反而费时间。一般用 85%–95%。');
     fill(previewEl, ...lines.map((t) => h('span', {}, t)));
   }
   const save = () => {

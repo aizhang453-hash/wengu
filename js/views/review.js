@@ -157,7 +157,7 @@ export function renderReview({ store }, setId = null) {
     const asideTools = h(
       'div',
       { class: 'row center review-aside' },
-      practice ? null : h('button', { class: 'link-btn', title: '今天先不背这张, 明天再来 (Anki 的「搁置」)', onclick: () => setAside(queue[0], 'bury') }, '明天再背这张'),
+      practice ? null : h('button', { class: 'link-btn', title: '今天先不背这张, 明天再来', onclick: () => setAside(queue[0], 'bury') }, '明天再背这张'),
       h('button', { class: 'link-btn', title: '不再排进复习, 在卡片集页能恢复', onclick: () => setAside(queue[0], 'suspend') }, '暂停这张'),
     );
     const flipBtn = h('button', { class: 'btn primary', onclick: () => reveal() }, '翻过来看答案');

@@ -105,7 +105,7 @@ export function renderFolder({ store, go }, id) {
     el: h(
       'section',
       {},
-      h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
+      h('a', { class: 'back', href: '#/' }, '← 主页'),
       h('h1', {}, `📁 ${folder.name || '未命名文件夹'}`),
       h('p', { class: 'muted' }, `${sets.length} 个卡片集 · 一共 ${total} 张卡片`),
       total ? planPanel({ store, go }, combo) : null, // 每天背新词 (整个文件夹一起定)、今天要背的

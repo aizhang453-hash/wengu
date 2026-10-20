@@ -29,7 +29,7 @@ export function renderGames({ store }, key = null) {
     el: h(
       'section',
       { class: 'games-hub' },
-      h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
+      h('a', { class: 'back', href: '#/' }, '← 主页'),
       h('h1', {}, '🎮 游戏'),
       h('p', { class: 'muted' }, '挑一个游戏, 再挑拿哪个卡片集来玩。'),
       tabs,

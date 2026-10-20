@@ -319,7 +319,7 @@ export function renderQuizEdit({ store, go }, id) {
       'section',
       { class: 'edit quiz-edit' },
       h('div', { class: 'page-head' }, h('h1', {}, existing ? '编辑题目集' : '新建题目集'), h('div', { class: 'row' }, h('a', { class: 'btn', href: cancelHref }, '取消'), saveBtn())),
-      h('p', { class: 'muted' }, '像 Kahoot 那样: 每道题自己写题目和选项, 答的时候限时, 答得越快分越高。'),
+      h('p', { class: 'muted' }, '每道题自己写题目和选项, 答的时候限时, 答得越快分越高。'),
       titleInput,
       descInput,
       listEl,
