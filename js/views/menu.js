@@ -1,5 +1,5 @@
 // 左边的菜单: 顶上的 ☰ 点开, 所有地方都在这里 ——
-// 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 游戏、新建、导入、题目集; 你的文件夹; 多设备同步
+// 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 游戏、新建、导入、题目集; 你的文件夹; 多设备同步、小乌龟温温
 
 import { h, icon } from '../dom.js';
 import { todayAll } from './plan.js';
@@ -7,7 +7,7 @@ import { dueMistakes } from '../mistakes.js';
 import { loadConfig } from '../sync.js';
 import { newFolder } from './folder.js';
 
-export function setupMenu({ store, go, syncer }) {
+export function setupMenu({ store, go, syncer, pet = null }) {
   const btn = document.getElementById('menu-btn');
   if (!btn) return;
   let drawer = null;
@@ -96,6 +96,21 @@ export function setupMenu({ store, go, syncer }) {
         ),
         sep(),
         item('#/sync', 'cloud', syncText, { match: starts('#/sync') }),
+        pet
+          ? h(
+              'button',
+              {
+                class: 'menu-item',
+                type: 'button',
+                onclick: () => {
+                  close();
+                  pet.openPanel();
+                },
+              },
+              icon('turtle', 22),
+              h('span', { class: 'menu-text' }, `小乌龟${pet.name()}`, h('span', { class: 'menu-sub' }, `${pet.summary()} · 长到哪了、装扮、显示不显示`)),
+            )
+          : null,
       ),
     );
     // 点旁边灰色的地方关上 (换页时 app.js 也会关)

@@ -46,6 +46,7 @@ import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
 import { renderStats } from './views/stats.js';
 import { setupMenu } from './views/menu.js';
+import { setupPet } from './views/pet.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
@@ -215,6 +216,7 @@ function render() {
   view.day = dayKey();
   current = view;
   main.replaceChildren(view.el);
+  pet.route(route.page);
   document.title = view.title ? `${view.title} · 温故` : '温故';
   window.scrollTo(0, 0);
   view.focus?.focus();
@@ -260,10 +262,17 @@ const syncer = new SyncManager(store, {
     badge.title = status === 'error' ? `同步出错: ${message}` : status === 'syncing' && message ? `多设备同步: ${message}` : warn ? (expiry.expired ? '同步用的密钥可能已经过期了, 点这里换' : expiry.days === 0 ? '同步用的密钥今天过期, 点这里换' : `同步用的密钥还有 ${expiry.days} 天过期, 点这里换`) : `多设备同步: ${text}`;
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
-  onApplied: () => refreshPage(),
+  onApplied: () => {
+    refreshPage();
+    pet.changed();
+  },
 });
-store.onChange = () => syncer.changed();
-setupMenu({ store, go, syncer }); // 左上角 ☰ 的菜单
+const pet = setupPet({ store }); // 右下角的小乌龟温温
+store.onChange = () => {
+  syncer.changed();
+  pet.changed();
+};
+setupMenu({ store, go, syncer, pet }); // 左上角 ☰ 的菜单
 
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)
@@ -271,6 +280,7 @@ window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
   refreshPage(['home', 'set', 'folder', 'games', 'mistakes', 'stats']);
+  pet.changed();
 });
 window.addEventListener('beforeunload', (e) => {
   if (current?.isDirty?.()) {

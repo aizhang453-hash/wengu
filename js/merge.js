@@ -12,10 +12,12 @@
 //   错题                              一道一道合: 内容听最后改过的, 重做记录听最后做过的
 //   翻卡自评的记录 (revlog)            两边的合起来, 哪边撤销了的 (undone) 去掉
 //   每天的计划、复习上限              听后改的那边
+//   小乌龟温温                        长大的进度取多的, 解锁的装扮合起来, 名字和装扮听后改的
 
 import { mergeRuns } from './quiz.js';
 import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { mergeLogs, subtractLogs } from './revlog.js';
+import { cleanPet, mergePet } from './pet.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -135,5 +137,6 @@ export function mergeData(local, remote) {
     undone,
     revlog: subtractLogs(mergeLogs(local.revlog, remote.revlog), undone),
     settings: mergeSettings(local.settings, remote.settings),
+    pet: mergePet(cleanPet(local.pet), cleanPet(remote.pet)),
   };
 }

@@ -5,6 +5,7 @@ import { cleanMistake, firstReview, reviewAfter, mergeMistake, PREFIX as MISTAKE
 import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
+import { cleanPet, mergePet, bankDays } from './pet.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -25,10 +26,11 @@ export function newId() {
 // revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
 // undone: 撤销了的复习记录 (跟 revlog 一样存), 同步时别从另一台设备又合回来; 留 120 天
+// pet: 小乌龟温温 (pet.js), 还没见过是 null
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings() };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -246,6 +248,7 @@ export function cleanData(raw) {
   const revlog = Object.fromEntries(Object.entries(cleanLog(raw?.revlog)).filter(([id]) => cardIds.has(id)));
   data.revlog = subtractLogs(revlog, data.undone);
   data.settings = cleanSettings(raw?.settings);
+  data.pet = cleanPet(raw?.pet);
   if (raw && Array.isArray(raw.mistakes)) {
     const seen = new Set();
     for (const m of raw.mistakes) {
@@ -921,9 +924,20 @@ export class Store {
   touchActivity(now = Date.now()) {
     const key = dayKey(now);
     this.data.activity[key] = (this.data.activity[key] ?? 0) + 1;
-    // 一年多以前的不留
+    // 一年多以前的不留 (温温吃过的先记下来)
     const keys = Object.keys(this.data.activity).sort();
-    while (keys.length > 400) delete this.data.activity[keys.shift()];
+    if (keys.length <= 400) return;
+    const gone = keys.slice(0, keys.length - 400);
+    this.data.pet = bankDays(this.data.pet, gone.map((k) => [k, this.data.activity[k]]), keys[gone.length]);
+    for (const k of gone) delete this.data.activity[k];
+  }
+
+  // 温温: 改名字、换装扮 (stamp: 记下改的时间, 同步时听后改的); 解锁、长大、庆祝过的直接合
+  updatePet(patch, { stamp = false, now = Date.now() } = {}) {
+    const old = this.data.pet ?? cleanPet({});
+    this.data.pet = cleanPet({ ...old, ...patch, at: stamp ? Math.max(now, old.at + 1) : old.at });
+    this.save();
+    return this.data.pet;
   }
 
   // 判错了, 用户说「我答对了」: 把记的一次错改成对 (测试里的; 不是翻卡自评, 不动复习的日子)
@@ -1022,6 +1036,7 @@ export class Store {
     this.data.undone = mergeLogs(this.data.undone, incoming.undone);
     this.data.revlog = subtractLogs(mergeLogs(this.data.revlog, incoming.revlog), this.data.undone);
     this.data.settings = mergeSettings(this.data.settings, incoming.settings);
+    this.data.pet = mergePet(this.data.pet, incoming.pet);
     this.applyParameters({ recompute: true });
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
