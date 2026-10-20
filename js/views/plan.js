@@ -39,7 +39,8 @@ export function planLine(info, plan) {
     parts.push(`还有 ${num(info.left)} 个没背过`);
     return parts.join(' · ');
   }
-  if (info.mode === 'exam') parts.push(`离考试 ${info.daysLeft} 天 (${dateText(examTime(plan.exam))}), 每天 ${info.perDay} 个`);
+  // 按考试算的: 写上考前几天只复习, 也说清楚每天按还剩几个、还剩几天重算 (少背了一天, 剩下的分到以后几天)
+  if (info.mode === 'exam') parts.push(`离考试 ${info.daysLeft} 天 (${dateText(examTime(plan.exam))})${plan.rest ? `, 最后 ${plan.rest} 天只复习` : ''}, 每天 ${info.perDay} 个 (每天按还剩的重算)`);
   else parts.push(`每天 ${info.perDay} 个${info.mode === 'passed' ? ' (考试日期过了)' : ''}`);
   parts.push(`今天 ${info.learned}/${info.learned + info.today}`);
   parts.push(`还有 ${num(info.left)} 个没背过${info.finish ? `, 照这样 ${dateText(info.finish)} 学完` : ''}`);
