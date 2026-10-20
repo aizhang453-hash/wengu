@@ -111,7 +111,8 @@ export function textToHtml(text) {
 
 // 卡片集 → Anki 能导入的文字 (Anki: 文件 → 导入)
 export function toAnkiText(set) {
-  const field = (s) => (/[\t\n"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  // 有 Tab、换行、引号, 或者 # 开头 (Anki 当成注释那一行就不要了) 的加引号
+  const field = (s) => (/^#|[\t\n"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = ['#separator:tab', '#html:true', '#columns:Front\tBack'];
   for (const c of set.cards) lines.push(`${field(textToHtml(c.term))}\t${field(textToHtml(c.def))}`);
   return lines.join('\n') + '\n';
@@ -183,7 +184,7 @@ export class AnkiError extends Error {}
 // Anki 的一条复习 (revlog): id 是什么时候 (毫秒), ease 是按的哪个键 (1 重来 2 困难 3 良好 4 简单),
 // type 0 学习 1 复习 2 重学 3 筛选牌组 4 手动改的 (重置、改日期) 5 改了排期。
 // 手动改的、改排期的不是真的复习, 不要; 重置 (手动、间隔 0) 那次以前的也不要 (跟 FSRS 优化参数时一样)。
-// 返回 [{ at, rating }], 从早到晚
+// 返回 [{ at, rating, type }], 从早到晚 (type 用来数忘了几次: 复习 (1) 时按重来才算, 学习步骤里的不算)
 export function reviewsOf(rows) {
   let out = [];
   for (const r of [...rows].sort((a, b) => Number(a.id) - Number(b.id))) {
@@ -193,9 +194,14 @@ export function reviewsOf(rows) {
     if (type === 4 && Number(r.ivl) === 0) out = [];
     if (!(type >= 0 && type <= 3) || !(ease >= 1 && ease <= 4) || !(at > 0)) continue;
     if (type === 3 && Number(r.factor) === 0) continue; // 筛选牌组里「不改排期」的突击复习 (Anki 自己的 FSRS 也不算)
-    out.push({ at, rating: ease });
+    out.push({ at, rating: ease, type });
   }
-  return out;
+  // 老版本 Anki 的「忘掉」(重置成新卡片) 不记一条: 最后一段学习 (type 0) 前面还有复习的, 从那段算起 (跟 Anki 自己的 FSRS 一样)
+  let i = out.length - 1;
+  while (i >= 0 && out[i].type !== 0) i--;
+  if (i < 0) return out;
+  while (i > 0 && out[i - 1].type === 0) i--;
+  return out.slice(i);
 }
 
 // 每个笔记的复习记录 (导出时勾了「包含学习进度」才有)。一个笔记可能有好几张卡片 (比如正面、反面各一张),
@@ -257,14 +263,20 @@ export async function readApkg(bytes) {
     for (const r of db.rows('decks')) decks.set(String(r.id), String(r.name).split('\x1f').join('::'));
   }
   const col = db.rows('col')[0];
-  try {
-    for (const m of Object.values(JSON.parse(col?.models || '{}'))) {
-      if (!models.has(String(m.id))) models.set(String(m.id), { name: m.name, fields: [...(m.flds ?? [])].sort((a, b) => a.ord - b.ord).map((f) => f.name) });
+  // 坏了的就当没有 (字段、牌组没名字), 一个坏了不连累别的
+  const entries = (text) => {
+    try {
+      return Object.values(JSON.parse(text || '{}') ?? {}).filter((x) => x && typeof x === 'object');
+    } catch {
+      return [];
     }
-    for (const d of Object.values(JSON.parse(col?.decks || '{}'))) if (!decks.has(String(d.id))) decks.set(String(d.id), d.name);
-  } catch {
-    // 没有就算了, 字段和牌组没名字
+  };
+  for (const m of entries(col?.models)) {
+    if (models.has(String(m.id))) continue;
+    const flds = Array.isArray(m.flds) ? m.flds.filter((f) => f && typeof f === 'object') : [];
+    models.set(String(m.id), { name: String(m.name ?? ''), fields: [...flds].sort((a, b) => a.ord - b.ord).map((f) => f.name) });
   }
+  for (const d of entries(col?.decks)) if (!decks.has(String(d.id))) decks.set(String(d.id), String(d.name ?? ''));
   const deckOf = new Map();
   const active = new Set(); // 有卡片没暂停的笔记 (queue -1 是暂停了)
   for (const c of db.rows('cards')) {
@@ -293,7 +305,12 @@ export async function readApkg(bytes) {
     throw new AnkiError('这个卡组是更新的 Anki 版本导出的, 读不了。在 Anki 里导出时勾上「兼容旧版本 Anki」再试试');
   }
 
-  const names = mediaMap(await zip.get('media')?.read());
+  let names = new Map();
+  try {
+    names = mediaMap(await zip.get('media')?.read());
+  } catch {
+    // 图片声音的清单坏了: 卡片照样导入, 不带图片声音
+  }
   const media = {
     has: (name) => names.has(name) || names.has(safeDecode(name)),
     async get(name) {

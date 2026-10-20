@@ -70,10 +70,10 @@ export function renderReview({ store }, setId = null) {
     return setId ? shareOf(all, sets) : all;
   };
 
-  // 计划以外还能学的新词 (卡片集和文件夹都定了计划的, 同一张只算一次); 卡片记在原来的卡片集上
+  // 计划以外还能学的新词 (卡片集和文件夹都定了计划的, 同一张只算一次; 今天计划里的不算); 卡片记在原来的卡片集上
   function moreCards() {
     const owner = new Map(sets.flatMap((set) => set.cards.map((c) => [c.id, set])));
-    const seen = new Set();
+    const seen = new Set(todayOf().fresh.map((x) => x.card.id));
     return learnable
       .flatMap((set) => newCards(set).map((card) => ({ set: owner.get(card.id), card, fresh: true })))
       .filter((x) => x.set && !seen.has(x.card.id) && seen.add(x.card.id));
@@ -101,12 +101,6 @@ export function renderReview({ store }, setId = null) {
     }
     total = queue.length;
     freshTotal = queue.filter((x) => x.fresh).length;
-    sub.textContent =
-      kind === 'ahead'
-        ? `提前复习 ${total} 张: 还没到日子的, 最可能忘的先来`
-        : practice
-          ? `练一下${{ forgot: '今天忘了的', leech: '难记卡', starred: '星标的' }[kind]} ${total} 张 · 只算答对答错, 不动复习的日子`
-          : todayText(total - freshTotal, freshTotal);
     retried = new Set();
     history = [];
     done = 0;
@@ -124,7 +118,15 @@ export function renderReview({ store }, setId = null) {
     return prefs.defFirst ? ['def', 'term'] : ['term', 'def'];
   }
 
+  // 上面那行: 这次背什么、几张 (明天再背 / 暂停了的不算)
+  function subText() {
+    if (mode === 'ahead') return `提前复习 ${total} 张: 还没到日子的, 最可能忘的先来`;
+    if (practice) return `练一下${{ forgot: '今天忘了的', leech: '难记卡', starred: '星标的' }[mode]} ${total} 张 · 只算答对答错, 不动复习的日子`;
+    return todayText(total - freshTotal, freshTotal);
+  }
+
   function draw() {
+    sub.textContent = subText();
     bar.style.width = `${total ? (done / total) * 100 : 0}%`;
     counter.textContent = total ? `${Math.min(done, total)} / ${total}` : '';
     undoBtn.disabled = !history.length;
@@ -228,9 +230,9 @@ export function renderReview({ store }, setId = null) {
   function grade(ok) {
     if (!flipped || !queue.length) return;
     const item = queue[0];
-    const before = snapshot(item);
+    const before = { ...snapshot(item), answered: Date.now() };
     queue.shift();
-    before.code = store.recordAnswer(item.set.id, item.card.id, ok, { selfRated: !practice });
+    before.code = store.recordAnswer(item.set.id, item.card.id, ok, { selfRated: !practice, now: before.answered });
     history.push(before);
     if (prefs.sound) playSound(ok ? 'right' : 'wrong');
     if (ok) {
@@ -267,6 +269,7 @@ export function renderReview({ store }, setId = null) {
   function undo() {
     const last = history.pop();
     if (!last) return;
+    if (last.answered) store.untouchActivity(last.answered); // 答的那一题不算今天答的
     if (last.code == null) store.putStat(last.item.set.id, last.item.card.id, last.stat);
     else store.restoreStat(last.item.set.id, last.item.card.id, last.stat, last.code);
     ({ queue, done, right, total, freshTotal, retried } = last);
@@ -308,7 +311,8 @@ export function renderReview({ store }, setId = null) {
     fill(capBtn, icon('gear', 16), ` 每天最多复习 ${store.reviewCap} 张`);
     fill(retBtn, `🎯 想记住 ${percent(store.retention)}`);
     fill(optBtn, store.data.settings.fsrs ? '📈 复习排法: 按我的记录' : '📈 复习排法: 默认');
-    if (!queue.length) return start();
+    // 做完了的: 今天的、一张都没背过的重新算一下今天的; 背过的 (自定义学习、能撤销) 留着, 只更新下面的字
+    if (!queue.length) return mode === 'today' && !history.length ? start() : finish({ quiet: true });
     // 按钮上的「几天后」换成新的 (翻过来了的还是翻着)
     const wasFlipped = flipped;
     draw();
@@ -424,14 +428,14 @@ export function renderReview({ store }, setId = null) {
     ];
   }
 
-  function finish() {
+  function finish({ quiet = false } = {}) {
     resolve();
     held = todayOf().held; // 做完以后按现在的算 (复习到上限了, 剩下的都超了)
-    const tomorrow = dueTomorrow(sets);
+    const tomorrow = dueTomorrow(sets) + held; // 超过上限的明天再来
     const backBtn = h('a', { class: 'btn primary', href: back }, `回到${backText}`);
     const heldNote = held ? h('p', {}, `还有 ${held} 张到日子的, 超过了每天最多复习 ${store.reviewCap} 张的上限, 明天先来最可能忘的。想现在接着复习也行。`) : null;
     if (total === 0) {
-      const busy = reviewedToday(sets) > 0 || learnable.some((set) => newToday(set).learned);
+      const busy = reviewedToday(sets) > 0 || learnable.some((set) => newToday(set).learned) || history.length > 0;
       stage.replaceChildren(
         h(
           'div',
@@ -450,7 +454,7 @@ export function renderReview({ store }, setId = null) {
       );
       return;
     }
-    if (prefs.sound) playSound('done');
+    if (prefs.sound && !quiet) playSound('done');
     const fresh = freshTotal ? ` (新词 ${freshTotal} 个)` : '';
     stage.replaceChildren(
       h(
@@ -475,7 +479,7 @@ export function renderReview({ store }, setId = null) {
       return undo();
     }
     if (e.metaKey || e.ctrlKey || !queue.length) return;
-    if (e.key === ' ' && !e.target.closest?.('button')) {
+    if (e.key === ' ' && !e.target.closest?.('button, input')) {
       e.preventDefault();
       reveal();
     } else if (e.key === '1' || e.key === '2') {

@@ -160,11 +160,15 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
   // ---- 已经连上 ----
   const statusEl = h('div', { class: 'sync-status' });
   const expiryEl = h('div', { class: 'sync-expiry' });
+  let lastStatus = null;
   const draw = () => {
     const st = syncer.state;
     const label = { syncing: `同步中……${st.message ? ` ${st.message}` : ''}`, ok: '同步好了', error: `出错了: ${st.message}`, idle: '等着同步', off: '没开' }[st.status] ?? '';
     statusEl.className = `sync-status ${st.status}`;
     fill(statusEl, h('strong', {}, label), h('div', { class: 'muted small' }, `上次同步: ${timeAgo(loadConfig()?.lastSyncAt)}`));
+    // 只是「传到哪了」变了: 下面的不重画 (不然正在填的日期、点开的「换密钥」会被弄没)
+    if (st.status === lastStatus && st.status === 'syncing') return;
+    lastStatus = st.status;
     drawExpiry();
     // 密钥不对 / 过期了: 直接打开「换密钥」
     if (st.status === 'error' && st.kind === 'auth') renew.open = true;

@@ -305,8 +305,9 @@ export function renderHome({ store, go }) {
         }
         toast(`导入了 ${added + replaced} 个卡片集` + (replaced ? ` (替换了 ${replaced} 个原来的)` : ''));
         go('#/');
-      } catch {
-        toast('读不了这个文件, 是温故导出的备份吗?');
+      } catch (e) {
+        // 存不下: 什么都没导入 (一起存, 存不下就全不要)
+        toast(e?.size ? `存不下了: 浏览器给的空间满了 (这个备份要 ${(e.size / 1e6).toFixed(1)} 百万字), 什么都没导入。先删掉用不着的卡片集再试。` : '读不了这个文件, 是温故导出的备份吗?');
       }
     },
   });
@@ -327,8 +328,14 @@ export function renderHome({ store, go }) {
         'button',
         {
           class: 'btn',
-          disabled: sets.length === 0,
-          onclick: async () => download(`温故备份-${today()}.json`, await exportBackup(store)),
+          disabled: sets.length === 0 && store.data.mistakes.length === 0,
+          onclick: async () => {
+            try {
+              download(`温故备份-${today()}.json`, await exportBackup(store));
+            } catch {
+              toast('导出不了: 东西太多了, 浏览器拼不出这么大的文件。可以先删掉用不着的卡片集再试, 或者用多设备同步 (不用导出)。');
+            }
+          },
         },
         '导出备份',
       ),

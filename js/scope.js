@@ -3,7 +3,7 @@
 //   测试: studied 背过的 | today 今天背的 | starred 星标的 | all 全部
 
 import { inPlanOrder, isNew } from './plan.js';
-import { startOfDay, isSuspended } from './srs.js';
+import { startOfDay, isSuspended, isBuried } from './srs.js';
 
 export const DEFAULT_NEXT = 20;
 export const BIG_SET = 50; // 比这多的卡片集, 学习默认「接着学 20 个」, 测试默认「背过的」
@@ -32,7 +32,7 @@ export function scopeCards(set, kind, { count = DEFAULT_NEXT, fresh = [], now = 
   switch (kind) {
     case 'next':
       // 还没背过 (没排进复习)、学习里也还没掌握的, 照顺序往下 (暂停的不要)
-      return inPlanOrder(set, set.cards.filter((c) => isNew(stats[c.id]) && !isSuspended(stats[c.id]) && learn[c.id] !== 2)).slice(0, Math.max(1, count));
+      return inPlanOrder(set, set.cards.filter((c) => isNew(stats[c.id]) && !isSuspended(stats[c.id]) && !isBuried(stats[c.id], now) && learn[c.id] !== 2)).slice(0, Math.max(1, count));
     case 'today': {
       // 今天开始背的新词、今天复习里要出的新词 (测试再加上今天复习过的)
       const ids = new Set(fresh.map((c) => c.id));

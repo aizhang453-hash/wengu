@@ -31,6 +31,7 @@ export async function readCardFile(file) {
 
   if (deck) {
     const { notes, media } = await readApkg(lazy ? file : bytes);
+    if (!notes.length) throw new FileError('这个卡组里没有卡片');
     // 一个牌组一张表
     const byDeck = new Map();
     for (const n of notes) {

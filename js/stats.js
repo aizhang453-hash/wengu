@@ -78,7 +78,7 @@ export function reviewsByDay(sets, log) {
 // 最近 1 天 (今天)、7 天、30 天、一年: [{ days, n 复习了几次, ok 记得几次 }]
 export function retentionStats(sets, log, now = Date.now(), periods = [1, 7, 30, 365]) {
   const today0 = startOfDay(now);
-  const from = periods.map((d) => today0 - (d - 1) * DAY);
+  const from = periods.map((d) => daysLater(now, -(d - 1))); // 按日历往前数 (换夏令时那天不是 24 小时)
   const out = periods.map((days) => ({ days, n: 0, ok: 0 }));
   for (const list of logsOf(sets, log)) {
     for (let i = 1; i < list.length; i++) {

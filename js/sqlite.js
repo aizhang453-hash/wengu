@@ -111,6 +111,7 @@ export class SQLiteDB {
   record(p) {
     const v = new DataView(p.buffer, p.byteOffset, p.byteLength);
     const [headerSize, first] = varintAt(p, 0);
+    if (headerSize > p.length) throw new SQLiteError('数据库坏了');
     const types = [];
     for (let at = first; at < headerSize; ) {
       const [t, next] = varintAt(p, at);

@@ -3,7 +3,8 @@
 //   media/packs/<包>.wgp        图片、录音, 一个包装好多个 (几 MB 一包; 见 encodePack)
 //   media/index.json            哪个包里有哪些: { version: 1, packs: { 包: [图片录音 id] }, unused: { id: 哪天开始没用的 } }
 //   media/<id>.<后缀>           v1.26 以前一个一个传的图片、录音 (还认, 不再这样传)
-// 删掉的卡片集、卡片用过的图片录音, 过一天 (万一别的设备还要) 从仓库删掉, 好几个一起一次提交; 一包里一半以上没用了就重新打包。
+// 删掉的卡片集、卡片用过的图片录音, 过一个星期 (万一别的设备还要) 从仓库删掉, 好几个一起一次提交; 一包里一半以上没用了就重新打包。
+// 目录里记着、文件却没了的包 (清理旧历史时正好有设备在传、手动删了) 当没传过, 有的设备会再传; 目录里没记着的包过一个星期删掉。
 // 每台设备填一次「仓库 + 密钥」(密钥只能改这一个仓库), 之后打开、改动、回到页面时自动同步。
 // 同步: 拿下仓库里的 → 跟本机的合并 (merge.js) → 推上去 → 补齐图片录音 (本机缺的拿下来, 仓库缺的打包传上去)。
 // 卡片先推: Anki 卡组动不动上万个图片录音, 等传完才推卡片, 别的设备半天看不到 (图片录音没到之前先不显示, 下次同步再拿)。
@@ -18,7 +19,7 @@ export const CONFIG_KEY = 'wengu:sync';
 export const DATA_PATH = 'wengu.json';
 export const INDEX_PATH = 'media/index.json';
 export const PACK_BYTES = 8 * 1024 * 1024; // 一包大概多大 (base64 以后 11 MB 左右, GitHub 一个文件最多 100 MB)
-export const GRACE_MS = 24 * 60 * 60 * 1000; // 没用的图片录音过多久从仓库删掉
+export const GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 没用的图片录音过多久从仓库删掉 (别的设备一个星期没同步也来得及)
 const DELETES_PER_COMMIT = 1000;
 const DEFAULT_API = 'https://api.github.com';
 
@@ -120,7 +121,8 @@ export class GitHubRepo {
     Object.assign(this, { owner, repo, token, api: api.replace(/\/$/, ''), fetch: fetchImpl });
   }
 
-  async call(method, path, { body = null, accept = 'application/vnd.github+json' } = {}) {
+  // timeout: 多久没回就算了 (网断了一半时不会一直「同步中」); 传、拿几 MB 的包给久一点
+  async call(method, path, { body = null, accept = 'application/vnd.github+json', timeout = 60_000 } = {}) {
     let res;
     try {
       res = await this.fetch(`${this.api}/repos/${this.owner}/${this.repo}${path}`, {
@@ -128,8 +130,10 @@ export class GitHubRepo {
         cache: 'no-store',
         headers: { Authorization: `Bearer ${this.token}`, Accept: accept, 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
+        signal: globalThis.AbortSignal?.timeout?.(timeout),
       });
-    } catch {
+    } catch (e) {
+      if (e?.name === 'TimeoutError' || e?.name === 'AbortError') throw new SyncError('GitHub 太久没回应, 过一会儿自动再试', 'network');
       throw new SyncError('连不上 GitHub, 看看网络', 'network');
     }
     if (res.status === 401) throw new SyncError('密钥不对, 或者过期了', 'auth');
@@ -145,7 +149,19 @@ export class GitHubRepo {
       if (method === 'GET') return null;
       throw new SyncError('找不到这个仓库, 或者密钥没给这个仓库的权限', 'auth');
     }
-    if (res.status === 409 || res.status === 422) throw new SyncError('别的设备刚同步过', 'conflict');
+    if (res.status === 409) throw new SyncError('别的设备刚同步过', 'conflict');
+    if (res.status === 422) {
+      // 文件的 sha 对不上、分支不是接着上一个的: 别的设备刚推过; 别的 422 是真出错了, 说清楚
+      const text = await res.text().catch(() => '');
+      if (/sha|fast.?forward/i.test(text)) throw new SyncError('别的设备刚同步过', 'conflict');
+      let message = '';
+      try {
+        message = JSON.parse(text).message ?? '';
+      } catch {
+        // 没有就算了
+      }
+      throw new SyncError(`GitHub 不接受 (${message || 422})`, 'other');
+    }
     if (!res.ok) throw new SyncError(`GitHub 出错了 (${res.status}), 过一会儿再试`, 'other');
     return res;
   }
@@ -164,12 +180,12 @@ export class GitHubRepo {
     if (meta.type && meta.type !== 'file') throw new SyncError(`仓库里的 ${path} 不是文件`);
     if (meta.encoding === 'base64' && meta.content) return { sha: meta.sha, text: b64ToUtf8(meta.content) };
     // 超过 1MB 的, 接口不给内容, 要用 raw 再拿一次
-    const raw = await this.call('GET', `/contents/${path}`, { accept: 'application/vnd.github.raw+json' });
+    const raw = await this.call('GET', `/contents/${path}`, { accept: 'application/vnd.github.raw+json', timeout: 300_000 });
     return { sha: meta.sha, text: raw ? await raw.text() : '' };
   }
 
   async readBlob(path) {
-    const res = await this.call('GET', `/contents/${path}`, { accept: 'application/vnd.github.raw+json' });
+    const res = await this.call('GET', `/contents/${path}`, { accept: 'application/vnd.github.raw+json', timeout: 600_000 });
     if (!res) return null;
     return new Blob([await res.arrayBuffer()], { type: typeOf(path) });
   }
@@ -217,7 +233,13 @@ export class GitHubRepo {
 
   // 存了几个版本 (提交): 每页一个, 看最后一页是第几页
   async commitCount() {
-    const res = await this.call('GET', '/commits?per_page=1');
+    let res;
+    try {
+      res = await this.call('GET', '/commits?per_page=1');
+    } catch (e) {
+      if (e.kind === 'conflict') return 0; // 空仓库
+      throw e;
+    }
     if (!res) return 0;
     const last = /[?&]page=(\d+)>; rel="last"/.exec(res.headers.get('link') ?? '');
     return last ? Number(last[1]) : (await res.json()).length;
@@ -263,7 +285,7 @@ export class GitHubRepo {
         continue;
       }
       const content = typeof value === 'string' ? utf8ToB64(value) : bytesToB64(value);
-      const blob = await (await this.call('POST', '/git/blobs', { body: { content, encoding: 'base64' } })).json();
+      const blob = await (await this.call('POST', '/git/blobs', { body: { content, encoding: 'base64' }, timeout: content.length > 1e6 ? 600_000 : 60_000 })).json();
       tree.push({ path, mode: '100644', type: 'blob', sha: blob.sha });
       shas[path] = blob.sha;
     }
@@ -274,7 +296,7 @@ export class GitHubRepo {
   }
 
   async write(path, base64, sha, message) {
-    const res = await this.call('PUT', `/contents/${path}`, { body: { message, content: base64, ...(sha ? { sha } : {}) } });
+    const res = await this.call('PUT', `/contents/${path}`, { body: { message, content: base64, ...(sha ? { sha } : {}) }, timeout: base64.length > 1e6 ? 600_000 : 60_000 });
     return (await res.json()).content?.sha;
   }
 }
@@ -359,101 +381,134 @@ async function addToIndex(repo, state, name, ids) {
   }
 }
 
-// 图片录音: 本机缺的拿下来 (老的一个一个的、包里的), 仓库缺的打包传上去。
-// progress(字): 传 / 拿到哪了。返回 { downloaded, uploaded }
-export async function syncMedia({ store, repo, media = localMedia, progress = () => {}, now = Date.now }) {
+// 图片录音: 本机缺的拿下来 (包里的、老的一个一个的), 仓库缺的打包传上去, 仓库里不用了的删掉。
+// progress(字): 传 / 拿到哪了; dataSha: 刚推上去 (或者拿到) 的 wengu.json 的 sha (删不用的时候要它还是这个, 别的设备刚推了新的就不删)。
+// 一个文件拿不下来、读不了不耽误别的。返回 { downloaded, uploaded, removed }
+export async function syncMedia({ store, repo, media = localMedia, progress = () => {}, now = Date.now, dataSha = null }) {
   const needed = new Set(usedMediaIds(store.data));
   if (!needed.size && !repo.commit) return { downloaded: 0, uploaded: 0, removed: 0 };
   const keys = media.keys ? await media.keys() : null;
   const local = keys ? new Set(keys) : new Set();
-  if (!keys) for (const id of needed) if (await media.get(id)) local.add(id);
+  if (!keys) for (const id of needed) if (await media.get(id).catch(() => null)) local.add(id);
 
-  // 仓库里有哪些: 老的一个一个的文件, 包里的
-  const where = new Map(); // id → { file } | { pack }
+  // 仓库里有哪些: 先看目录 (目录里的包都是先传好文件再记的), 再列文件夹;
+  // 目录里记着、文件没了的包不算 (有的设备会再传), 没记着的包是没用的 (orphans)
+  const state = await readIndex(repo);
+  const packFiles = new Set((await repo.list('media/packs')).map((name) => name.replace(/\.wgp$/, '')));
+  const dangling = Object.keys(state.index.packs).filter((name) => !packFiles.has(name));
+  const orphans = [...packFiles].filter((name) => !(name in state.index.packs) && /^p_[\w-]+$/.test(name));
+  const where = new Map(); // id → { pack } | { file }: 包里的先 (一包拿一次), 没有再找老的一个一个的
+  for (const [pack, ids] of Object.entries(state.index.packs)) if (packFiles.has(pack)) for (const id of ids) if (!where.has(id)) where.set(id, { pack });
   for (const name of await repo.list('media')) {
     const m = /^(m_[\w-]+)\.[a-z0-9]+$/.exec(name);
-    if (m) where.set(m[1], { file: `media/${name}` });
+    if (m && !where.has(m[1])) where.set(m[1], { file: `media/${name}` });
   }
-  const state = await readIndex(repo);
-  for (const [pack, ids] of Object.entries(state.index.packs)) for (const id of ids) if (!where.has(id)) where.set(id, { pack });
 
-  // 拿下来: 一个包拿一次, 里面用得着的都存上
+  // 拿下来: 一个包拿一次, 里面用得着的都存上。存不进去 (设备上没地方了) 就先不拿了
   let downloaded = 0;
+  let full = false;
+  const save = async (blob, id) => {
+    try {
+      await media.put(blob, id);
+      downloaded++;
+    } catch {
+      full = true;
+    }
+  };
   const missing = [...needed].filter((id) => !local.has(id) && where.has(id));
   const byPack = new Map();
   for (const id of missing) {
+    if (full) break;
     const w = where.get(id);
     if (w.file) {
       progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
       const blob = await repo.readBlob(w.file);
-      if (blob) {
-        await media.put(blob, id);
-        downloaded++;
-      }
+      if (blob) await save(blob, id);
     } else byPack.set(w.pack, [...(byPack.get(w.pack) ?? []), id]);
   }
   for (const [pack, ids] of byPack) {
+    if (full) break;
     progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
     const blob = await repo.readBlob(`media/packs/${pack}.wgp`);
     if (!blob) continue;
     const want = new Set(ids);
-    for (const item of decodePack(new Uint8Array(await blob.arrayBuffer()))) {
-      if (!want.has(item.id)) continue;
-      await media.put(item.blob, item.id);
-      downloaded++;
-    }
+    for (const item of decodePack(new Uint8Array(await blob.arrayBuffer()))) if (want.has(item.id) && !full) await save(item.blob, item.id);
   }
 
-  // 传上去: 几 MB 一包, 传好一包记一下目录 (中途断了, 传好的不用再传)
+  // 传上去: 几 MB 一包, 传好一包记一下目录 (中途断了, 传好的不用再传)。读不了的 (坏了的) 跳过
   const toSend = [...needed].filter((id) => local.has(id) && !where.has(id));
   let uploaded = 0;
   let batch = [];
   let bytes = 0;
   const flushPack = async () => {
     if (!batch.length) return;
+    let pack;
+    try {
+      pack = await encodePack(batch);
+    } catch {
+      const ok = [];
+      for (const item of batch) if (await item.blob.arrayBuffer().then(() => true, () => false)) ok.push(item);
+      batch = ok;
+      if (!batch.length) return;
+      pack = await encodePack(batch);
+    }
     progress(`传图片录音 ${uploaded + batch.length}/${toSend.length}`);
     const name = `p_${newId()}`;
-    await repo.write(`media/packs/${name}.wgp`, bytesToB64(await encodePack(batch)), undefined, `温故: 图片 / 录音 (${batch.length} 个)`);
+    await repo.write(`media/packs/${name}.wgp`, bytesToB64(pack), undefined, `温故: 图片 / 录音 (${batch.length} 个)`);
     await addToIndex(repo, state, name, batch.map((x) => x.id));
     uploaded += batch.length;
     batch = [];
     bytes = 0;
   };
   for (const id of toSend) {
-    const blob = await media.get(id);
+    const blob = await media.get(id).catch(() => null);
     if (!blob) continue;
     if (bytes && bytes + blob.size > PACK_BYTES) await flushPack();
     batch.push({ id, blob });
     bytes += blob.size;
   }
   await flushPack();
-  // 仓库里不用了的删掉 (needed 是刚合并好、推上去的, 是所有设备最新的)
-  const removed = repo.commit ? await cleanRemote({ repo, state, where, needed, now: now(), progress }) : 0;
+  // 仓库里不用了的删掉 (needed 是刚合并好、推上去的, 是所有设备最新的); 出了问题不耽误同步, 下次再删
+  let removed = 0;
+  if (repo.commit) {
+    try {
+      removed = await cleanRemote({ repo, state, where, needed, now: now(), progress, dangling, orphans, dataSha });
+    } catch {
+      removed = 0;
+    }
+  }
   return { downloaded, uploaded, removed };
 }
 
-// 仓库里没用了的图片录音 (删掉的卡片集、卡片、错题的): 先记下哪天开始没用的, 过一天还没用上就删掉 (万一别的设备还要)。
-// 老的一个一个的直接删; 包: 整包都没用了删掉, 一半以上没用了重新打包 (剩下的装一个新包)。好几个一起一次提交,
-// 目录也在同一个提交里改。另一台设备同时在改: 这次不删了, 下次再说。返回删掉了几个
-async function cleanRemote({ repo, state, where, needed, now, progress }) {
+// 仓库里没用了的图片录音 (删掉的卡片集、卡片、错题的) 和没记在目录里的包: 先记下哪天开始没用的, 过一个星期还没用上就删掉
+// (万一别的设备还要)。老的一个一个的直接删; 包: 整包都没用了删掉, 一半以上没用了重新打包 (剩下的装一个新包)。
+// 好几个一起一次提交, 目录也在同一个提交里改; 提交时目录、wengu.json 都还得是刚才看到的那个 (别的设备这中间改了: 这次不删, 下次再说)。
+// 目录里记着、文件没了的包 (dangling) 从目录里去掉。返回删掉了几个
+async function cleanRemote({ repo, state, where, needed, now, progress, dangling = [], orphans = [], dataSha = null }) {
   const unused = { ...state.index.unused };
-  let changed = false;
-  for (const id of Object.keys(unused)) {
-    if (needed.has(id) || !where.has(id)) {
-      delete unused[id];
-      changed = true;
-    }
+  let changed = dangling.length > 0;
+  const orphanKeys = new Set(orphans.map((name) => `pack:${name}`));
+  for (const [id, t] of Object.entries(unused)) {
+    const alive = id.startsWith('pack:') ? orphanKeys.has(id) : where.has(id) && !needed.has(id);
+    // 用上了、没了的不记; 时间不对的 (别的设备时钟快了) 从现在算
+    if (!alive) delete unused[id];
+    else if (t > now + GRACE_MS / 7) unused[id] = now;
+    else continue;
+    changed = true;
   }
-  for (const id of where.keys()) {
-    if (!needed.has(id) && !(id in unused)) {
-      unused[id] = now;
+  for (const key of [...[...where.keys()].filter((id) => !needed.has(id)), ...orphanKeys]) {
+    if (!(key in unused)) {
+      unused[key] = now;
       changed = true;
     }
   }
   const ripe = new Set(Object.keys(unused).filter((id) => now - unused[id] >= GRACE_MS));
+  const original = { ...state.index.packs };
+  for (const name of dangling) delete original[name];
+  const expect = { [INDEX_PATH]: state.sha, ...(dataSha ? { [DATA_PATH]: dataSha } : {}) };
   if (!ripe.size) {
     if (!changed) return 0;
-    const index = { ...state.index, unused };
+    const index = { ...state.index, packs: original, unused };
     try {
       state.sha = await repo.write(INDEX_PATH, utf8ToB64(JSON.stringify(index)), state.sha, '温故: 图片 / 录音的目录');
       state.index = index;
@@ -462,7 +517,6 @@ async function cleanRemote({ repo, state, where, needed, now, progress }) {
     }
     return 0;
   }
-  const original = state.index.packs;
   const deadPacks = [];
   const repack = [];
   for (const [name, ids] of Object.entries(original)) {
@@ -470,13 +524,13 @@ async function cleanRemote({ repo, state, where, needed, now, progress }) {
     if (dead && dead === ids.length) deadPacks.push(name);
     else if (dead && dead * 2 >= ids.length) repack.push(name);
   }
-  let packs = { ...original };
+  let packs = original;
   const gone = new Set(); // 真的从仓库删掉了的
-  // 提交成功了才算删掉了 (dropping: 这次删掉的 id)
+  // 提交成功了才算删掉了 (dropping: 这次删掉的 id、pack:名字)
   const commit = async (changes, message, dropping) => {
     const done = new Set([...gone, ...dropping]);
     const index = { ...state.index, packs, unused: without(unused, done) };
-    const shas = await repo.commit({ ...changes, [INDEX_PATH]: JSON.stringify(index) }, message, { [INDEX_PATH]: state.sha });
+    const shas = await repo.commit({ ...changes, [INDEX_PATH]: JSON.stringify(index) }, message, { ...expect, [INDEX_PATH]: state.sha });
     Object.assign(state, { sha: shas[INDEX_PATH], index });
     for (const id of dropping) gone.add(id);
   };
@@ -485,7 +539,11 @@ async function cleanRemote({ repo, state, where, needed, now, progress }) {
       progress('整理仓库里的图片录音');
       const blob = await repo.readBlob(`media/packs/${name}.wgp`);
       if (!blob) continue;
-      const keep = decodePack(new Uint8Array(await blob.arrayBuffer())).filter((x) => !ripe.has(x.id));
+      const items = decodePack(new Uint8Array(await blob.arrayBuffer()));
+      const keep = items.filter((x) => !ripe.has(x.id));
+      // 拆出来的少了还要用的 (下载坏了): 这包先不动
+      const have = new Set(keep.map((x) => x.id));
+      if (original[name].some((id) => !ripe.has(id) && !have.has(id))) continue;
       const changes = { [`media/packs/${name}.wgp`]: null };
       packs = { ...packs };
       delete packs[name];
@@ -496,7 +554,11 @@ async function cleanRemote({ repo, state, where, needed, now, progress }) {
       }
       await commit(changes, '温故: 整理图片 / 录音', original[name].filter((id) => ripe.has(id)));
     }
-    const deletes = [...[...ripe].filter((id) => where.get(id)?.file).map((id) => [where.get(id).file, [id]]), ...deadPacks.map((name) => [`media/packs/${name}.wgp`, original[name], name])];
+    const deletes = [
+      ...[...ripe].filter((id) => where.get(id)?.file).map((id) => [where.get(id).file, [id]]),
+      ...deadPacks.map((name) => [`media/packs/${name}.wgp`, original[name], name]),
+      ...orphans.filter((name) => ripe.has(`pack:${name}`)).map((name) => [`media/packs/${name}.wgp`, [`pack:${name}`]]),
+    ];
     for (let i = 0; i < deletes.length; i += DELETES_PER_COMMIT) {
       progress('清掉仓库里不用的图片录音');
       const chunk = deletes.slice(i, i + DELETES_PER_COMMIT);
@@ -518,6 +580,7 @@ const canonical = (data) => JSON.stringify(cleanData(data));
 export async function syncOnce({ store, repo, media = localMedia, onApplied = null, now = Date.now, progress = () => {} }) {
   let changed = false;
   let pushed = false;
+  let dataSha = null; // 仓库里现在的 wengu.json (删不用的图片录音时要它没变)
   for (let attempt = 0; ; attempt++) {
     const remote = await repo.readText(DATA_PATH);
     let remoteData = null;
@@ -538,9 +601,12 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
     }
 
     const out = canonical(store.data);
-    if (remote && canonical(JSON.parse(remote.text)) === out) break; // 仓库里已经是最新的
+    if (remote && canonical(JSON.parse(remote.text)) === out) {
+      dataSha = remote.sha;
+      break; // 仓库里已经是最新的
+    }
     try {
-      await repo.write(DATA_PATH, utf8ToB64(out), remote?.sha, `温故同步 ${new Date(now()).toISOString()}`);
+      dataSha = await repo.write(DATA_PATH, utf8ToB64(out), remote?.sha, `温故同步 ${new Date(now()).toISOString()}`);
       pushed = true;
       break;
     } catch (e) {
@@ -548,7 +614,7 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
       throw e;
     }
   }
-  const { downloaded, uploaded, removed } = await syncMedia({ store, repo, media, progress, now });
+  const { downloaded, uploaded, removed } = await syncMedia({ store, repo, media, progress, now, dataSha });
   return { changed, pushed, downloaded, uploaded, removed };
 }
 
@@ -641,6 +707,10 @@ export class SyncManager {
         return { error: message };
       } finally {
         this.running = null;
+        if (this.again) {
+          this.again = false;
+          this.syncSoon(1000); // 清理的时候又改了东西: 接着同步
+        }
       }
     })();
     return this.running;

@@ -5,7 +5,7 @@ import { newId } from './store.js';
 
 const DB_NAME = 'wengu-media';
 const STORE = 'files';
-const KEEP_NEW_MS = 60 * 60 * 1000; // 一小时内放进来的不清 (可能是别的标签页正在编辑, 还没保存)
+const KEEP_NEW_MS = 24 * 60 * 60 * 1000; // 一天内放进来的不清 (可能是别的标签页正在编辑, 还没保存)
 
 let dbPromise = null;
 

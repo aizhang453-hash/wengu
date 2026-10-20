@@ -193,11 +193,13 @@ export function renderCards({ store }, id) {
     if (finished || busy || !prefs.track) return;
     const card = deck[index];
     // 记下标之前的样子, 撤销时恢复 (会不会、答对答错次数、下次复习的日子)
-    const stat = set.stats[card.id] ? structuredClone(set.stats[card.id]) : null;
-    const entry = { id: card.id, known, wasKnown: set.known.includes(card.id), stat };
+    // (从 store 现拿: 别的标签页背过、这页的 set 是旧的, 撤销时不能退回更早的样子)
+    const live = store.ownerOf(set.id, card.id)?.stats[card.id];
+    const stat = live ? structuredClone(live) : null;
+    const entry = { id: card.id, known, wasKnown: set.known.includes(card.id), stat, at: Date.now() };
     history.push(entry);
     store.setKnown(set.id, card.id, known);
-    entry.code = store.recordAnswer(set.id, card.id, known, { selfRated: true }); // 翻卡自评: 用 FSRS 排进以后的复习
+    entry.code = store.recordAnswer(set.id, card.id, known, { selfRated: true, now: entry.at }); // 翻卡自评: 用 FSRS 排进以后的复习
     busy = true;
     cardEl.classList.add(known ? 'fly-right' : 'fly-left');
     setTimeout(() => {
@@ -212,6 +214,7 @@ export function renderCards({ store }, id) {
     if (!prefs.track) return prev();
     if (history.length === 0) return;
     const last = history.pop();
+    if (last.at) store.untouchActivity(last.at);
     store.setKnown(set.id, last.id, last.wasKnown);
     if ('stat' in last) store.restoreStat(set.id, last.id, last.stat, last.code);
     if (!finished) index = Math.max(0, index - 1);
@@ -533,6 +536,10 @@ export function renderCards({ store }, id) {
     if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
     const key = e.key;
     if (key === 'f' || key === 'F') return toggleFull();
+    if (key === 'z' || key === 'Z' || key === 'Backspace') {
+      e.preventDefault();
+      return undo(); // 做完了也能撤销最后一张
+    }
     if (finished) return;
     // 勾选框上按空格是勾 / 不勾, 不翻面
     if (key === ' ' && e.target.matches?.('input')) return;
@@ -547,9 +554,6 @@ export function renderCards({ store }, id) {
       e.preventDefault();
       if (prefs.track) mark(true);
       else next();
-    } else if (key === 'z' || key === 'Z' || key === 'Backspace') {
-      e.preventDefault();
-      undo();
     } else if (key === 's' || key === 'S') {
       sayCard(deck[index], showingSide(), set);
     } else if (key === 'h' || key === 'H') {

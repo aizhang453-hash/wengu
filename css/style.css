@@ -6708,3 +6708,10 @@ a.pick-row:hover {
 .sync-msg.ok {
   color: var(--good);
 }
+
+/* 很长、没空格的名字 (Anki 的 Core2k6k_Optimized_……) 在手机上换行, 不把页面撑宽 */
+.deck-name,
+.q-head > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

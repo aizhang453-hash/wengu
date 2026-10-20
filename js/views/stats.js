@@ -19,6 +19,7 @@ export function renderStats({ store, go }, id = null) {
   }
   const sets = (id ? store.setsOf(id) : store.allSets()).filter((s) => s.kind !== 'quiz');
   const here = `#/stats${id ? `/${encodeURIComponent(id)}` : ''}`;
+  const review = `#/review${id ? `/${encodeURIComponent(id)}` : ''}`; // 只看一个卡片集的: 去复习也只复习它
   const redraw = () => {
     const y = window.scrollY;
     go(here);
@@ -49,12 +50,12 @@ export function renderStats({ store, go }, id = null) {
       h('div', { class: 'page-head' }, h('h1', {}, '📊 统计'), picker),
       sets.some((s) => s.cards.length)
         ? [
-            todaySection(store, sets, log, now),
+            todaySection(store, sets, log, now, review),
             forecastSection(sets, now),
             calendarSection(sets, log, now),
             retentionSection(store, sets, log, now, redraw),
             cardsSection(sets, now),
-            leechSection(store, sets, redraw),
+            leechSection(store, sets, redraw, review),
             suspendedSection(store, sets, redraw),
           ]
         : h('p', { class: 'muted' }, '还没有卡片。'),
@@ -65,7 +66,7 @@ export function renderStats({ store, go }, id = null) {
 const section = (title, ...children) => h('section', { class: 'stats-card' }, h('h2', {}, title), ...children);
 const figure = (value, label) => h('div', { class: 'stat-fig' }, h('strong', {}, value), h('span', { class: 'muted small' }, label));
 
-function todaySection(store, sets, log, now) {
+function todaySection(store, sets, log, now, review) {
   const t = todayStats(sets, log, now);
   const [today] = retentionStats(sets, log, now, [1]);
   return section(
@@ -81,7 +82,7 @@ function todaySection(store, sets, log, now) {
           today.n ? figure(percent(today.ok / today.n), `记住率 (${today.n} 张到日子的)`) : null,
         )
       : h('p', { class: 'muted' }, '今天还没翻卡自评过。'),
-    h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: '#/review' }, '去今天的复习')),
+    h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: review }, '去今天的复习')),
   );
 }
 
@@ -249,7 +250,7 @@ function cardLine(item, extra, tools) {
   );
 }
 
-function leechSection(store, sets, redraw) {
+function leechSection(store, sets, redraw, review) {
   const list = leeches(sets);
   if (!list.length) return null;
   return section(
@@ -278,7 +279,7 @@ function leechSection(store, sets, redraw) {
       }),
     ),
     list.length > LIST_MAX ? h('p', { class: 'muted small' }, `还有 ${list.length - LIST_MAX} 张, 在卡片集页点「难记卡」看全部。`) : null,
-    h('div', { class: 'row' }, h('a', { class: 'btn small', href: '#/review' }, '去复习 (「自定义学习」里能单练难记卡)')),
+    h('div', { class: 'row' }, h('a', { class: 'btn small', href: review }, '去复习 (「自定义学习」里能单练难记卡)')),
   );
 }
 

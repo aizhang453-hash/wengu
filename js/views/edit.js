@@ -580,7 +580,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         });
       } catch (e) {
         console.warn(e);
-        toast(tooBig(e.size));
+        toast(e?.size !== undefined ? tooBig(e.size) : `导入出错了: ${e?.message ?? e}`);
         return;
       }
       if (!made.length) return;
@@ -752,7 +752,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         return importedReviews.size ? store.importReviews(set.id, [...importedReviews].map(([id, [reviews, suspended]]) => [id, reviews, suspended])) : 0;
       });
     } catch (e) {
-      toast(tooBig(e.size));
+      toast(e?.size !== undefined ? tooBig(e.size) : `保存出错了: ${e?.message ?? e}`);
       return;
     }
     importedReviews.clear();

@@ -1,6 +1,6 @@
 // 一个卡片集: 选学习方式, 看所有卡片
 
-import { h, toast, download, openDialog, switchRow, icon } from '../dom.js';
+import { h, fill, toast, download, openDialog, switchRow, icon } from '../dom.js';
 import { isSuspended, LEECH } from '../srs.js';
 import { formatCards } from '../parse.js';
 import { stripMarks } from '../rich.js';
@@ -78,6 +78,7 @@ export function renderSet({ store, go }, id) {
                   store.suspend(set.id, [card.id], !paused);
                   toast(paused ? '恢复了, 照常排进复习' : '暂停了, 不排进复习');
                   drawList();
+                  drawTop(); // 上面的「暂停几张」「今天要背几张」也跟着变
                 },
               },
               icon('pause', 14),
@@ -234,7 +235,16 @@ export function renderSet({ store, go }, id) {
 
   const inFolders = store.foldersOf(set.id);
 
+  // 上面那行 (几张卡片、排进复习的、暂停的) 和每天背新词的计划 (今天要背几张)
+  const progressEl = h('p', { class: 'muted' });
+  const planBox = h('div', { class: 'plan-box' });
+  function drawTop() {
+    progressEl.textContent = progressLine(set);
+    fill(planBox, total ? planPanel({ store, go }, set) : null);
+  }
+
   drawList();
+  drawTop();
 
   return {
     title: set.title || '未命名卡片集',
@@ -244,7 +254,7 @@ export function renderSet({ store, go }, id) {
       h('a', { class: 'back', href: '#/' }, '← 我的卡片集'),
       h('h1', {}, set.title || '未命名卡片集'),
       set.description ? h('p', { class: 'description' }, set.description) : null,
-      h('p', { class: 'muted' }, progressLine(set)),
+      progressEl,
       inFolders.length
         ? h(
             'p',
@@ -253,7 +263,7 @@ export function renderSet({ store, go }, id) {
             inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, `📁 ${f.name || '未命名文件夹'}`)]),
           )
         : null,
-      total ? planPanel({ store, go }, set) : null, // 每天背新词的计划, 今天要背的
+      planBox, // 每天背新词的计划, 今天要背的
       modes,
       actions,
       set.virtual ? null : diagramSection(set),

@@ -28,7 +28,7 @@
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
-import { h, toast, icon } from './dom.js';
+import { h, toast, icon, dialogOpen } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
@@ -66,8 +66,35 @@ window.addEventListener('pagehide', () => store.flush());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') store.flush();
   // 开着过了一夜再回来: 首页、卡片集页这些「今天」的数字换成今天的
-  else if (current && current.day !== dayKey() && ['home', 'set', 'folder', 'mistakes', 'stats'].includes(current.page)) render();
+  else if (current && current.day !== dayKey()) refreshPage(['home', 'set', 'folder', 'mistakes', 'stats']);
 });
+
+// 数据变了 (别的标签页存了、别的设备同步来了、过了一夜): 首页、卡片集页这些重画, 停在原来的地方;
+// 正在背、正在编辑的不打断。开着窗口 (正在改卡片、定计划) 时先不画, 关了再画, 免得打了一半的字没了
+const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats'];
+let refreshLater = null;
+function refreshPage(pages = REFRESHABLE) {
+  if (!pages.includes(current?.page)) return;
+  if (dialogOpen()) {
+    refreshLater = pages;
+    return;
+  }
+  const y = window.scrollY;
+  render();
+  window.scrollTo(0, y);
+}
+// 窗口关了: 有等着的重画就画 (等窗口自己关完、它的回调跑完)
+document.addEventListener(
+  'close',
+  () =>
+    setTimeout(() => {
+      if (!refreshLater || dialogOpen()) return;
+      const pages = refreshLater;
+      refreshLater = null;
+      refreshPage(pages);
+    }, 0),
+  true,
+);
 let lastSaveError = 0;
 store.onSaveError = () => {
   // 一直存不进去时别每次都弹
@@ -82,7 +109,14 @@ let shownHash = null;
 let outsideHash = null; // 进游戏之前在哪一页 (游戏里点 ✕ 回游戏板块还是回卡片集)
 
 function parse(hash) {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  const decode = (s) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s; // 链接断在 % 中间: 原样用
+    }
+  };
+  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decode);
   if (parts.length === 0) return { page: 'home' };
   if (parts[0] === 'new') return { page: 'edit', id: null };
   if (parts[0] === 'new-quiz') return { page: 'quiz-edit', id: null };
@@ -133,8 +167,8 @@ function render() {
     history.replaceState(null, '', shownHash);
     return;
   }
-  // 换页时 (比如按了浏览器的返回) 关掉还开着的弹出窗口
-  for (const d of document.querySelectorAll('dialog[open]')) d.close();
+  // 换页时 (比如按了浏览器的返回) 关掉还开着的弹出窗口 (同一页重画不关: 重画都等窗口关了才来)
+  if (hash !== shownHash) for (const d of document.querySelectorAll('dialog[open]')) d.close();
   current?.cleanup?.();
   current = null;
   shownHash = hash;
@@ -225,13 +259,7 @@ const syncer = new SyncManager(store, {
     badge.title = status === 'error' ? `同步出错: ${message}` : status === 'syncing' && message ? `多设备同步: ${message}` : warn ? (expiry.expired ? '同步用的密钥可能已经过期了, 点这里换' : expiry.days === 0 ? '同步用的密钥今天过期, 点这里换' : `同步用的密钥还有 ${expiry.days} 天过期, 点这里换`) : `多设备同步: ${text}`;
   },
   // 别的设备的改动合并进来了: 首页、卡片集页这些直接重画; 正在背、正在编辑的不打断
-  onApplied: () => {
-    if (['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats'].includes(current?.page)) {
-      const y = window.scrollY;
-      render();
-      window.scrollTo(0, y);
-    }
-  },
+  onApplied: () => refreshPage(),
 });
 store.onChange = () => syncer.changed();
 
@@ -240,11 +268,7 @@ store.onChange = () => syncer.changed();
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  if (['home', 'set', 'folder', 'games', 'mistakes', 'stats'].includes(current?.page)) {
-    const y = window.scrollY;
-    render();
-    window.scrollTo(0, y);
-  }
+  refreshPage(['home', 'set', 'folder', 'games', 'mistakes', 'stats']);
 });
 window.addEventListener('beforeunload', (e) => {
   if (current?.isDirty?.()) {
@@ -264,7 +288,8 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 // 没有卡片用的图片、录音 (比如编辑时加了又没保存、别的设备删了卡片集), 过一会儿删掉;
 // 已经没有了的卡片集在浏览器里另外记的东西 (背到哪了、学哪些……) 也删掉
 setTimeout(() => {
-  cleanMedia(store);
+  // 卡片读不出来、一个卡片集一道错题都没有的时候不清 (看着都「没用」, 一清就全没了)
+  if (!store.loadError && (store.data.sets.length || store.data.mistakes.length)) cleanMedia(store);
   store.pruneLocal();
 }, 5000);
 

@@ -80,3 +80,22 @@ test('打卡同一天取多的; 合并两次结果一样', () => {
   assert.deepEqual(JSON.stringify(again.sets.map((s) => [s.id, s.title])), JSON.stringify(m.sets.map((s) => [s.id, s.title])));
   assert.deepEqual(again.activity, m.activity);
 });
+
+test('卡片一张一张合: 一边新加的、另一边后来改了别的, 都留下; 删掉的不回来; 同一张听后改的', () => {
+  const base = set({ id: 's', cards: [card('a', 'apple'), card('b', 'banana')], updatedAt: T });
+  // 平板上 (没联网) 加了一张 c、把 a 改成 APPLE
+  const ipad = { ...base, cards: [{ ...card('a', 'APPLE'), edited: T + 10 }, card('b', 'banana'), { ...card('c', 'cherry'), edited: T + 20 }], updatedAt: T + 20 };
+  // 电脑上后来删了 b, 改了标题
+  const pc = { ...base, title: '电脑改的', cards: [card('a', 'apple')], updatedAt: T + 50 };
+  for (const [x, y] of [
+    [ipad, pc],
+    [pc, ipad],
+  ]) {
+    const m = merge({ sets: [x], deleted: { 'card:b': T + 50 } }, { sets: [y] });
+    assert.equal(m.sets[0].title, '电脑改的');
+    assert.deepEqual(m.sets[0].cards.map((c) => c.term), ['APPLE', 'cherry']); // a 平板后改的, c 平板新加的; b 电脑删了
+  }
+  // 删了以后又改过的 (那边改的时候还不知道删了): 留下
+  const m = merge({ sets: [pc], deleted: { 'card:c': T + 15 } }, { sets: [ipad] });
+  assert.ok(m.sets[0].cards.some((c) => c.term === 'cherry'));
+});

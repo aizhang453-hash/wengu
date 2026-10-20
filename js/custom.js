@@ -4,7 +4,7 @@
 //   forgot 今天忘了的再过一遍 | leech 难记卡 | starred 星标的: 这三个是练习, 只算答对答错, 不动复习的日子
 // 都是 [{ set, card }], 卡片记在原来的卡片集上; 暂停了的不要
 
-import { isSuspended, retrievability, startOfDay, LEECH } from './srs.js';
+import { isSuspended, isBuried, retrievability, startOfDay, LEECH } from './srs.js';
 import { historyOf, AGAIN } from './revlog.js';
 
 export const CUSTOM = {
@@ -34,7 +34,7 @@ function each(sets, pick) {
 
 // 还没到日子的 (今天以后才该复习的), 现在记得的把握越低越前
 export function aheadCards(sets, now = Date.now()) {
-  return each(sets, (stat) => Number(stat?.due) > now && stat.interval >= 1 && retrievability(stat, now))
+  return each(sets, (stat) => Number(stat?.due) > now && stat.interval >= 1 && !isBuried(stat, now) && retrievability(stat, now))
     .sort((a, b) => a.v - b.v)
     .map(({ set, card }) => ({ set, card }));
 }

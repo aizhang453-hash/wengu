@@ -48,8 +48,9 @@ test('该复习的卡片', () => {
   const sets = [
     {
       id: 'a',
-      cards: [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }],
-      stats: { 1: { due: noon - 5 }, 2: { due: noon - 100 }, 3: { due: noon + DAY / 4 }, 4: { right: 1, wrong: 0 } },
+      cards: [{ id: '1' }, { id: '2' }, { id: '3' }, { id: '4' }, { id: '5' }],
+      // 3: 今天晚些时候到 (是今天的, 不算明天的); 5: 明天中午
+      stats: { 1: { due: noon - 5 }, 2: { due: noon - 100 }, 3: { due: noon + DAY / 4 }, 4: { right: 1, wrong: 0 }, 5: { due: noon + DAY } },
     },
   ];
   assert.deepEqual(

@@ -85,18 +85,40 @@ test('删除', () => {
   assert.equal(store.getSet(set.id), null);
 });
 
-test('备份导出再导入: 新的加进来, 一样的替换', () => {
+test('备份导出再导入: 新的加进来, 两边都有的合在一起 (后改的为准, 这边后来改的不退回去)', () => {
   const from = new Store(memoryStorage());
   const shared = from.putSet(sampleSet());
   from.putSet({ ...sampleSet(), title: '只在备份里' });
   const backup = from.exportBackup();
 
   const to = new Store(memoryStorage());
-  to.putSet({ ...structuredClone(shared), title: '旧标题' });
+  to.putSet({ ...structuredClone(shared), title: '这边后来改的' });
   to.putSet({ ...sampleSet(), title: '只在这边' });
   const result = to.importBackup(backup);
   assert.deepEqual(result, { added: 1, replaced: 1 });
-  assert.deepEqual(to.allSets().map((s) => s.title).sort(), ['只在备份里', '只在这边', '水果'].sort());
+  assert.deepEqual(to.allSets().map((s) => s.title).sort(), ['只在备份里', '只在这边', '这边后来改的'].sort());
+});
+
+test('用备份恢复删掉的卡片集: 恢复了的同步以后还在; 备份里别的卡片集不会退回旧的样子', async () => {
+  const { mergeData } = await import('../js/merge.js');
+  const store = new Store(memoryStorage());
+  const keep = store.putSet({ title: '一直在用', cards: [makeCard('apple', '苹果'), makeCard('pear', '梨')] });
+  const lost = store.putSet({ title: '不小心删了', cards: [makeCard('x', 'y')] });
+  const backup = store.exportBackup();
+  // 备份以后: 改了一张、加了一张、标了会了; 删掉一个卡片集, 同步出去
+  const k = store.getSet(keep.id);
+  store.putSet({ ...k, cards: [{ ...k.cards[0], term: 'APPLE' }, k.cards[1], makeCard('grape', '葡萄')] });
+  store.setKnown(keep.id, k.cards[1].id, true);
+  store.deleteSet(lost.id);
+  const remote = cleanData(structuredClone(store.data));
+  store.importBackup(backup);
+  const now = store.getSet(keep.id);
+  assert.deepEqual(now.cards.map((c) => c.term), ['APPLE', 'pear', 'grape']);
+  assert.equal(now.known.length, 1);
+  assert.ok(store.getSet(lost.id));
+  const merged = cleanData(mergeData(remote, store.data));
+  assert.deepEqual(merged.sets.map((s) => s.title).sort(), ['一直在用', '不小心删了'].sort());
+  assert.deepEqual(merged.sets.find((s) => s.id === keep.id).cards.map((c) => c.term), ['APPLE', 'pear', 'grape']);
 });
 
 test('备份文件不对: 读不了的抛错, 没有卡片集的什么也不加', () => {

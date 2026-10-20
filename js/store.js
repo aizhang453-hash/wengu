@@ -1,10 +1,10 @@
 import { schedule, replay, dayKey, useParameters, isLapse, cleanRetention, startOfDay, daysLater, DAY, DEFAULT_RETENTION } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
-import { cleanMistake, firstReview, reviewAfter, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
-import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack } from './revlog.js';
+import { cleanMistake, firstReview, reviewAfter, mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
+import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
-import { mergeData, mergeSettings } from './merge.js';
+import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -58,6 +58,20 @@ const DELETED_KEEP_MS = 120 * 24 * 60 * 60 * 1000; // 删除记录留 120 天
 const EMPTY_MEDIA = new Set(['image', 'termAudio', 'defAudio']);
 const compact = (key, value) => (value === '' && EMPTY_MEDIA.has(key) ? undefined : value);
 
+// 改过的卡片记 edited (这张最后改的时间), 新加的也算; 删掉的记在 deleted['card:id']: 同步时一张一张合, 两台设备各加的卡片都不丢。
+// (新建的卡片集不用记: 别的设备还没有)
+const cardText = (c) => JSON.stringify([c.term, c.def, c.image, c.termAudio, c.defAudio, c.q ?? null]);
+function stampCards(next, prev, now, deleted) {
+  const old = new Map(prev.cards.map((c) => [c.id, c]));
+  for (const c of next.cards) {
+    const o = old.get(c.id);
+    if (!o || cardText(o) !== cardText(c)) c.edited = now;
+    else if (o.edited) c.edited = o.edited;
+  }
+  const ids = new Set(next.cards.map((c) => c.id));
+  for (const id of old.keys()) if (!ids.has(id)) deleted[`card:${id}`] = now;
+}
+
 // 文件夹: { id, name, setIds: [卡片集 id...], best: {}, plan: 每天背新词的计划 (plan.js, 没定过是 null), createdAt, updatedAt }
 export function makeFolder(name = '') {
   const now = Date.now();
@@ -81,7 +95,7 @@ export const COLLAPSED_KEY = 'wengu:home-collapsed'; // 首页收起了的文件
 //          答对答错几次, 记忆状态, 下次哪天复习 (srs.js),
 //          first 第一次排进复习的时间 (算今天学了几个新词), n 从第一次起翻卡自评了几次 (看复习记录全不全),
 //          lapses 背过以后又忘了几次 (8 次以上是难记卡), sus 暂停的时间 (暂停了不排复习), bury 「明天再说」到哪天 0 点,
-//          rev 撤销、暂停这些手动改的时间 (同步时比 at 新的听这边的)
+//          rev 撤销的时间 (同步时比 at 新的听这边的), flag 暂停 / 明天再说改的时间 (同步时这两样单独听后改的)
 //   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
 //   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
 //   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
@@ -131,6 +145,7 @@ function cleanSet(raw) {
           image: mediaId(c.image),
           termAudio: mediaId(c.termAudio),
           defAudio: mediaId(c.defAudio),
+          ...(Number(c.edited) > 0 ? { edited: Number(c.edited) } : {}), // 这张最后改的时间 (同步时一张一张合)
           ...(raw.kind === 'quiz' ? { q: cleanQuestion(c.q) ?? newQuestion() } : {}),
         }))
     : [];
@@ -170,6 +185,7 @@ function cleanSet(raw) {
       if (Number.isSafeInteger(v.lapses) && v.lapses > 0) out.lapses = v.lapses;
       if (Number(v.sus) > 0) out.sus = Number(v.sus);
       if (Number(v.bury) > Date.now()) out.bury = Number(v.bury); // 过了那天的不用留
+      if (Number(v.flag) > 0) out.flag = Number(v.flag); // 暂停、明天再说改的时间
       if (Number(v.rev) > 0) out.rev = Number(v.rev);
       return out;
     }),
@@ -299,11 +315,20 @@ export class Store {
     return n;
   }
 
+  // 读不出来 (坏了、浏览器不让读): 当成空的, 记下 loadError (这时别清图片录音, 不然全没了); 坏了的原样另存一份
   load() {
+    this.loadError = false;
+    let text = null;
     try {
-      const text = this.storage?.getItem(KEY);
+      text = this.storage?.getItem(KEY);
       return text ? cleanData(JSON.parse(text)) : emptyData();
     } catch {
+      this.loadError = true;
+      try {
+        if (text) this.storage?.setItem(`${KEY}:broken-${Date.now()}`, text);
+      } catch {
+        // 存不下就算了
+      }
       return emptyData();
     }
   }
@@ -462,12 +487,15 @@ export class Store {
     if (touch) clean.updatedAt = Date.now();
     const i = this.data.sets.findIndex((s) => s.id === clean.id);
     const prev = this.data.sets[i];
+    const deletedBefore = { ...this.data.deleted };
+    if (prev) stampCards(clean, prev, Date.now(), this.data.deleted);
     if (i === -1) this.data.sets.push(clean);
     else this.data.sets[i] = clean;
     // 存不下: 退回去 (不然浏览器里有、存着的没有, 以后每次存都失败), 编辑页靠这个提示「存不下了」
     if (!this.save()) {
       if (i === -1) this.data.sets.pop();
       else this.data.sets[i] = prev;
+      this.data.deleted = deletedBefore;
       throw new Error('存不下了');
     }
     return clean;
@@ -528,16 +556,22 @@ export class Store {
   putMistake(mistake, now = Date.now()) {
     const clean = cleanMistake({ ...mistake, updatedAt: now });
     const i = this.data.mistakes.findIndex((m) => m.id === clean.id);
+    const prev = this.data.mistakes[i];
     if (i === -1) {
       clean.createdAt = now;
       clean.review ??= firstReview(now);
       this.data.mistakes.push(clean);
     } else {
-      clean.review = this.data.mistakes[i].review;
-      clean.createdAt = this.data.mistakes[i].createdAt;
+      clean.review = prev.review;
+      clean.createdAt = prev.createdAt;
       this.data.mistakes[i] = clean;
     }
-    if (!this.save()) throw new Error('存不下了');
+    if (!this.save()) {
+      // 存不下: 退回去
+      if (i === -1) this.data.mistakes.pop();
+      else this.data.mistakes[i] = prev;
+      throw new Error('存不下了');
+    }
     return clean;
   }
 
@@ -620,10 +654,17 @@ export class Store {
     const set = this.ownerOf(setId, cardId);
     const card = set?.cards.find((c) => c.id === cardId);
     if (!card) return null;
+    const before = { term: card.term, def: card.def, edited: card.edited, updatedAt: set.updatedAt };
     if (typeof term === 'string') card.term = term;
     if (typeof def === 'string') card.def = def;
-    set.updatedAt = Date.now();
-    if (!this.save()) throw new Error('存不下了');
+    set.updatedAt = card.edited = Date.now();
+    if (!this.save()) {
+      // 存不下: 退回去 (不然看着改了、其实没存, 以后存什么都失败)
+      Object.assign(card, before);
+      if (!before.edited) delete card.edited;
+      set.updatedAt = before.updatedAt;
+      throw new Error('存不下了');
+    }
     return card;
   }
 
@@ -684,7 +725,9 @@ export class Store {
     return {
       load: (days) => {
         const c = this.dayCounts(now);
-        return days.map((t) => c.map.get(t < c.tomorrow0 ? 0 : Math.round((t - c.today0) / DAY)) ?? 0);
+        // 有今天以前的日子 (从 Anki 搬来、早就到日子了的): 今天那格是所有积压的, 比不出哪天少, 不看
+        if (days.some((t) => t < c.tomorrow0)) return null;
+        return days.map((t) => c.map.get(Math.round((t - c.today0) / DAY)) ?? 0);
       },
       add: (due) => this.countDue({ due }, 1),
     };
@@ -711,6 +754,7 @@ export class Store {
     const s = (set.stats[cardId] ??= { right: 0, wrong: 0 });
     let code = null;
     if (selfRated) {
+      now = this.freeTime(cardId, correct, now);
       if (isLapse(s, correct, now)) s.lapses = (s.lapses ?? 0) + 1;
       const next = this.nextReview(s, cardId, correct, now);
       this.countDue(s, -1);
@@ -725,6 +769,15 @@ export class Store {
     this.touchActivity(now);
     if (save) this.saveSoon();
     return code; // 记进复习记录的那一条 (撤销时用)
+  }
+
+  // 复习记录按秒记: 同一秒里同一张同样的评分 (忘了马上又忘了、撤销了马上又点) 会被当成同一次合掉、撤销掉。
+  // 这一秒有了就往后挪一秒
+  freeTime(cardId, correct, now) {
+    const taken = new Set([...unpack(this.data.revlog[cardId]), ...unpack(this.data.undone[cardId])]);
+    let t = now;
+    for (let i = 0; i < 60 && taken.has(encodeReview(t, correct ? GOOD : AGAIN)); i++) t += 1000;
+    return t;
   }
 
   // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }], 在 Anki 里暂停了]]。按一遍 FSRS 接着 Anki 的进度排
@@ -742,15 +795,15 @@ export class Store {
       if (reviews?.length) {
         addReviews(this.data.revlog, cardId, reviews);
         if (!set.stats[cardId]?.at) {
-          set.stats[cardId] = { ...replay(reviews, { seed: cardId, load: days.load }), first: Math.min(...reviews.map((r) => r.at)), n: historyOf(this.data.revlog, cardId).length };
+          set.stats[cardId] = { ...replay(reviews, { seed: cardId, load: days.load }), first: reviews.reduce((t, r) => Math.min(t, r.at), Infinity), n: historyOf(this.data.revlog, cardId).length };
           if (!set.stats[cardId].lapses) delete set.stats[cardId].lapses;
-          days.add(set.stats[cardId].due);
+          if (!suspended) days.add(set.stats[cardId].due);
         }
         n++;
         changed = true;
       }
       if (suspended && !set.stats[cardId]?.sus) {
-        set.stats[cardId] = { right: 0, wrong: 0, ...set.stats[cardId], sus: now };
+        set.stats[cardId] = { right: 0, wrong: 0, ...set.stats[cardId], sus: now, flag: now };
         changed = true;
       }
     }
@@ -769,7 +822,7 @@ export class Store {
       if (Boolean(stat.sus) === on) continue;
       if (on) stat.sus = now;
       else delete stat.sus;
-      stat.rev = now;
+      stat.flag = now;
       n++;
     }
     this.counts = null;
@@ -781,16 +834,19 @@ export class Store {
   bury(setId, cardId, now = Date.now()) {
     const set = this.ownerOf(setId, cardId);
     if (!set?.cards.some((c) => c.id === cardId)) return;
-    Object.assign((set.stats[cardId] ??= { right: 0, wrong: 0 }), { bury: daysLater(now, 1), rev: now });
+    Object.assign((set.stats[cardId] ??= { right: 0, wrong: 0 }), { bury: daysLater(now, 1), flag: now });
     this.counts = null;
     this.save();
   }
 
-  // 撤销暂停、明天再说: 一张卡片的统计换回以前的样子 (复习记录不动)
+  // 撤销暂停、明天再说、练习里答的: 一张卡片的统计换回以前的样子 (复习记录不动)。
+  // 暂停、明天再说记 flag (同步时这两样听后改的那边, 不连着复习的日子一起盖掉); 练习答的记 rev
   putStat(setId, cardId, stat, now = Date.now()) {
     const set = this.ownerOf(setId, cardId);
     if (!set) return;
-    set.stats[cardId] = { ...(stat ?? { right: 0, wrong: 0 }), rev: now };
+    const cur = set.stats[cardId];
+    const flagged = Boolean(cur?.sus) !== Boolean(stat?.sus) || Boolean(cur?.bury) !== Boolean(stat?.bury);
+    set.stats[cardId] = { ...(stat ?? { right: 0, wrong: 0 }), ...(flagged ? { flag: now } : { rev: now }) };
     this.counts = null;
     this.save();
   }
@@ -854,6 +910,13 @@ export class Store {
     this.save();
   }
 
+  // 撤销了那一题: 那天答的题数退回一个 (调的地方接着存)
+  untouchActivity(at) {
+    const key = dayKey(at);
+    if (this.data.activity[key] > 1) this.data.activity[key]--;
+    else delete this.data.activity[key];
+  }
+
   // 今天学过 (连续打卡)
   touchActivity(now = Date.now()) {
     const key = dayKey(now);
@@ -914,18 +977,33 @@ export class Store {
 
   // 备份里的卡片集加进来; 同一个卡片集 (id 一样) 用备份里的替换。
   // 返回 { added, replaced }
-  importBackup(text) {
+  // 备份里的算刚改过的 (同步时听备份的, 不会被别的设备的旧内容、删除记录又盖掉; 删掉了的也恢复回来)。
+  // 一起存: 存不下就全不要, 抛错 (error.size)
+  importBackup(text, now = Date.now()) {
     const incoming = cleanData(JSON.parse(text));
+    return this.transaction(() => this.mergeBackup(incoming, now));
+  }
+
+  // 这里没有的 (删掉了的、别的设备的) 加回来, 算刚改过的 (同步时不会被删除记录、别的设备又去掉);
+  // 这里还有的跟备份合在一起 (跟同步一样: 后改的为准, 新加的卡片都留下), 不会把这里后来改的、背的退回去
+  mergeBackup(incoming, now) {
     this.counts = null;
     let added = 0;
     let replaced = 0;
+    const revive = (key, x) => {
+      const t = Math.max(now, (this.data.deleted[key] ?? 0) + 1); // 比删掉的时间晚
+      delete this.data.deleted[key];
+      x.updatedAt = Math.max(x.updatedAt ?? 0, t);
+      if ('progressAt' in x) x.progressAt = Math.max(x.progressAt ?? 0, t);
+    };
     for (const set of incoming.sets) {
       const i = this.data.sets.findIndex((s) => s.id === set.id);
       if (i === -1) {
+        revive(set.id, set);
         this.data.sets.push(set);
         added++;
       } else {
-        this.data.sets[i] = set;
+        this.data.sets[i] = cleanSet(mergeSet(this.data.sets[i], set, this.data.deleted));
         replaced++;
       }
     }
@@ -933,10 +1011,13 @@ export class Store {
     for (const [day, n] of Object.entries(incoming.activity)) {
       this.data.activity[day] = Math.max(this.data.activity[day] ?? 0, n);
     }
+    const setIds = new Set(this.data.sets.map((s) => s.id));
     for (const folder of incoming.folders) {
       const i = this.data.folders.findIndex((f) => f.id === folder.id);
-      if (i === -1) this.data.folders.push(folder);
-      else this.data.folders[i] = folder;
+      if (i === -1) {
+        revive(FOLDER_PREFIX + folder.id, folder);
+        this.data.folders.push(folder);
+      } else this.data.folders[i] = cleanFolder(mergeFolder(this.data.folders[i], folder), setIds);
     }
     this.data.undone = mergeLogs(this.data.undone, incoming.undone);
     this.data.revlog = subtractLogs(mergeLogs(this.data.revlog, incoming.revlog), this.data.undone);
@@ -944,8 +1025,10 @@ export class Store {
     this.applyParameters({ recompute: true });
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
-      if (i === -1) this.data.mistakes.push(m);
-      else this.data.mistakes[i] = m;
+      if (i === -1) {
+        revive(MISTAKE_PREFIX + m.id, m);
+        this.data.mistakes.push(m);
+      } else this.data.mistakes[i] = cleanMistake(mergeMistake(this.data.mistakes[i], m));
     }
     this.save();
     return { added, replaced };

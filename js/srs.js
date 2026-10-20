@@ -99,7 +99,7 @@ export function spreadInterval(interval, elapsed, { seed = '', load = null, max 
   if (hi <= lo) return lo;
   const days = [];
   for (let d = lo; d <= hi; d++) days.push(d);
-  const counts = load ? load(days) : null;
+  const counts = load ? load(days) : null; // 给了 load 也可能是 null (比不出来): 就随机挑
   const weights = days.map((d, i) => (counts ? 1 / ((counts[i] + 1) ** 2 * d) : 1));
   let x = random(seed) * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < days.length; i++) {
@@ -152,10 +152,11 @@ export function replay(reviews, spread = {}) {
   let right = 0;
   let wrong = 0;
   let lapses = 0;
-  for (const { at, rating } of reviews) {
+  for (const { at, rating, type } of reviews) {
     lastStep = step(fsrs, memory, last, at, rating);
-    // 隔了一天以上来复习、上次记得的, 这次忘了算忘了一次 (Anki 当天的学习步骤里按重来不算)
-    if (rating === Rating.Again && memory && lastRating !== Rating.Again && lastStep.elapsed >= 1) lapses++;
+    // 忘了一次: Anki 的记录有类型的, 复习 (type 1) 时按重来才算 (学习、重学步骤里的不算, 跟 Anki 一样);
+    // 没有类型的: 隔了一天以上来复习、上次记得的, 这次忘了才算
+    if (rating === Rating.Again && (type !== undefined ? type === 1 : memory && lastRating !== Rating.Again && lastStep.elapsed >= 1)) lapses++;
     memory = lastStep.memory;
     last = at;
     lastRating = rating;
@@ -197,13 +198,15 @@ export function dueCards(sets, now = Date.now()) {
 // 明天 (到明天晚上为止) 要复习几张, 不算今天已经该复习的 (今天说了「明天再说」的算明天的)
 export function dueTomorrow(sets, now = Date.now()) {
   const end = daysLater(now, 2);
+  const tomorrow = daysLater(now, 1);
   let n = 0;
   for (const set of sets) {
     for (const card of set.cards) {
       const stat = set.stats[card.id];
       const due = stat?.due;
       if (!due || isSuspended(stat)) continue;
-      if ((due > now && due < end) || (due <= now && isBuried(stat, now))) n++;
+      // (今天晚些时候到的, 比如十分钟后再来的, 是今天的)
+      if ((due >= tomorrow && due < end) || (due <= now && isBuried(stat, now))) n++;
     }
   }
   return n;
