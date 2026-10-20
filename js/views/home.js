@@ -358,10 +358,7 @@ export function renderHome({ store, go }) {
           ? h(
               'div',
               { class: 'row' },
-              h('a', { class: 'btn', href: '#/stats', title: '以后每天要复习几张、每天背了多少、记住率、难记卡' }, '📊 统计'),
-              h('a', { class: 'btn', href: '#/mistakes' }, '📕 错题集'),
-              h('a', { class: 'btn', href: '#/games' }, '🎮 游戏'),
-              h('a', { class: 'btn', href: '#/new-quiz', title: '像 Kahoot 那样每道题自己写选项, 限时答' }, '📝 新建题目集'),
+              // 统计、错题集、游戏、题目集这些在左上角 ☰ 的菜单里
               h('a', { class: 'btn', href: '#/import', title: 'Quizlet 的文字、Excel、CSV、Anki 卡组' }, '导入'),
               h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建'),
             )

@@ -74,6 +74,7 @@ const FILES = [
   'js/views/home.js',
   'js/views/learn.js',
   'js/views/match.js',
+  'js/views/menu.js',
   'js/views/mistakeedit.js',
   'js/views/mistakereview.js',
   'js/views/mistakes.js',

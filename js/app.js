@@ -45,6 +45,7 @@ import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
 import { renderStats } from './views/stats.js';
+import { setupMenu } from './views/menu.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
 import { renderQuizlet } from './views/quizlet.js';
@@ -262,6 +263,7 @@ const syncer = new SyncManager(store, {
   onApplied: () => refreshPage(),
 });
 store.onChange = () => syncer.changed();
+setupMenu({ store, go, syncer }); // 左上角 ☰ 的菜单
 
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)

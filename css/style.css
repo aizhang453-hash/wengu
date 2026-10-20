@@ -6715,3 +6715,141 @@ a.pick-row:hover {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* ---- 左边的菜单 (☰) ---- */
+.topbar .menu-btn {
+  margin-right: -6px;
+  color: var(--text);
+}
+
+.drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(320px, 86vw);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0 18px 18px 0;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 4px 0 30px rgb(0 0 0 / 25%);
+  animation: drawer-in 0.18s ease-out;
+}
+
+.drawer::backdrop {
+  background: rgb(20 18 15 / 45%);
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer {
+    animation: none;
+  }
+}
+
+.drawer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px 12px calc(16px + env(safe-area-inset-bottom));
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 2px 12px;
+}
+
+.drawer-head .menu-btn {
+  color: var(--text);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--surface-2);
+}
+
+.menu-item.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.menu-item .svg-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.menu-item.on .svg-icon {
+  color: var(--accent);
+}
+
+.menu-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.menu-sub {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.menu-badge {
+  flex: none;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 10px 6px;
+  background: var(--border);
+}
+
+.menu-title {
+  padding: 4px 14px 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* 名字那一列占剩下的地方 (数字那几列只要够放数字) */
+.deck-table td.deck-name {
+  width: 100%;
+}
