@@ -7388,3 +7388,42 @@ body.has-pet main {
   font-size: 0.72rem;
   text-align: center;
 }
+
+/* 温温说话下面那一排: 还有呢、学得怎么样、论语、小窝 */
+.pet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.pet-actions + .pet-chips {
+  margin-top: 8px;
+}
+
+.pet-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.pet-chip:hover {
+  border-color: var(--muted);
+}
+
+.pet-list {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  font-size: 0.88rem;
+}
+
+.pet-list li + li {
+  margin-top: 2px;
+}

@@ -1,15 +1,20 @@
 // 右下角的小乌龟温温 (想法、要说的话在 ../pet.js):
-//   点它: 说一句有用的 (今天还要背几张、错题该重做了……, 带按钮直接去), 再点念一句《论语》, 轮着来
-//   自己说话: 每天第一次见面打个招呼; 过一阵念一句《论语》; 长大了、解锁了装扮、连续打卡到了天数 (放烟花)、
-//            今天的背完了、碰到难记卡的时候说一声
+//   点它: 说一句有用的 (今天还要背几张、错题该重做了、计划跟不上了、哪张卡片老是忘……, 带按钮直接去),
+//         跟《论语》、学习小窍门轮着来; 说过的不重复, 数变了才再说。下面一排: 还有呢、学得怎么样、论语、小窝
+//   自己说话: 每天第一次见面打个招呼 (隔一个星期说说这 7 天学得怎么样); 过一阵念一句《论语》(挑合适现在的);
+//            长大了、解锁了装扮、连续打卡到了天数 (放烟花)、今天的背完了、有新的难记卡的时候说一声
 //   只在首页、卡片集页这些地方; 背卡、测试、游戏、编辑、打字的时候不出来 (不挡按钮、不打扰)
 //   「温温的小窝」: 长到哪了、心情、装扮、起名字, 这台设备上显示不显示、自己说不说话、缩成小圆点
 
 import { h, fill, openDialog, askText, switchRow, dialogOpen } from '../dom.js';
 import { todayAll } from './plan.js';
-import { reviewedToday, examTime } from '../plan.js';
+import { editCardDialog } from './cardedit.js';
+import { reviewedToday, examTime, plannedSets, newToday, isNew } from '../plan.js';
 import { dueMistakes } from '../mistakes.js';
-import { streak, dueTomorrow, dayKey, startOfDay, daysLater, DAY, LEECH } from '../srs.js';
+import { streak, dueTomorrow, dayKey, startOfDay, daysLater, DAY, LEECH, isSuspended } from '../srs.js';
+import { historyOf, AGAIN } from '../revlog.js';
+import { stripMarks } from '../rich.js';
+import { MATURE } from '../stats.js';
 import {
   STAGES,
   OUTFITS,
@@ -23,7 +28,11 @@ import {
   idleDays,
   greeting,
   eventLine,
-  randomQuote,
+  report,
+  QUOTES,
+  STUDY_TIPS,
+  quoteTags,
+  pickNext,
   quoteSource,
   milestoneDue,
   cheered,
@@ -35,7 +44,8 @@ const PREFS_KEY = 'wengu:pet';
 const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'search', 'games', 'sync']);
 const QUOTE_EVERY = [6 * 60e3, 12 * 60e3]; // 自己念《论语》: 隔 6–12 分钟一次
 
-// 这台设备上的: hidden 不显示, quiet 不自己说话, mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」
+// 这台设备上的: hidden 不显示, quiet 不自己说话, mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」,
+//   reported 哪天说过「这 7 天学得怎么样」, heardQ / heardT 这一轮念过的《论语》、小窍门 (都说一遍才从头来)
 function loadPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
@@ -183,6 +193,127 @@ export function situation(store, now = Date.now()) {
   return c;
 }
 
+const dayTime = (key) => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d).getTime();
+};
+const shortText = (text, n = 18) => {
+  const t = stripMarks(String(text ?? '')).replace(/\s+/g, ' ').trim();
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+};
+
+// 细算的 (要翻复习记录, 卡片多了要几十毫秒): 点它、打招呼、看「学得怎么样」的时候才算
+//   perCard 平时答一题要多久 (毫秒), retention 最近 7 天复习时记住的, pace 计划跟不上了的, rest 考前只复习了还有新词的,
+//   leech 忘得最多的那张, neglect 很久没碰、还有好多新词的卡片集, week 这 7 天 (「学得怎么样」用)
+export function insight(store, now = Date.now()) {
+  const data = store.data;
+  const sets = store.allSets().filter((s) => s.kind !== 'quiz');
+  const today0 = startOfDay(now);
+  const from7 = daysLater(now, -6); // 今天和前 6 天
+  const from14 = daysLater(now, -13);
+  const hrefOf = (x) => (x.virtual ? `#/folder/${encodeURIComponent(x.folderId)}` : `#/set/${encodeURIComponent(x.id)}`);
+  const times = [];
+  let n = 0;
+  let ok = 0;
+  let fresh7 = 0;
+  let studied = 0;
+  let mature = 0;
+  let worst = null;
+  for (const set of sets) {
+    for (const card of set.cards) {
+      const stat = set.stats[card.id];
+      if (!stat) continue;
+      if (stat.first >= from7) fresh7++;
+      const paused = isSuspended(stat);
+      if (stat.due > 0 && !paused) {
+        studied++;
+        if (stat.interval >= MATURE) mature++;
+      }
+      if (stat.lapses >= LEECH && !paused && (!worst || stat.lapses > worst.lapses)) worst = { set, card, lapses: stat.lapses };
+      // 两个星期没答过的, 记录里也没有最近的
+      if (!(stat.at >= from14)) continue;
+      const list = historyOf(data.revlog, card.id);
+      for (let i = 0; i < list.length; i++) {
+        const { at, rating } = list[i];
+        if (at < from14 || at > now) continue;
+        times.push(at);
+        // 记住了几成: 复习的 (不算第一次, 同一天又看的也不算)
+        if (i && at >= from7 && startOfDay(at) !== startOfDay(list[i - 1].at)) {
+          n++;
+          if (rating !== AGAIN) ok++;
+        }
+      }
+    }
+  }
+  // 平时答一题多久: 两次之间隔了多久 (隔太久是走开了, 算一会儿)
+  times.sort((a, b) => a - b);
+  let ms = 0;
+  for (let i = 1; i < times.length; i++) {
+    const gap = times[i] - times[i - 1];
+    ms += gap > 5 * 60e3 ? 8000 : Math.min(gap, 60e3);
+  }
+  const perCard = times.length >= 50 ? (ms + 8000) / times.length : null;
+
+  // 按考试日期的计划: 最近 7 天少学了好多; 到了考前只复习, 还有新词没学
+  let pace = null;
+  let rest = null;
+  const week0 = daysLater(now, -7);
+  for (const x of [...plannedSets(sets), ...store.plannedFolders()]) {
+    const info = newToday(x, now);
+    if (!info.on) continue;
+    const title = x.title || '未命名';
+    if (info.mode === 'rest' && info.left > 0 && (!rest || info.left > rest.left)) rest = { href: hrefOf(x), title, left: info.left };
+    if (info.mode !== 'exam' || !(x.plan.at > 0 && x.plan.at < now - 8 * DAY)) continue; // 刚定的计划先不说
+    const need7 = info.perDay * 7;
+    let learned7 = 0;
+    const stats = x.stats; // 文件夹合起来的每次读都要现算, 只读一次
+    for (const card of x.cards) {
+      const first = stats[card.id]?.first;
+      if (first >= week0 && first < today0) learned7++;
+    }
+    if (need7 >= 7 && learned7 < need7 * 0.6 && (!pace || need7 - learned7 > pace.need7 - pace.learned7)) pace = { href: hrefOf(x), title, learned7, need7, perDay: info.perDay };
+  }
+
+  // 很久没碰、还有好多新词、也没定计划的卡片集
+  let neglect = null;
+  const inPlan = new Set(data.folders.filter((f) => f.plan?.on).flatMap((f) => f.setIds));
+  for (const set of sets) {
+    if (set.plan?.on || inPlan.has(set.id)) continue;
+    let fresh = 0;
+    let last = 0;
+    for (const card of set.cards) {
+      const stat = set.stats[card.id];
+      if (isNew(stat) && !isSuspended(stat)) fresh++;
+      if (stat?.at > last) last = stat.at;
+    }
+    if (fresh < 20 || (last ? last > now - 14 * DAY : set.createdAt > now - 7 * DAY)) continue;
+    if (!neglect || fresh > neglect.fresh) neglect = { href: hrefOf(set), title: set.title || '未命名', fresh, days: last ? Math.round((today0 - startOfDay(last)) / DAY) : 0 };
+  }
+
+  // 这 7 天、上一个 7 天
+  let answers7 = 0;
+  let answersPrev = 0;
+  let days7 = 0;
+  for (let i = 0; i < 14; i++) {
+    const v = data.activity[dayKey(daysLater(now, -i))] ?? 0;
+    if (i < 7) {
+      answers7 += v;
+      if (v) days7++;
+    } else answersPrev += v;
+  }
+  const mastered = data.mistakes.filter((m) => m.review?.mastered).length;
+  return {
+    at: now,
+    perCard,
+    retention: { n, ok, target: data.settings.retention },
+    pace,
+    rest,
+    neglect,
+    leech: worst ? { term: shortText(worst.card.term) || shortText(worst.card.def) || '这张卡片', lapses: worst.lapses, setId: worst.set.id, cardId: worst.card.id } : null,
+    week: { days7, answers7, answersPrev, fresh7, studied, mature, mastered, mistakesLeft: data.mistakes.length - mastered },
+  };
+}
+
 // ---- 右下角 ----
 
 export function setupPet({ store }) {
@@ -192,7 +323,10 @@ export function setupPet({ store }) {
   let base = null; // 这次打开网页以后第一次算的 (比一比吃了几口、多了几张难记卡)
   const events = []; // 等着说的事
   let talkN = 0;
-  let lastQuote = null;
+  let lastKind = 'quote'; // 上次说的是《论语》还是小窍门 (轮着来)
+  const said = new Map(); // 这一阵说过的有用的话: id → 说的字 (数变了可以再说)
+  let lastTap = 0;
+  let deep = null; // insight 算过的 (数据变了、过了 10 分钟重算)
   let hideTimer = null;
   let quoteTimer = null;
   let changeTimer = null;
@@ -212,6 +346,23 @@ export function setupPet({ store }) {
 
   function visibleNow() {
     return !prefs.hidden && SHOW_ON.has(page) && !typing && !document.body.classList.contains('in-game');
+  }
+
+  function savePref(patch) {
+    prefs = { ...prefs, ...patch };
+    savePrefs(prefs);
+  }
+
+  // 细算过的也放进来 (给 tips 用)
+  function full() {
+    if (!deep || Date.now() - deep.at > 10 * 60e3) deep = insight(store);
+    const minutes = deep.perCard && c.due ? Math.max(1, Math.round(((c.reviews + c.fresh * 3) * deep.perCard) / 60000)) : null;
+    return { ...c, minutes, pace: deep.pace, rest: deep.rest, retention: deep.retention, leech: deep.leech, neglect: deep.neglect };
+  }
+
+  function myReport() {
+    full();
+    return report({ ...deep.week, retention: deep.retention, streak: c.streak, examDays: c.examDays });
   }
 
   function setPrefs(patch) {
@@ -267,10 +418,7 @@ export function setupPet({ store }) {
     // 有事先说事; 没有事, 今天第一次见面打个招呼
     if (bubble.hidden && !prefs.quiet && !prefs.mini) {
       const hello = prefs.greeted !== dayKey();
-      if (hello) {
-        prefs = { ...prefs, greeted: dayKey() };
-        savePrefs(prefs);
-      }
+      if (hello) savePref({ greeted: dayKey() });
       if (events.length) setTimeout(() => shown() && bubble.hidden && sayEvent(), 700);
       else if (hello) setTimeout(() => shown() && bubble.hidden && greet(), 1200);
     }
@@ -307,8 +455,7 @@ export function setupPet({ store }) {
     if (Object.keys(patch).length) store.updatePet({ ...pet, ...patch });
     // 这台设备上一天说一次「背完了」
     if (c.reviewed > 0 && c.due === 0 && prefs.cleared !== dayKey()) {
-      prefs = { ...prefs, cleared: dayKey() };
-      savePrefs(prefs);
+      savePref({ cleared: dayKey() });
       if (!first) found.push({ kind: 'cleared', tomorrow: c.tomorrow });
     }
     if (base) {
@@ -353,16 +500,19 @@ export function setupPet({ store }) {
 
   // ---- 说话 ----
 
-  // line: { text, src?, plain?, action?: { label, href } | { label, panel: true } }; auto: 自己说的 (过一会儿自己收起来)
+  // line: { text, src?, plain?, list?: [字], action?: { label, href } | { label, panel: true } | { label, edit: { setId, cardId } } }
+  // auto: 自己说的 (过一会儿自己收起来)
   function say(line, { auto = false } = {}) {
     if (!line) return;
     clearTimeout(hideTimer);
     const pet = petData();
-    const actions = [];
-    if (line.action?.href) actions.push(h('a', { class: 'btn small primary', href: line.action.href, onclick: () => hideBubble(false) }, line.action.label));
-    else if (line.action?.panel) actions.push(h('button', { class: 'btn small primary', type: 'button', onclick: () => openPanel() }, line.action.label));
-    actions.push(h('button', { class: 'btn small', type: 'button', onclick: () => tap() }, '再说一句'));
-    if (!line.action?.panel) actions.push(h('button', { class: 'btn small ghost', type: 'button', onclick: () => openPanel() }, '小窝'));
+    const a = line.action;
+    const action = !a
+      ? null
+      : a.href
+        ? h('a', { class: 'btn small primary', href: a.href, onclick: () => hideBubble(false) }, a.label)
+        : h('button', { class: 'btn small primary', type: 'button', onclick: () => (a.edit ? editCard(a.edit) : openPanel()) }, a.label);
+    const chip = (label, onclick) => h('button', { class: 'pet-chip', type: 'button', onclick }, label);
     fill(
       bubble,
       h('button', { class: 'pet-x', type: 'button', 'aria-label': '收起来', onclick: () => hideBubble() }, '✕'),
@@ -370,7 +520,9 @@ export function setupPet({ store }) {
       h('p', { class: `pet-say${line.src ? ' quote' : ''}` }, line.text),
       line.src ? h('p', { class: 'pet-src' }, `—— ${line.src}`) : null,
       line.plain ? h('p', { class: 'pet-plain' }, `意思是: ${line.plain}`) : null,
-      h('div', { class: 'pet-actions' }, actions),
+      line.list?.length ? h('ul', { class: 'pet-list' }, line.list.map((x) => h('li', {}, x))) : null,
+      action ? h('div', { class: 'pet-actions' }, action) : null,
+      h('div', { class: 'pet-chips' }, chip('还有呢', more), chip('学得怎么样', sayReport), chip('论语', () => say(quote())), a?.panel ? null : chip('小窝', openPanel)),
     );
     bubble.hidden = false;
     sign.hidden = true;
@@ -380,7 +532,15 @@ export function setupPet({ store }) {
       // 鼠标在上面、正在点里面的按钮: 等一会儿再收
       if (bubble.matches(':hover') || bubble.contains(document.activeElement)) hideTimer = setTimeout(later, 3000);
       else hideBubble();
-    }, auto ? 12000 : 30000);
+    }, auto ? (line.list ? 20000 : 12000) : 30000);
+  }
+
+  // 改那张老是忘的卡片
+  function editCard({ setId, cardId }) {
+    const card = store.getSet(setId)?.cards.find((x) => x.id === cardId);
+    if (!card) return;
+    hideBubble(false);
+    editCardDialog({ store, setId, card, onSaved: () => (deep = null) });
   }
 
   // next: 收起来以后接着说等着的事
@@ -409,29 +569,92 @@ export function setupPet({ store }) {
   }
 
   function greet() {
-    const first = tips(c)[0];
+    const today = dayKey();
+    // 隔了一个星期: 说说这 7 天学得怎么样 (第一次只记下日子; 最近两个星期学了 3 天以上才说)
+    const last = /^\d{4}-\d{2}-\d{2}$/.test(prefs.reported ?? '') ? prefs.reported : null;
+    if (!last) savePref({ reported: today });
+    else if (Math.round((dayTime(today) - dayTime(last)) / DAY) >= 7) {
+      const from = dayKey(daysLater(Date.now(), -13));
+      const studied = Object.entries(store.data.activity).filter(([d, v]) => v > 0 && d >= from).length;
+      if (studied >= 3) {
+        savePref({ reported: today });
+        const r = myReport();
+        say({ ...r, text: `${greeting(c.hour)}! 又过了一个星期, 说说这 7 天: ${r.text}` }, { auto: true });
+        return;
+      }
+    }
+    const first = tips(full())[0];
+    said.set(first.id, first.text);
     say({ ...first, text: `${greeting(c.hour)}! ${first.text}` }, { auto: true });
   }
 
+  // 《论语》: 100 句都念一遍才从头来, 一半的时候挑合适现在的 (有错题说改错的, 好几天没来说坚持的……)
   function quote() {
-    const q = randomQuote(lastQuote);
-    lastQuote = q;
-    const who = q.who ?? '孔子';
-    return { text: `${who}说: 「${q.text}」`, src: quoteSource(q), plain: q.plain };
+    const { index, heard } = pickNext(QUOTES, prefs.heardQ, { tags: c ? quoteTags(c) : [] });
+    savePref({ heardQ: heard });
+    const x = QUOTES[index];
+    return { text: `${x.who ?? '孔子'}说: 「${x.text}」`, src: quoteSource(x), plain: x.plain };
   }
 
-  // 点它: 先说事; 没事就有用的话和《论语》轮着来
+  function studyTip() {
+    const { index, heard } = pickNext(STUDY_TIPS, prefs.heardT);
+    savePref({ heardT: heard });
+    return STUDY_TIPS[index];
+  }
+
+  // 还没说过的有用的话 (说过的数变了也算)
+  function freshTip() {
+    return tips(full()).find((t) => said.get(t.id) !== t.text) ?? null;
+  }
+
+  function sayTip(t) {
+    said.set(t.id, t.text);
+    say(t);
+  }
+
+  function refresh() {
+    c = situation(store);
+    draw();
+  }
+
+  // 点它: 先说事; 没事就 有用的话、《论语》、有用的话、小窍门 轮着来 (有用的话说完了就《论语》和小窍门轮着)
   function tap() {
     if (prefs.mini) {
       setPrefs({ mini: false });
       if (!shown()) return;
     }
     if (events.length && sayEvent()) return;
-    c = situation(store);
-    draw();
-    const list = tips(c);
-    const n = talkN++;
-    say(n % 2 === 0 && list.length ? list[(n / 2) % list.length] : quote());
+    // 隔了一阵再点: 从最要紧的说起
+    if (Date.now() - lastTap > 10 * 60e3) {
+      said.clear();
+      talkN = 0;
+    }
+    lastTap = Date.now();
+    refresh();
+    const slot = talkN++ % 4;
+    if (slot % 2 === 0) {
+      const t = freshTip();
+      if (t) return sayTip(t);
+    }
+    const kind = slot === 1 ? 'quote' : slot === 3 ? 'study' : lastKind === 'quote' ? 'study' : 'quote';
+    lastKind = kind;
+    say(kind === 'quote' ? quote() : { text: `小窍门: ${studyTip()}` });
+  }
+
+  // 「还有呢」: 下一句有用的话; 都说完了送一个小窍门
+  function more() {
+    lastTap = Date.now();
+    refresh();
+    const t = freshTip();
+    if (t) return sayTip(t);
+    say({ text: `今天要紧的都说完啦。送你一个小窍门: ${studyTip()}` });
+  }
+
+  function sayReport() {
+    lastTap = Date.now();
+    refresh();
+    const r = myReport();
+    say({ text: r.text, list: r.list });
   }
 
   function scheduleQuote() {
@@ -474,6 +697,7 @@ export function setupPet({ store }) {
   function panelBody(refresh) {
     const pet = petData();
     const now = situation(store);
+    const deepNow = insight(store);
     const g = growth(now.xp);
     const next = g.to === null ? null : STAGES[g.stage + 1];
     const reason = {
@@ -544,7 +768,11 @@ export function setupPet({ store }) {
         ),
       ),
       h('p', { class: 'muted small' }, '怎么喂: 答一题、重做一道错题、玩一局游戏, 都是喂它一口; 今天的复习背完, 它就吃饱了。几天不学它会饿、会想你, 但不会生病, 也不会离开。连续打卡到 3、7、14、30、50、100…… 天放烟花。'),
-      now.streak ? h('p', { class: 'small' }, `已经连续打卡 ${now.streak} 天。`) : null,
+      h('h3', {}, '这 7 天学得怎么样'),
+      (() => {
+        const r = report({ ...deepNow.week, retention: deepNow.retention, streak: now.streak, examDays: now.examDays });
+        return [h('p', {}, r.text), h('ul', { class: 'pet-list' }, r.list.map((x) => h('li', {}, x)))];
+      })(),
       h('h3', {}, '装扮'),
       h('p', { class: 'muted small' }, '学到了就解锁, 不用买。点一下戴上。'),
       h(
@@ -577,6 +805,7 @@ export function setupPet({ store }) {
     },
     // 数据变了 (答了题、同步来了): 等一会儿再算 (答题一秒好几次)
     changed() {
+      deep = null;
       clearTimeout(changeTimer);
       changeTimer = setTimeout(() => shown() && update(), 1200);
     },
