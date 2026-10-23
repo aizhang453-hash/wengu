@@ -1,5 +1,7 @@
 // 星际远航的台面美术 (画成一张贴图, 3D 里铺在台面上) 和台面上的灯 (INSERTS)。
 // 灯画在贴图上是暗的; 亮的时候 3D 里在同一个地方盖一层会发光的 (pinball3d.js), 两边都照这张表
+//   台面: 星空 + 下半截是远航号的船体钢板 (铆钉、警戒线), 中间画着远航号; 每条路线口有箭头、字牌, 黑洞旁边是任务 / 危机 / 着陆的灯,
+//         下面一排五个星系的灯 (过了的亮、现在的闪)
 
 import { W, H, LANE_X } from './pinball.js';
 
@@ -11,7 +13,7 @@ const RAMP_OUT = { x: 0.546, y: 0.838 };
 const rampArrow = (k) => ({ x: 150 + RAMP_OUT.x * k, y: 560 + RAMP_OUT.y * k });
 const rampAngle = Math.atan2(-RAMP_OUT.y, -RAMP_OUT.x); // 箭头指着坡道里面
 
-// 灯: id, 形状 (circle 圆 | arrow 箭头 | star 星 | ring 圈), 位置 (台面坐标), 大小, 角度 (箭头指的方向), 颜色, 字
+// 灯: id, 形状 (circle 圆 | arrow 箭头 | star 星 | ring 圈 | rect 字牌), 位置 (台面坐标), 大小, 角度 (箭头指的方向), 颜色, 字
 export const INSERTS = [
   // 顶上三条再入通道
   ...[250, 300, 350].map((x, i) => ({ id: `lane${i}`, shape: 'circle', x, y: 128, size: 8, color: '#ffd84d' })),
@@ -22,9 +24,23 @@ export const INSERTS = [
   // 环绕轨道、推进器
   { id: 'orbit', shape: 'arrow', x: 520, y: 600, size: 13, angle: -Math.PI / 2, color: '#ff9b3d', label: '' },
   { id: 'spinner', shape: 'arrow', x: 520, y: 640, size: 10, angle: -Math.PI / 2, color: '#ffcf5e' },
-  // 黑洞: 锁球、任务准备好了
-  { id: 'lock', shape: 'circle', x: 275, y: 588, size: 11, color: '#9b7bff', label: '锁' },
-  { id: 'ready', shape: 'arrow', x: 275, y: 618, size: 12, angle: -Math.PI / 2, color: '#ff4f6d' },
+  // 黑洞: 两边任务、危机, 下面锁球、着陆, 有事等着的时候箭头闪
+  { id: 'iMission', shape: 'rect', x: 224, y: 538, size: 11, color: '#ff6b4f', label: '任务' },
+  { id: 'iBoss', shape: 'rect', x: 326, y: 538, size: 11, color: '#ff3f6d', label: '危机' },
+  { id: 'ready', shape: 'arrow', x: 275, y: 574, size: 11, angle: -Math.PI / 2, color: '#ff4f6d' },
+  { id: 'lock', shape: 'circle', x: 275, y: 602, size: 10, color: '#9b7bff', label: '锁' },
+  { id: 'iLand', shape: 'rect', x: 275, y: 628, size: 11, color: '#ffd84d', label: '着陆' },
+  // 对接坡道: 口子里两个箭头 (对接了几次), 口子下面一个
+  { id: 'dock0', shape: 'arrow', x: 262, y: 432, size: 9, angle: -Math.PI / 2, color: '#ffcf5e' },
+  { id: 'dock1', shape: 'arrow', x: 288, y: 432, size: 9, angle: -Math.PI / 2, color: '#ffcf5e' },
+  { id: 'aimCenter', shape: 'arrow', x: 275, y: 478, size: 12, angle: -Math.PI / 2, color: '#ffffff' },
+  // 左边环绕轨道的口、连击
+  { id: 'aimOrbitL', shape: 'arrow', x: 74, y: 404, size: 12, angle: -Math.PI * 0.72, color: '#ffffff' },
+  { id: 'combo', shape: 'rect', x: 118, y: 404, size: 10, color: '#38e8ff', label: '连击' },
+  // 五个星系 (过了的亮, 现在的闪)
+  ...['柯', '比', '翠', '渊', '曙'].map((label, i) => ({ id: `chapter${i}`, shape: 'circle', x: 208 + i * 36, y: 684, size: 12, color: ['#8fd8ff', '#ff8a3d', '#3dffa8', '#b07dff', '#ffd84d'][i], label })),
+  // 奖励的球
+  { id: 'extra', shape: 'rect', x: 280, y: 930, size: 10, color: '#ff9b3d', label: '加球' },
   // 任务靶下面
   ...[[400, 455], [425, 485], [450, 515]].map(([x, y], i) => ({ id: `target${i}`, shape: 'circle', x: x - 16, y: y + 22, size: 7, color: '#ff6b4f' })),
   // 星座 (五颗星, 掉落靶旁边)
@@ -37,20 +53,27 @@ export const INSERTS = [
   // 任务箭头 (现在的任务该往哪打)
   { id: 'aimRamp', shape: 'arrow', ...rampArrow(190), size: 16, angle: rampAngle, color: '#ffffff' },
   { id: 'aimOrbit', shape: 'arrow', x: 520, y: 690, size: 14, angle: -Math.PI / 2, color: '#ffffff' },
-  { id: 'aimHole', shape: 'arrow', x: 275, y: 650, size: 14, angle: -Math.PI / 2, color: '#ffffff' },
+  { id: 'aimHole', shape: 'arrow', x: 275, y: 656, size: 13, angle: -Math.PI / 2, color: '#ffffff' },
   { id: 'aimDrops', shape: 'arrow', x: 92, y: 520, size: 13, angle: Math.PI, color: '#ffffff' },
   { id: 'aimTargets', shape: 'arrow', x: 395, y: 545, size: 13, angle: -Math.PI * 0.8, color: '#ffffff' },
   { id: 'aimBumpers', shape: 'arrow', x: 280, y: 405, size: 13, angle: -Math.PI / 2, color: '#ffffff' },
 ];
 
 // 要打的路线 (pinball.js 的 aims()) → 该亮哪几个箭头
-export const AIM = { ramp: ['aimRamp'], orbit: ['aimOrbit'], spinner: ['aimOrbit'], hole: ['aimHole'], drops: ['aimDrops'], targets: ['aimTargets'], bumpers: ['aimBumpers'], slings: ['aimBumpers'], combo: ['aimRamp', 'aimOrbit', 'aimHole'] };
+export const AIM = { ramp: ['aimRamp'], center: ['aimCenter'], orbit: ['aimOrbit', 'aimOrbitL'], spinner: ['aimOrbit'], hole: ['aimHole'], drops: ['aimDrops'], targets: ['aimTargets'], bumpers: ['aimBumpers'], slings: ['aimBumpers'], combo: ['aimRamp', 'aimCenter', 'aimOrbit', 'aimHole'] };
 
 // 一盏灯的形状 (画在 ctx 上, 台面坐标)
 export function insertPath(ctx, ins) {
   const { x, y, size: r, angle = 0 } = ins;
   ctx.beginPath();
   if (ins.shape === 'circle' || ins.shape === 'ring') ctx.arc(x, y, r, 0, Math.PI * 2);
+  else if (ins.shape === 'rect') {
+    // 字牌: 两头斜着切的长条 (只用直线, 3D 那边照着它做形状)
+    const w = r * 2.4;
+    const hh = r * 0.95;
+    [[x - w, y - hh], [x + w - 4, y - hh], [x + w, y - hh + 4], [x + w, y + hh], [x - w + 4, y + hh], [x - w, y + hh - 4]].forEach((pt, i) => (i ? ctx.lineTo(...pt) : ctx.moveTo(...pt)));
+    ctx.closePath();
+  }
   else if (ins.shape === 'arrow') {
     const p = (dx, dy) => [x + Math.cos(angle) * dx - Math.sin(angle) * dy, y + Math.sin(angle) * dx + Math.cos(angle) * dy];
     for (const [i, pt] of [p(r, 0), p(-r * 0.7, r * 0.75), p(-r * 0.35, 0), p(-r * 0.7, -r * 0.75)].entries()) (i ? ctx.lineTo(...pt) : ctx.moveTo(...pt));
@@ -244,6 +267,138 @@ export function paintPlayfield(ctx, table) {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // 下半截: 远航号的甲板钢板 (从上往下慢慢显出来), 接缝、铆钉、甲板编号
+  ctx.save();
+  const deckFade = ctx.createLinearGradient(0, 620, 0, 720);
+  deckFade.addColorStop(0, 'rgba(0,0,0,0)');
+  deckFade.addColorStop(1, 'rgba(0,0,0,1)');
+  {
+    const deck = document.createElement('canvas');
+    deck.width = W;
+    deck.height = H;
+    const d = deck.getContext('2d');
+    for (let y = 620; y < H; y += 44) {
+      for (let x = (Math.floor((y - 620) / 44) % 2) * -32; x < W; x += 64) {
+        const g = d.createLinearGradient(x, y, x + 64, y + 44);
+        g.addColorStop(0, 'rgba(70,86,130,0.4)');
+        g.addColorStop(1, 'rgba(30,38,70,0.4)');
+        d.fillStyle = g;
+        d.fillRect(x + 1, y + 1, 62, 42);
+        d.strokeStyle = 'rgba(10,14,30,0.9)';
+        d.lineWidth = 1.5;
+        d.strokeRect(x + 1, y + 1, 62, 42);
+        d.fillStyle = 'rgba(190,205,240,0.35)';
+        for (const [rx, ry] of [[5, 5], [59, 5], [5, 39], [59, 39]]) {
+          d.beginPath();
+          d.arc(x + rx, y + ry, 1.3, 0, Math.PI * 2);
+          d.fill();
+        }
+      }
+    }
+    // 上边慢慢淡出去
+    d.globalCompositeOperation = 'destination-in';
+    d.fillStyle = deckFade;
+    d.fillRect(0, 620, W, H - 620);
+    ctx.drawImage(deck, 0, 0);
+  }
+  ctx.restore();
+  // 甲板上的小字、电路一样的线
+  ctx.save();
+  ctx.font = `700 7px ${FONT}`;
+  ctx.fillStyle = 'rgba(200,215,255,0.32)';
+  ctx.textAlign = 'left';
+  for (const [t, x, y] of [['甲板 A-07', 170, 870], ['冬眠舱区 · 十万人', 318, 870], ['远航号 · 殖民方舟', 184, 958], ['注意: 别靠近黑洞', 324, 958]]) ctx.fillText(t, x, y);
+  ctx.strokeStyle = 'rgba(80,230,255,0.28)';
+  ctx.lineWidth = 1.2;
+  for (const pts of [
+    [[150, 640], [150, 700], [196, 700], [196, 684]],
+    [[410, 640], [410, 700], [364, 700], [364, 684]],
+    [[226, 556], [226, 600], [252, 626]],
+    [[326, 556], [326, 600], [298, 626]],
+    [[118, 416], [118, 470], [175, 520]],
+  ]) {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+    const [ex, ey] = pts.at(-1);
+    ctx.fillStyle = 'rgba(120,240,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(ex, ey, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  // 出局道、掉球的地方: 黄黑警戒线
+  const hazard = (x0, y0, w, h) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, w, h);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(20,16,0,0.55)';
+    ctx.fillRect(x0, y0, w, h);
+    ctx.fillStyle = 'rgba(255,200,40,0.45)';
+    for (let k = -h; k < w + h; k += 14) {
+      ctx.beginPath();
+      ctx.moveTo(x0 + k, y0 + h);
+      ctx.lineTo(x0 + k + 7, y0 + h);
+      ctx.lineTo(x0 + k + 7 + h, y0);
+      ctx.lineTo(x0 + k + h, y0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+  hazard(20, 905, 38, 8);
+  hazard(502, 905, 38, 8);
+  hazard(222, 985, 116, 8);
+  // 黑洞外面的星图圈
+  ctx.save();
+  ctx.translate(ho.x, ho.y);
+  ctx.strokeStyle = 'rgba(140,220,255,0.28)';
+  ctx.lineWidth = 1;
+  for (const r of [46, 58]) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    const r0 = i % 3 ? 56 : 52;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+    ctx.lineTo(Math.cos(a) * 60, Math.sin(a) * 60);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // 远航号 (侧面): 长长的船身、转着的环、后面的发动机
+  ctx.save();
+  ctx.translate(280, 768);
+  glow(ctx, -96, 0, 34, 'rgba(90,180,255,0.6)');
+  const hull = ctx.createLinearGradient(0, -12, 0, 12);
+  hull.addColorStop(0, '#e6eefc');
+  hull.addColorStop(0.5, '#8d9bc0');
+  hull.addColorStop(1, '#3b4566');
+  ctx.fillStyle = hull;
+  ctx.beginPath();
+  ctx.moveTo(-92, -9);
+  ctx.lineTo(70, -9);
+  ctx.quadraticCurveTo(108, -6, 116, 0);
+  ctx.quadraticCurveTo(108, 6, 70, 9);
+  ctx.lineTo(-92, 9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#5a6690';
+  ctx.fillRect(-104, -7, 12, 14); // 发动机
+  ctx.fillRect(-28, -15, 46, 6); // 太阳能板
+  ctx.fillRect(-28, 9, 46, 6);
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(-50, 0, 9, 26, 0, 0, Math.PI * 2); // 转着的环 (冬眠舱)
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,230,150,0.9)';
+  for (let x = -20; x < 66; x += 9) ctx.fillRect(x, -2, 4, 3); // 窗
+  ctx.restore();
+
   // 台面的字 (金色、发光)
   const title = (text, x, y, size, color = '#ffd884', angle = 0, alpha = 0.95) => {
     ctx.save();
@@ -260,17 +415,46 @@ export function paintPlayfield(ctx, table) {
     ctx.shadowBlur = 0;
     ctx.restore();
   };
-  title('星 际 远 航', 280, 772, 34, '#ffd884');
-  title('温故而知新', 280, 806, 12, '#c9b8ff', 0, 0.8);
-  title('曲速坡道', 206, 628, 13, '#7ff3ff', Math.atan2(RAMP_OUT.y, RAMP_OUT.x) - Math.PI / 2, 0.9);
-  title('环绕轨道', 503, 760, 11, '#ffb070', -Math.PI / 2, 0.85);
-  title('推进器', 505, 500, 10, '#ffcf5e', -Math.PI / 2, 0.75);
-  title('黑洞', 275, 485, 12, '#ffb36b', 0, 0.85);
-  title('任务', 448, 560, 12, '#ff8a6b', -0.5, 0.85);
-  title('星座', 86, 610, 11, '#fff1a0', 0, 0.8);
-  title('小行星带', 280, 205, 11, '#c9b8ff', 0, 0.7);
+  // 字牌: 深色的底 + 一圈亮边, 上面写路线的名字
+  const banner = (text, x, y, size, color, angle = 0) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.font = `900 ${size}px ${FONT}`;
+    const w = ctx.measureText(text).width / 2 + size * 0.7;
+    const hh = size * 0.85;
+    ctx.beginPath();
+    ctx.moveTo(-w, -hh + 3);
+    ctx.lineTo(-w + 3, -hh);
+    ctx.lineTo(w - 3, -hh);
+    ctx.lineTo(w, -hh + 3);
+    ctx.lineTo(w, hh - 3);
+    ctx.lineTo(w - 3, hh);
+    ctx.lineTo(-w + 3, hh);
+    ctx.lineTo(-w, hh - 3);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(6,8,28,0.78)';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+    title(text, x, y + 0.5, size, color, angle, 0.95);
+  };
+  title('星 际 远 航', 280, 806, 22, '#ffd884');
+  title('温故而知新', 280, 826, 9, '#c9b8ff', 0, 0.75);
+  banner('曲速坡道', 206, 628, 12, '#7ff3ff', Math.atan2(RAMP_OUT.y, RAMP_OUT.x) - Math.PI / 2);
+  banner('对接坡道', 352, 456, 10, '#ffcf5e');
+  banner('环绕轨道', 503, 760, 10, '#ffb070', -Math.PI / 2);
+  banner('推进器', 505, 520, 9, '#ffcf5e', -Math.PI / 2);
+  title('黑洞', 275, 500, 11, '#ffb36b', 0, 0.85);
+  banner('任务靶', 458, 562, 10, '#ff8a6b', -0.5);
+  banner('星座', 86, 612, 10, '#fff1a0');
+  title('小行星带', 280, 266, 10, '#c9b8ff', 0, 0.7);
   title('再 入', 300, 172, 10, '#ffe58a', 0, 0.75);
-  title('奖励倍数', 280, 690, 10, '#9feaff', 0, 0.7);
+  title('奖励倍数', 280, 734, 9, '#9feaff', 0, 0.7);
+  title('五 个 星 系', 280, 664, 8, '#c9b8ff', 0, 0.6);
   title('救生舱', 40, 945, 9, '#9dffb6', 0, 0.75);
   title('护 盾', 280, 990, 9, '#9dffb6', 0, 0.75);
 
@@ -291,7 +475,7 @@ export function paintPlayfield(ctx, table) {
     ctx.globalAlpha = 1;
     if (ins.label) {
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = `800 ${Math.round(ins.size * 0.85)}px ${FONT}`;
+      ctx.font = `800 ${Math.round(ins.size * (ins.shape === 'rect' ? 1 : 0.85))}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(ins.label, ins.x, ins.y + 0.5);

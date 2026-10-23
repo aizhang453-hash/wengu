@@ -2,7 +2,7 @@
 //   台面 600 × 1000 (单位随便叫「点」), x 往右、y 往下 (台面是斜的, 球受重力往下滚), z 是离台面多高 (坡道上)
 //   物理: 每 1/600 秒走一步 (球一步最多走 7 点, 比球的半径小, 穿不过墙); 墙是线段, 碰到了推出来、
 //         法向速度按弹性反过来、切向按摩擦减一点; 挡板是转动的胶囊, 碰撞时算上挡板那一点的速度; 几个球之间也会撞
-//   坡道: 球从入口冲上去就离开台面, 沿着坡道的路线走 (上坡减速、下坡加速), 冲不上去就滚回来; 下来落到右边回球道
+//   坡道: 球从入口冲上去就离开台面, 沿着坡道的路线走 (上坡减速、下坡加速), 冲不上去就滚回来; 下来落进回球道
 //
 // 故事: 殖民方舟「远航号」载着十万名在冬眠舱里睡着的人, 去找一颗能住的星球。你是新来的舰长。
 //   四个星系是四章 (CHAPTERS), 每章三个限时任务, 都做完了来一场危机 (大敌人, 有血条, 两个球一起打);
@@ -12,7 +12,8 @@
 //   发射: 顶上三条「再入」通道有一条在闪, 一发射就落进那条 → 技巧射击; 三条都亮 → 奖励倍数 +1 (按挡板挪亮着的灯)
 //   任务: 右边三个任务靶都打亮 → 打进黑洞选任务 (按挡板换), 任务开着的时候要打的路线亮箭头; 时间到了没做完先停下, 做到哪留着, 下次接着做
 //   连击: 坡道、轨道、黑洞几秒内接着打中
-//   曲速坡道: 打上去一次曲速 +1, 到 5 级「跃迁」大奖; 打上去两次锁球灯亮, 锁满两个球「穿梭机出动」三个球, 坡道是超级大奖
+//   曲速坡道 (左边): 打上去一次曲速 +1, 到 5 级「跃迁」大奖; 对接坡道 (中间, 铁丝的): 打上去两次锁球灯亮,
+//   锁满两个球「穿梭机出动」三个球, 两条坡道都是超级大奖
 //   黑洞: 没别的事的时候是补给舱 (随机奖励); 星座: 五个掉落靶都打倒 → 救生舱亮
 //   护盾: 每个球开始 10 秒内掉了救回来; 撞台子 (N 键 / 按钮) 能把球撞开, 撞太多倾斜, 这个球挡板不动、不算分
 //   队员 (CREW): 远航模式开局选一个队员, 各有本事, 等级跨局累积 (存在页面那边); 经典模式没有队员, 比分数公平
@@ -42,9 +43,9 @@ export const STORY = {
 };
 
 // 能「亮」的路线 (任务、危机、终章要打的), 还有别的算数的东西
-export const SHOTS = ['ramp', 'orbit', 'spinner', 'hole', 'drops', 'targets'];
-export const SHOT_NAMES = { ramp: '坡道', orbit: '环绕轨道', spinner: '推进器', hole: '黑洞', drops: '星座靶', targets: '任务靶', bumpers: '小行星', slings: '弹弓', lanes: '顶上通道', combo: '连击' };
-const MAJOR = new Set(['ramp', 'orbit', 'hole']); // 算连击的
+export const SHOTS = ['ramp', 'center', 'orbit', 'spinner', 'hole', 'drops', 'targets'];
+export const SHOT_NAMES = { ramp: '曲速坡道', center: '对接坡道', orbit: '环绕轨道', spinner: '推进器', hole: '黑洞', drops: '星座靶', targets: '任务靶', bumpers: '小行星', slings: '弹弓', lanes: '顶上通道', combo: '连击' };
+const MAJOR = new Set(['ramp', 'center', 'orbit', 'hole']); // 算连击的
 
 // 任务: steps 一步一步 (每步打哪些、几下), each 亮着的路线各打一次, hurry 分数从这么多往下掉 (越快打中越多)
 const mission = (name, goal, time, rule) => ({ name, goal, time, ...rule });
@@ -63,7 +64,7 @@ export const CHAPTERS = [
     name: '比邻星',
     intro: '第一站: 离太阳最近的红色恒星',
     missions: [
-      mission('扫描比邻 b', '打小行星 6 下让行星显出来, 再打坡道扫描', 65, { steps: [{ shots: ['bumpers'], need: 6 }, { shots: ['ramp'], need: 1 }] }),
+      mission('扫描比邻 b', '打小行星 6 下让行星显出来, 再打中间的对接坡道扫描', 65, { steps: [{ shots: ['bumpers'], need: 6 }, { shots: ['center'], need: 1 }] }),
       mission('展开太阳帆', '打倒 5 个星座靶', 60, { steps: [{ shots: ['drops'], need: 5 }] }),
       mission('推进器加速', '推进器转 30 圈', 55, { steps: [{ shots: ['spinner'], need: 30 }] }),
     ],
@@ -75,7 +76,7 @@ export const CHAPTERS = [
     missions: [
       mission('星云采气', '绕环绕轨道 2 圈', 70, { steps: [{ shots: ['orbit'], need: 2 }] }),
       mission('冬眠舱故障', '分数一直在掉, 快打进黑洞修好', 45, { hurry: 400000, steps: [{ shots: ['hole'], need: 1 }] }),
-      mission('寻找信号', '亮着的四样各打一次', 80, { each: ['ramp', 'spinner', 'hole', 'drops'] }),
+      mission('寻找信号', '亮着的四样各打一次', 80, { each: ['ramp', 'center', 'spinner', 'drops'] }),
     ],
     boss: { kind: 'pirate', name: '星际海盗', hp: 6, say: '星际海盗盯上了远航号的货舱' },
   },
@@ -83,14 +84,14 @@ export const CHAPTERS = [
     name: '深渊黑洞',
     intro: '曙光星就在黑洞另一边',
     missions: [
-      mission('引力弹弓', '连击 2 次 (坡道、轨道、黑洞接着打)', 75, { steps: [{ shots: ['combo'], need: 2 }] }),
+      mission('引力弹弓', '连击 2 次 (两条坡道、轨道、黑洞接着打)', 75, { steps: [{ shots: ['combo'], need: 2 }] }),
       mission('穿越小行星带', '打小行星和弹弓 20 下', 50, { steps: [{ shots: ['bumpers', 'slings'], need: 20 }] }),
       mission('穿越虫洞', '进黑洞 2 次', 70, { steps: [{ shots: ['hole'], need: 2 }] }),
     ],
     boss: { kind: 'void', name: '黑洞潮汐', hp: 7, say: '黑洞潮汐! 引力在把球往里拉', gravity: true },
   },
 ];
-export const FINAL = { name: '着陆曙光星', lit: ['ramp', 'orbit', 'spinner', 'drops', 'targets'] };
+export const FINAL = { name: '着陆曙光星', lit: ['ramp', 'center', 'orbit', 'spinner', 'drops', 'targets'] };
 export const CONSTELLATIONS = ['猎户座', '北斗七星', '天蝎座', '仙后座', '天鹅座', '狮子座'];
 export const WARP_MAX = 5;
 
@@ -145,19 +146,23 @@ function norm(x, y) {
   return { x: x / l, y: y / l };
 }
 
-// 坡道入口: 口子中间 M, 朝里的方向 d (往左上), 宽 60, 深 55
-const RAMP_M = [150, 560];
-const RAMP_D = norm(-0.546, -0.838);
-const RAMP_P = { x: -RAMP_D.y, y: RAMP_D.x }; // 跟口子平行
+// 坡道入口: 口子中间 m, 朝里的方向 d, 宽 60, 深 55 → 口子两边的柱子 a、b, 里头的门 a2–b2
 const at = (p, v, k) => [p[0] + v.x * k, p[1] + v.y * k];
-const RAMP_A = at(RAMP_M, RAMP_P, 30);
-const RAMP_B = at(RAMP_M, RAMP_P, -30);
-const RAMP_A2 = at(RAMP_A, RAMP_D, 55);
-const RAMP_B2 = at(RAMP_B, RAMP_D, 55);
+function mouth(m, d, width = 60, depth = 55) {
+  const p = { x: -d.y, y: d.x }; // 跟口子平行
+  const a = at(m, p, width / 2);
+  const b = at(m, p, -width / 2);
+  return { a, b, a2: at(a, d, depth), b2: at(b, d, depth), in: d };
+}
+const doorMid = (m) => [(m.a2[0] + m.b2[0]) / 2, (m.a2[1] + m.b2[1]) / 2];
+const WARP = mouth([150, 560], norm(-0.546, -0.838)); // 曲速坡道 (左边, 右挡板打)
+const DOCK = mouth([275, 452], norm(0, -1), 70); // 对接坡道 (中间, 黑洞上面; 宽一点, 正对着挡板不好打)
 
-// 坡道的路线 (x, y, z): 从入口往左上爬, 从虫洞顶上横过去, 沿右边下来, 落进右边的回球道
-const RAMP_POINTS = [
-  [(RAMP_A2[0] + RAMP_B2[0]) / 2, (RAMP_A2[1] + RAMP_B2[1]) / 2, 4],
+const DOCK_ROOF = [DOCK.b2, [275, DOCK.a2[1] - 26], DOCK.a2];
+
+// 曲速坡道的路线 (x, y, z): 从入口往左上爬, 从虫洞顶上横过去, 沿右边下来, 落进右边的回球道
+const WARP_POINTS = [
+  [...doorMid(WARP), 4],
   [96, 440, 40],
   [88, 330, 70],
   [128, 228, 88],
@@ -169,6 +174,21 @@ const RAMP_POINTS = [
   [510, 560, 50],
   [493, 680, 26],
   [484, 760, 6],
+];
+// 对接坡道 (铁丝的): 从中间往上, 弯到左上 (在顶上从曲速坡道上面交叉过去), 沿左边的墙上头下来, 落进左边的回球道
+const DOCK_POINTS = [
+  [...doorMid(DOCK), 4],
+  [267, 345, 34],
+  [238, 284, 76],
+  [182, 224, 112],
+  [118, 200, 118],
+  [66, 244, 112],
+  [44, 338, 98],
+  [42, 450, 82],
+  [46, 560, 64],
+  [56, 662, 42],
+  [67, 736, 20],
+  [76, 780, 4],
 ];
 
 // Catmull-Rom 曲线取点, 算好每一点走了多远
@@ -212,10 +232,12 @@ export function buildTable() {
     // 右边墙上的小鼓包: 贴着墙滚下来的球往里推一点 (左边不放: 左边有救生舱, 鼓包会挡住弹回去的球)
     bulges: [[[LANE_X, 610], [mx(54), 652], [LANE_X, 690]]],
     dividers: [225, 275, 325, 375].map((x) => [[x, 92], [x, 150]]),
-    ramp: [
-      [RAMP_A, RAMP_A2],
-      [RAMP_B, RAMP_B2],
-    ],
+    // 两个坡道口两边的栏杆
+    ramp: [WARP, DOCK].flatMap((m) => [
+      [m.a, m.a2],
+      [m.b, m.b2],
+    ]),
+    roof: DOCK_ROOF,
   };
   const walls = [
     // 顶上的大圆弧, 左右两边的墙, 发射通道
@@ -227,6 +249,8 @@ export function buildTable() {
     ...rails.bulges.flatMap((p) => polyline(p)),
     ...rails.dividers.map(([[ax, ay], [bx, by]]) => seg(ax, ay, bx, by, { r: 4, e: 0.3 })),
     ...rails.ramp.map(([[ax, ay], [bx, by]]) => seg(ax, ay, bx, by, { r: 3, e: 0.35 })),
+    // 对接坡道口后面的尖顶: 门是平的, 从上面掉下来的球会停在上面, 加个尖顶让它滚下去
+    ...polyline(DOCK_ROOF, { r: 3, e: 0.35 }),
   ];
   // 单向门: 只挡从「挡的那一边」(n 指的那边) 过来的球。发射通道口 (从上面掉下来的拨到台面上); 左边回旋道 (往上能过, 从上面下来的拨到台面上)
   const gates = [
@@ -236,8 +260,10 @@ export function buildTable() {
   const posts = [
     { x: 58, y: 690, r: 6 },
     { x: mx(58), y: 690, r: 6 },
-    { x: RAMP_A[0], y: RAMP_A[1], r: 7 },
-    { x: RAMP_B[0], y: RAMP_B[1], r: 7 },
+    ...[WARP, DOCK].flatMap((m) => [
+      { x: m.a[0], y: m.a[1], r: 7 },
+      { x: m.b[0], y: m.b[1], r: 7 },
+    ]),
   ];
   // 弹弓: 三角形, 朝里的那条边会把球弹出去 (下边跟导轨之间要留够一个球过去的空)
   const sling = (a, b, c, i) => [seg(a[0], a[1], b[0], b[1]), seg(b[0], b[1], c[0], c[1]), seg(a[0], a[1], c[0], c[1], { kick: 1000, sling: i, e: 0.6 })];
@@ -247,9 +273,9 @@ export function buildTable() {
   ];
   const slings = slingShapes.flatMap(([a, b, c], i) => sling(a, b, c, i));
   const bumpers = [
-    { x: 220, y: 250, r: 28 },
-    { x: 340, y: 250, r: 28 },
-    { x: 280, y: 335, r: 28 },
+    { x: 220, y: 242, r: 28 },
+    { x: 340, y: 242, r: 28 },
+    { x: 280, y: 314, r: 28 },
   ];
   // 左边五个星座靶 (掉落靶, 贴着墙, 朝右)
   const drops = [440, 472, 504, 536, 568].map((y) => ({ ...seg(34, y, 34, y + 26, { e: 0.35 }), up: true }));
@@ -278,7 +304,11 @@ export function buildTable() {
     orbit: { x: 300, y: 36, r: 18 }, // 顶上圆弧的最高处
     spinner: { x: 520, y: 470, ax: LANE_X - 42, bx: LANE_X }, // 右边轨道上横着的转片
     hole: { x: 275, y: 530, r: 18 }, // 黑洞
-    ramp: { door: [RAMP_A2, RAMP_B2], in: RAMP_D, path: sampleCurve(RAMP_POINTS), exit: { vx: 0, vy: 520 } },
+    // 坡道: 0 曲速坡道, 1 对接坡道
+    ramps: [
+      { name: 'warp', door: [WARP.a2, WARP.b2], in: WARP.in, path: sampleCurve(WARP_POINTS), exit: { vx: 0, vy: 520 } },
+      { name: 'dock', door: [DOCK.a2, DOCK.b2], in: DOCK.in, path: sampleCurve(DOCK_POINTS), exit: { vx: 0, vy: 520 } },
+    ].map((r) => ({ ...r, doorSeg: { ax: r.door[0][0], ay: r.door[0][1], bx: r.door[1][0], by: r.door[1][1], r: 0, e: 0.3, mu: 0.1 } })),
     plunger: { x: 560, y: 975, top: 975 },
   };
 }
@@ -399,7 +429,7 @@ export class Pinball {
     this.input = { left: false, right: false, plunger: false, nudge: false };
     this.prevInput = { ...this.input };
     this.events = []; // 给画面、声音用: { type, ... }
-    this.flash = { bumper: [0, 0, 0], sling: [0, 0], drop: [0, 0, 0, 0, 0], target: [0, 0, 0], lane: [0, 0, 0], hole: 0, orbit: 0, ramp: 0, spinner: 0, warp: 0, shake: 0, boss: 0 };
+    this.flash = { bumper: [0, 0, 0], sling: [0, 0], drop: [0, 0, 0, 0, 0], target: [0, 0, 0], lane: [0, 0, 0], hole: 0, orbit: 0, ramp: 0, dock: 0, spinner: 0, warp: 0, shake: 0, boss: 0 };
     this.acc = 0;
     this.time = 0;
     this.timer = 0;
@@ -425,7 +455,7 @@ export class Pinball {
       medic: 0, // 还能急救几次
       pull: 0, // 弹簧拉了多少 0–1
       warp: 0, // 曲速几级
-      ramps: 0, // 这一阵打上坡道几次 (两次锁球灯亮)
+      docks: 0, // 这一阵打上对接坡道几次 (两次锁球灯亮)
       lockLit: false,
       locked: 0, // 锁住了几个球
       multiball: false, // 穿梭机出动 (锁球的多球)
@@ -676,21 +706,21 @@ export class Pinball {
     }
 
     // 冲进坡道入口: 碰到入口、往里冲得够快就上坡道; 太慢入口当墙, 弹回来
-    const door = t.ramp.door;
-    const doorSeg = { ax: door[0][0], ay: door[0][1], bx: door[1][0], by: door[1][1], r: 0, e: 0.3, mu: 0.1 };
-    const [dcx, dcy] = closest(b.x, b.y, doorSeg);
-    if ((b.x - dcx) ** 2 + (b.y - dcy) ** 2 < (b.r + 2) ** 2) {
-      const inward = b.vx * t.ramp.in.x + b.vy * t.ramp.in.y;
+    for (let k = 0; k < t.ramps.length; k++) {
+      const ramp = t.ramps[k];
+      const [dcx, dcy] = closest(b.x, b.y, ramp.doorSeg);
+      if ((b.x - dcx) ** 2 + (b.y - dcy) ** 2 >= (b.r + 2) ** 2) continue;
+      const inward = b.vx * ramp.in.x + b.vy * ramp.in.y;
       if (inward > 300) {
-        b.ramp = { s: 0, v: Math.min(inward, 2800) };
-        this.emit('rampEnter');
+        b.ramp = { k, s: 0, v: Math.min(inward, 2800) };
+        this.emit('rampEnter', { k });
         return;
       }
     }
 
     for (let pass = 0; pass < 2; pass++) {
       for (const w of t.walls) hitSegment(b, w);
-      hitSegment(b, doorSeg);
+      for (const ramp of t.ramps) hitSegment(b, ramp.doorSeg);
       for (const g of t.gates) hitSegment(b, g);
       for (const p of t.posts) resolve(b, p.x, p.y, p.r, { e: 0.5 });
       for (const w of t.slings) {
@@ -728,7 +758,8 @@ export class Pinball {
   rideRamp(b, h) {
     const t = this.table;
     const r = b.ramp;
-    const path = t.ramp.path;
+    const ramp = t.ramps[r.k];
+    const path = ramp.path;
     const p = rampAt(path, r.s);
     r.v += (-G_UP * p.dz + GRAVITY * p.dy) * h;
     r.v *= 1 - 0.25 * h;
@@ -738,17 +769,18 @@ export class Pinball {
       // 滚回入口: 放回台面, 往外滚
       const back = Math.max(200, -r.v);
       b.ramp = null;
-      const d = t.ramp.door;
-      Object.assign(b, { x: (d[0][0] + d[1][0]) / 2 - t.ramp.in.x * 4, y: (d[0][1] + d[1][1]) / 2 - t.ramp.in.y * 4, z: 0, vx: -t.ramp.in.x * back, vy: -t.ramp.in.y * back });
-      this.emit('rampFail');
+      const d = ramp.door;
+      Object.assign(b, { x: (d[0][0] + d[1][0]) / 2 - ramp.in.x * 4, y: (d[0][1] + d[1][1]) / 2 - ramp.in.y * 4, z: 0, vx: -ramp.in.x * back, vy: -ramp.in.y * back });
+      this.emit('rampFail', { k: r.k });
       return;
     }
     if (r.s >= path.total) {
       // 下来了: 落进右边的回球道
       const end = rampAt(path, path.total);
       b.ramp = null;
-      Object.assign(b, { x: end.x, y: end.y, z: 0, vx: t.ramp.exit.vx, vy: Math.max(t.ramp.exit.vy, r.v * 0.4) });
-      this.rampDone();
+      Object.assign(b, { x: end.x, y: end.y, z: 0, vx: ramp.exit.vx, vy: Math.max(ramp.exit.vy, r.v * 0.4) });
+      if (r.k === 1) this.dockDone();
+      else this.rampDone();
       return;
     }
     const q = rampAt(path, r.s);
@@ -916,16 +948,40 @@ export class Pinball {
     }
   }
 
+  // 多球的时候两条坡道都是超级大奖
+  jackpot() {
+    if (!this.state.multiball) return;
+    const jackpot = 30000 * this.tier;
+    this.add(jackpot);
+    this.say(`超级大奖! +${fmt(jackpot)}`, 3);
+    this.emit('jackpot', { points: jackpot });
+  }
+
+  // 对接坡道: 打上去两次锁球灯亮
+  dockDone() {
+    const s = this.state;
+    this.flash.dock = 0.8;
+    this.jackpot();
+    this.add(3000 * this.tier);
+    s.bonus += 50;
+    const quiet = s.multiball || s.mission || s.boss || s.final;
+    if (!s.multiball && !s.lockLit && s.locked < 2) {
+      s.docks++;
+      if (s.docks >= 2) {
+        s.lockLit = true;
+        s.docks = 0;
+        this.say('锁球灯亮了: 打进黑洞锁住一个球', 2.5);
+        this.emit('lockLit');
+      } else if (!quiet) this.say(`对接 ${s.docks}/2 · 再打一次锁球灯亮`, 1.8);
+    }
+    this.emit('dock');
+    this.shot('center');
+  }
+
   rampDone() {
     const s = this.state;
     this.flash.ramp = 0.8;
-    s.ramps++;
-    if (s.multiball) {
-      const jackpot = 30000 * this.tier;
-      this.add(jackpot);
-      this.say(`超级大奖! +${fmt(jackpot)}`, 3);
-      this.emit('jackpot', { points: jackpot });
-    }
+    this.jackpot();
     s.warp = Math.min(WARP_MAX, s.warp + 1);
     this.add(2000 * s.warp * this.tier);
     s.bonus += 50;
@@ -938,12 +994,6 @@ export class Pinball {
       this.say(`跃迁! +${fmt(prize)}`, 3);
       this.emit('hyperspace', { points: prize });
     } else if (!quiet) this.say(`曲速 ${s.warp} 级`, 1.5);
-    if (!s.multiball && !s.lockLit && s.locked < 2 && s.ramps >= 2) {
-      s.lockLit = true;
-      s.ramps = 0;
-      this.say('锁球灯亮了: 打进黑洞锁住一个球', 2.5);
-      this.emit('lockLit');
-    }
     this.emit('ramp', { warp: s.warp });
     this.shot('ramp');
   }
@@ -1052,7 +1102,7 @@ export class Pinball {
       });
     }
     this.addBall({ auto: true });
-    this.say('穿梭机出动! 三个球, 坡道是超级大奖', 4);
+    this.say('穿梭机出动! 三个球, 两条坡道都是超级大奖', 4);
     this.emit('multiball');
   }
 

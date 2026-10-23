@@ -127,14 +127,17 @@ test('得分: 小行星 100 还会弹; 顶上三条通道都亮 → 倍数 +1, �
   assert.equal(skill.state.skillLane, -1);
 });
 
-test('曲速坡道: 冲得够快上去、绕一圈落进右边回球道, 曲速 +1; 太慢滚回来; 两次锁球灯亮, 5 级跃迁', () => {
-  const shoot = (speed) => {
+test('两条坡道: 曲速坡道冲得够快上去、绕一圈落进右边回球道, 曲速 +1, 太慢滚回来, 5 级跃迁; 对接坡道落进左边回球道, 两次锁球灯亮', () => {
+  const shoot = (speed, k = 0) => {
     const g = playing();
-    const d = g.table.ramp.in;
-    Object.assign(g.ball, { x: 150 - d.x * 20, y: 560 - d.y * 20, vx: d.x * speed, vy: d.y * speed });
+    const r = g.table.ramps[k];
+    const d = r.in;
+    const mx = (r.door[0][0] + r.door[1][0]) / 2 - d.x * 75;
+    const my = (r.door[0][1] + r.door[1][1]) / 2 - d.y * 75;
+    Object.assign(g.ball, { x: mx, y: my, vx: d.x * speed, vy: d.y * speed });
     let end = null;
     run(g, 3, (x) => {
-      if (!end && x.events.some((e) => e.type === 'ramp' || e.type === 'rampFail')) end = { x: x.ball.x, y: x.ball.y };
+      if (!end && x.events.some((e) => e.type === 'ramp' || e.type === 'dock' || e.type === 'rampFail')) end = { x: x.ball.x, y: x.ball.y };
     });
     return { g, end };
   };
@@ -145,13 +148,18 @@ test('曲速坡道: 冲得够快上去、绕一圈落进右边回球道, 曲速 
   const slow = shoot(1200);
   assert.ok(types(slow.g).includes('rampFail') && !types(slow.g).includes('ramp'));
   assert.ok(slow.end.x < 200 && slow.end.y > 500, '滚回入口');
+  const dock = shoot(2400, 1);
+  assert.ok(types(dock.g).includes('dock'));
+  assert.ok(dock.end.x < 90 && dock.end.y > 760, `落在左边 (${dock.end.x}, ${dock.end.y})`);
+  assert.equal(dock.g.state.docks, 1);
+  assert.ok(types(shoot(1300, 1).g).includes('rampFail'));
   const g = playing();
-  g.rampDone();
+  g.dockDone();
   assert.equal(g.state.lockLit, false);
-  g.rampDone();
+  g.dockDone();
   assert.equal(g.state.lockLit, true);
   assert.ok(types(g).includes('lockLit'));
-  for (let i = 0; i < WARP_MAX - 2; i++) g.rampDone();
+  for (let i = 0; i < WARP_MAX; i++) g.rampDone();
   assert.ok(types(g).includes('hyperspace'));
   assert.equal(g.state.warp, 0);
 });

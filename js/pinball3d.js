@@ -4,11 +4,12 @@
 //         黑洞 (吸积盘在转) 和上面飘着的飞碟、顶上三个虫洞、带环的行星、弹簧; 灯亮了会发光 (bloom)
 //   镜头: 横着的屏幕跟着球上下走; 竖着的屏幕从上面看整张台
 
-import { W, H, BALL_R, LANE_X, CHAPTERS } from './pinball.js';
+import { W, H, BALL_R, LANE_X, CHAPTERS, WARP_MAX } from './pinball.js';
 import { paintPlayfield, INSERTS, insertPath, AIM } from './pinart.js';
 
 const S = 0.01;
 const X = (x) => (x - W / 2) * S;
+const mx = (x) => 560 - x; // 左右对称 (跟 pinball.js 一样)
 const Z = (y) => (y - H / 2) * S;
 
 export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
@@ -140,6 +141,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   }
   // 坡道入口的两边 (透明塑料)
   for (const [[ax, ay], [bx, by]] of table.rails.ramp) box(ax, ay, bx, by, { h: 0.3, t: 0.04, mat: M.throat });
+  for (const [[ax, ay], [bx, by]] of path(table.rails.roof)) box(ax, ay, bx, by, { h: 0.3, t: 0.05 });
   // 单向门
   for (const g of table.gates) box(g.ax, g.ay, g.bx, g.by, { h: 0.12, t: 0.02, y0: 0.06, mat: M.darkMetal });
   // 橡皮柱
@@ -179,13 +181,19 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     bg.addColorStop(1, '#0b0820');
     g.fillStyle = bg;
     g.fillRect(0, 0, 1024, 128);
-    g.font = '900 54px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+    g.font = '900 40px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.shadowColor = '#ff9b3d';
     g.shadowBlur = 18;
     g.fillStyle = '#ffe3a8';
-    g.fillText('星 际 远 航', 512, 64);
+    g.fillText('星 际 远 航', 512, 60);
+    g.shadowBlur = 0;
+    g.font = '800 22px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+    g.fillStyle = '#9dffb6';
+    g.fillText('护 盾', 248, 34);
+    g.fillStyle = '#9fe8ff';
+    g.fillText('任 务 · 危 机', 776, 34);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
@@ -271,7 +279,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
 
   // ---- 曲速坡道: 透明的槽 + 两边镀铬的边 + 几根支柱 ----
   {
-    const pts = table.ramp.path.pts;
+    const pts = table.ramps[0].path.pts;
     const pos = [];
     const idx = [];
     const wid = 0.17;
@@ -309,6 +317,257 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       pole.position.set(s.c[0], s.c[1] / 2, s.c[2]);
     });
   }
+
+  // ---- 对接坡道: 金色的铁丝坡道 (下面两根托着球, 两边各一根拦着), 一圈一圈的箍, 几根柱子 ----
+  {
+    const gold = new THREE.MeshStandardMaterial({ color: 0xe0b86a, metalness: 1, roughness: 0.22 });
+    const pts = table.ramps[1].path.pts.map((p) => new THREE.Vector3(X(p[0]), p[2] * S + BALL_R * S, Z(p[1])));
+    const up = new THREE.Vector3(0, 1, 0);
+    const frames = pts.map((c, i) => {
+      const t = pts[Math.min(pts.length - 1, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize();
+      const n = new THREE.Vector3().crossVectors(t, up).normalize();
+      const u = new THREE.Vector3().crossVectors(n, t).normalize();
+      return { c, t, n, u };
+    });
+    const wire = (dn, du) => frames.filter((_, i) => i % 2 === 0 || i === frames.length - 1).map(({ c, n, u }) => c.clone().addScaledVector(n, dn).addScaledVector(u, du));
+    const wires = [
+      [0.07, -0.095],
+      [-0.07, -0.095],
+      [0.135, 0.01],
+      [-0.135, 0.01],
+    ];
+    const geos = wires.map(([dn, du]) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wire(dn, du)), 220, 0.011, 6));
+    frames.forEach(({ c, t }, i) => {
+      if (i % 14 !== 7) return;
+      const hoop = new THREE.TorusGeometry(0.15, 0.009, 6, 20, Math.PI * 1.25);
+      hoop.rotateZ(-Math.PI * 0.125 - Math.PI / 2 - Math.PI * 0.5);
+      hoop.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), t));
+      hoop.translate(c.x, c.y, c.z);
+      geos.push(hoop);
+      if (c.y > 0.35 && i % 28 === 7) {
+        const pole = new THREE.CylinderGeometry(0.013, 0.013, c.y - 0.12, 8);
+        pole.translate(c.x, (c.y - 0.12) / 2, c.z);
+        geos.push(pole);
+      }
+    });
+    add(shadow(new THREE.Mesh(THREE.mergeGeometries(geos), gold), true, false));
+  }
+
+  // 对接坡道口: 一座门架 (两根柱子、横梁上写着「对接舱」、两排灯), 打上去的时候两只夹子合一下
+  const gantry = new THREE.Group();
+  const gantryLights = [];
+  {
+    const dock = table.ramps[1];
+    const [cx, cy] = [(dock.door[0][0] + dock.door[1][0]) / 2, (dock.door[0][1] + dock.door[1][1]) / 2 + 40];
+    gantry.position.set(X(cx), 0, Z(cy));
+    const steel = new THREE.MeshStandardMaterial({ color: 0x8a93a8, metalness: 0.85, roughness: 0.35 });
+    for (const k of [-1, 1]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.62, 0.07), steel);
+      pillar.position.set(k * 0.47, 0.31, 0);
+      gantry.add(shadow(pillar));
+    }
+    const sign = (() => {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 48;
+      const g = c.getContext('2d');
+      g.fillStyle = '#141a33';
+      g.fillRect(0, 0, 256, 48);
+      g.fillStyle = '#ffcf5e';
+      for (let x = 0; x < 256; x += 24) g.fillRect(x, 0, 12, 5), g.fillRect(x + 12, 43, 12, 5);
+      g.font = '900 28px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = '#ffe9b0';
+      g.fillText('对 接 舱', 128, 25);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.12, 0.08), [steel, steel, steel, steel, new THREE.MeshStandardMaterial({ map: sign, emissive: 0xffffff, emissiveMap: sign, emissiveIntensity: 0.5 }), steel]);
+    beam.position.set(0, 0.66, 0);
+    gantry.add(shadow(beam));
+    for (let i = 0; i < 6; i++) {
+      const l = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), glowMat(0xffcf5e, 2));
+      l.position.set(-0.4 + i * 0.16, 0.59, 0.045);
+      gantry.add(l);
+      gantryLights.push(l);
+    }
+    gantry.userData.clamps = [-1, 1].map((k) => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.05), steel);
+      arm.position.set(k * 0.36, 0.5, 0);
+      gantry.add(arm);
+      return arm;
+    });
+  }
+  add(gantry);
+
+  // ---- 塑料片: 真弹珠台上架在柱子上、印着图的彩色塑料 (弹弓上、导轨上、星座靶上面) ----
+  function plasticArt(w, h, color, text) {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = Math.max(64, Math.round((256 * h) / w));
+    const g = c.getContext('2d');
+    const bg = g.createLinearGradient(0, 0, c.width, c.height);
+    bg.addColorStop(0, color);
+    bg.addColorStop(1, '#140a36');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, c.width, c.height);
+    // 一圈警戒线、几颗星、字
+    g.fillStyle = 'rgba(255,210,60,0.75)';
+    for (let x = -c.height; x < c.width; x += 18) {
+      g.beginPath();
+      g.moveTo(x, 10);
+      g.lineTo(x + 9, 10);
+      g.lineTo(x + 19, 0);
+      g.lineTo(x + 10, 0);
+      g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    for (let i = 0; i < 30; i++) g.fillRect(((i * 97) % c.width), 14 + ((i * 53) % (c.height - 16)), 1.5, 1.5);
+    if (text) {
+      g.save();
+      g.translate(c.width / 2, c.height / 2 + 4);
+      if (c.height > c.width * 1.4) g.rotate(-Math.PI / 2);
+      g.font = `900 ${Math.round(Math.min(c.width, c.height) * 0.22)}px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.shadowColor = '#fff';
+      g.shadowBlur = 8;
+      g.fillStyle = '#fff6d8';
+      g.fillText(text, 0, 0);
+      g.restore();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const plastics = [];
+  const plasticPosts = []; // (台面那些柱子已经合成一个了, 这些另外合)
+  function plastic(poly, color, text, { y = 0.3, depth = 0.025 } = {}) {
+    const xs = poly.map((p) => X(p[0]));
+    const zs = poly.map((p) => -Z(p[1]));
+    const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+    const shape = new THREE.Shape(poly.map((p) => new THREE.Vector2(X(p[0]), -Z(p[1]))));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, y, 0);
+    const tex = plasticArt(x1 - x0, z1 - z0, color, text);
+    tex.repeat.set(1 / (x1 - x0), 1 / (z1 - z0));
+    tex.offset.set(-x0 / (x1 - x0), -z0 / (z1 - z0));
+    const mat = new THREE.MeshPhysicalMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35, transparent: true, opacity: 0.88, roughness: 0.2, clearcoat: 1 });
+    const m = add(shadow(new THREE.Mesh(geo, mat), true, false));
+    plastics.push(m);
+    // 撑着的小柱子
+    for (const [px, py] of poly.filter((_, i) => i % 2 === 0)) {
+      const g = new THREE.CylinderGeometry(0.012, 0.012, y, 8);
+      g.translate(X(px), y / 2, Z(py));
+      plasticPosts.push(g);
+    }
+    return m;
+  }
+  // 弹弓上面: 比弹弓大一圈
+  table.slingShapes.forEach((tri, i) => {
+    const cx = tri.reduce((n, p) => n + p[0], 0) / 3;
+    const cy = tri.reduce((n, p) => n + p[1], 0) / 3;
+    plastic(tri.map(([x, y]) => [cx + (x - cx) * 1.12, cy + (y - cy) * 1.12]), i ? '#c2187e' : '#2a64d8', i ? '海盗' : '护航');
+  });
+  // 两边回球道的导轨上面
+  plastic([[30, 640], [64, 640], [64, 690], [44, 720], [30, 720]], '#7b3dff', '');
+  plastic([[mx(30), 640], [mx(64), 640], [mx(64), 690], [mx(44), 720], [mx(30), 720]].reverse(), '#7b3dff', '');
+  // 星座靶上面 (靠墙一条)
+  plastic([[20, 424], [44, 424], [44, 600], [20, 600]], '#b38a1a', '星座', { y: 0.34 });
+  // 顶上通道上面一块弯的
+  plastic([[205, 86], [395, 86], [380, 100], [220, 100]], '#1a6a8a', '', { y: 0.27, depth: 0.02 });
+  add(new THREE.Mesh(THREE.mergeGeometries(plasticPosts), M.chrome));
+
+  // ---- 远航号: 飘在台面顶上, 船身、转着的冬眠舱环、太阳能板、发动机的光 ----
+  const ark = new THREE.Group();
+  {
+    const hullMat = new THREE.MeshStandardMaterial({ color: 0xd8deea, metalness: 0.6, roughness: 0.35 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x3a4466, metalness: 0.7, roughness: 0.4 });
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 16), hullMat);
+    hull.rotation.z = Math.PI / 2;
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.28, 16), hullMat);
+    nose.rotation.z = -Math.PI / 2;
+    nose.position.x = 0.79;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.035, 10, 40), hullMat);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.x = -0.25;
+    const spokes = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.46, 0.02), dark);
+    spokes.position.x = -0.25;
+    ring.add(spokes);
+    const panels = [-1, 1].map((k) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.01, 0.16), new THREE.MeshStandardMaterial({ color: 0x2a4a9a, metalness: 0.5, roughness: 0.3, emissive: 0x0a1a50 }));
+      p.position.set(0.18, 0, k * 0.17);
+      return p;
+    });
+    const engines = [-0.05, 0.05].map((z) => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), glowMat(0x6ab8ff, 2.4));
+      e.position.set(-0.68, 0, z);
+      return e;
+    });
+    ark.add(shadow(hull, true, false), nose, ring, ...panels, ...engines);
+    ark.userData.ring = ring;
+  }
+  ark.position.set(X(300), 1.15, Z(52));
+  ark.rotation.y = 0.12;
+  ark.scale.setScalar(1.35);
+  add(ark);
+
+  // ---- 右上角的雷达: 一根杆子、一个会转的锅 ----
+  const radar = new THREE.Group();
+  {
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb8c0d0, metalness: 0.8, roughness: 0.3 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.5, 10), steel);
+    pole.position.y = 0.25;
+    const dish = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3.2), new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.4, roughness: 0.4, side: THREE.DoubleSide }));
+    dish.rotation.x = Math.PI * 0.62;
+    dish.position.y = 0.5;
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), glowMat(0xff4060, 2.5));
+    tip.position.set(0, 0.56, 0.12);
+    radar.add(shadow(pole), shadow(dish), tip);
+    radar.userData.dish = dish;
+    radar.userData.tip = tip;
+  }
+  radar.position.set(X(596), 0.5, Z(250));
+  add(radar);
+
+  // ---- 左下的维修机器人: 站在机柜边上, 眼睛会闪, 打中东西的时候挥手 ----
+  const robot = new THREE.Group();
+  {
+    const body = new THREE.MeshStandardMaterial({ color: 0xe8a23a, metalness: 0.5, roughness: 0.45 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2b2f3d, metalness: 0.6, roughness: 0.5 });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.14), body);
+    torso.position.y = 0.26;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.12), body);
+    head.position.y = 0.44;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.01), glowMat(0x38e8ff, 2.4));
+    eye.position.set(0, 0.45, 0.065);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 6), dark);
+    antenna.position.set(0.04, 0.54, 0);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), glowMat(0xff4060, 2.4));
+    bulb.position.set(0.04, 0.6, 0);
+    const legs = [-1, 1].map((k) => {
+      const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.08), dark);
+      l.position.set(k * 0.055, 0.08, 0);
+      return l;
+    });
+    const arms = [-1, 1].map((k) => {
+      const a = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.04), dark);
+      m.position.y = -0.08;
+      a.add(m);
+      a.position.set(k * 0.13, 0.34, 0);
+      return a;
+    });
+    robot.add(shadow(torso), shadow(head), eye, antenna, bulb, ...legs, ...arms);
+    robot.userData = { eye, bulb, arms };
+  }
+  robot.position.set(X(-6), 0.5, Z(820));
+  robot.rotation.y = 0.5;
+  robot.scale.setScalar(1.1);
+  add(robot);
 
   // ---- 黑洞: 转着的吸积盘 + 一圈光, 上面飘着飞碟 ----
   const ho = table.hole;
@@ -463,7 +722,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   const bossGroup = new THREE.Group();
   bossGroup.visible = false;
   add(bossGroup);
-  const glowMat = (color, k = 1.8, opacity = 1) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k), transparent: opacity < 1, opacity, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: opacity >= 1, toneMapped: false, side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide });
+  function glowMat(color, k = 1.8, opacity = 1) {
+    return new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k), transparent: opacity < 1, opacity, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: opacity >= 1, toneMapped: false, side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide });
+  }
   function lumpy(r, seed, detail = 2, rough = 0.2) {
     const geo = new THREE.IcosahedronGeometry(r, detail);
     const pos = geo.attributes.position;
@@ -620,6 +881,244 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     }
   }
 
+  // ---- 机库: 台子立在远航号的机库甲板上; 两边货箱、燃料罐、控制台、停着的穿梭机, 后面机库大门开着, 外面是太空 ----
+  const FLOOR = -1.05;
+  const canvasTex = (w, h, draw, { repeat = null } = {}) => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    if (repeat) {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(...repeat);
+    }
+    t.anisotropy = 4;
+    return t;
+  };
+  const deckTex = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#1b2233';
+    g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 128) {
+      for (let x = 0; x < w; x += 128) {
+        const gr = g.createLinearGradient(x, y, x + 128, y + 128);
+        gr.addColorStop(0, '#2c3650');
+        gr.addColorStop(1, '#1a2134');
+        g.fillStyle = gr;
+        g.fillRect(x + 2, y + 2, 124, 124);
+        g.fillStyle = 'rgba(200,210,240,0.25)';
+        for (const [rx, ry] of [[8, 8], [120, 8], [8, 120], [120, 120]]) g.fillRect(x + rx - 2, y + ry - 2, 4, 4);
+        // 防滑的纹
+        g.strokeStyle = 'rgba(255,255,255,0.05)';
+        for (let k = 16; k < 112; k += 12) {
+          g.beginPath();
+          g.moveTo(x + k, y + 20);
+          g.lineTo(x + k + 8, y + 28);
+          g.stroke();
+        }
+      }
+    }
+  }, { repeat: [11, 11] });
+  const deck = add(new THREE.Mesh(new THREE.PlaneGeometry(44, 44), new THREE.MeshStandardMaterial({ map: deckTex, roughness: 0.7, metalness: 0.4 })));
+  deck.rotation.x = -Math.PI / 2;
+  deck.position.y = FLOOR;
+  deck.receiveShadow = true;
+  // 台子周围一圈黄黑的停机线
+  const stripeTex = canvasTex(256, 32, (g, w, h) => {
+    g.fillStyle = '#16130a';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = '#e8b430';
+    for (let x = -h; x < w; x += 32) {
+      g.beginPath();
+      g.moveTo(x, h);
+      g.lineTo(x + 16, h);
+      g.lineTo(x + 16 + h, 0);
+      g.lineTo(x + h, 0);
+      g.fill();
+    }
+  }, { repeat: [6, 1] });
+  const stripeMat = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.6 });
+  for (const [w, d, x, z, rot] of [[8.4, 0.25, 0, -6.1, 0], [8.4, 0.25, 0, 6.9, 0], [13.2, 0.25, -4.2, 0.4, Math.PI / 2], [13.2, 0.25, 4.2, 0.4, Math.PI / 2]]) {
+    const st = add(new THREE.Mesh(new THREE.PlaneGeometry(w, d), stripeMat));
+    st.rotation.set(-Math.PI / 2, 0, rot);
+    st.position.set(x, FLOOR + 0.005, z);
+  }
+  // 机柜: 台面下面的箱子, 两边印着远航号, 前面一根镀铬的横杆
+  const sideTex = canvasTex(1024, 128, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, '#2a2060');
+    gr.addColorStop(1, '#0e0b26');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(120,140,220,0.35)';
+    for (let x = 0; x < w; x += 128) g.strokeRect(x + 2, 6, 124, h - 12);
+    g.fillStyle = '#e8b430';
+    g.fillRect(0, h - 8, w, 4);
+    g.font = '900 58px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+    g.textBaseline = 'middle';
+    g.shadowColor = '#5fd8ff';
+    g.shadowBlur = 16;
+    g.fillStyle = '#e6f4ff';
+    g.fillText('远航号 · 殖民方舟', 60, h / 2);
+    g.shadowBlur = 0;
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.font = '700 22px "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText('乘客 100,000 · 冬眠中', 640, h / 2 + 4);
+  });
+  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.5, metalness: 0.3 });
+  // (顶面比台面低一点, 不然两个面打架, 台面一闪一闪的)
+  const body = add(shadow(new THREE.Mesh(new THREE.BoxGeometry(6.2, -FLOOR - 0.04, 10.9), [sideMat, sideMat, M.cabinet, M.cabinet, M.cabinet, M.cabinet]), true, true));
+  body.position.set(0, (FLOOR - 0.04) / 2, 0.42);
+  const barMat = new THREE.MeshStandardMaterial({ color: 0x8c93a6, metalness: 0.9, roughness: 0.4 });
+  const bar = add(shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 6.1, 20), barMat)));
+  bar.rotation.z = Math.PI / 2;
+  bar.position.set(0, 0.56, Z(1052));
+
+  // 货箱: 印着字的箱子, 堆两层
+  const crateTex = (label, color) =>
+    canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = color;
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(0,0,0,0.45)';
+      g.lineWidth = 14;
+      g.strokeRect(7, 7, w - 14, h - 14);
+      g.beginPath();
+      g.moveTo(14, 14);
+      g.lineTo(w - 14, h - 14);
+      g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      g.font = '900 44px "PingFang SC", "Microsoft YaHei", sans-serif';
+      g.textAlign = 'center';
+      g.fillText(label, w / 2, h / 2 + 15);
+    });
+  const crateMats = [crateTex('补给', '#5a6a3a'), crateTex('种子', '#6a4a2a'), crateTex('氧气', '#2a4a6a')].map((map) => new THREE.MeshStandardMaterial({ map, roughness: 0.8 }));
+  for (const [x, y, z, size, k, rot] of [[-4.6, 0, 2.4, 0.9, 0, 0.1], [-4.6, 0.9, 2.5, 0.8, 1, -0.2], [-5.7, 0, 3.0, 0.9, 2, 0.4], [-4.8, 0, 4.4, 0.6, 1, 0.8], [4.6, 0, -3.2, 0.8, 2, -0.3], [5.4, 0, -2.6, 0.6, 0, 0.5]]) {
+    const c = add(shadow(new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMats[k])));
+    c.position.set(x, FLOOR + y + size / 2, z);
+    c.rotation.y = rot;
+  }
+  // 燃料罐: 躺着的两个, 有红色的箍
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0xc8ccd6, metalness: 0.7, roughness: 0.3 });
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0xc0283a, roughness: 0.5 });
+  for (const z of [-1.4, -0.4]) {
+    const tank = add(shadow(new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 1.4, 6, 16), tankMat)));
+    tank.rotation.z = Math.PI / 2;
+    tank.position.set(-5.4, FLOOR + 0.4, z);
+    for (const x of [-0.5, 0.5]) {
+      const band = add(new THREE.Mesh(new THREE.TorusGeometry(0.385, 0.03, 8, 32), bandMat));
+      band.rotation.y = Math.PI / 2;
+      band.position.set(-5.4 + x, FLOOR + 0.4, z);
+    }
+  }
+  // 控制台: 斜着的屏幕, 上面是星图和远航号的状态
+  const screenTex = canvasTex(512, 256, (g, w, h) => {
+    g.fillStyle = '#031020';
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(80,220,255,0.7)';
+    g.lineWidth = 2;
+    for (const r of [40, 75, 110]) {
+      g.beginPath();
+      g.arc(150, 128, r, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.fillStyle = '#ffd84d';
+    for (const [x, y] of [[150, 128], [205, 92], [100, 190], [240, 160]]) {
+      g.beginPath();
+      g.arc(x, y, 6, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = '#7ff3ff';
+    g.font = '700 26px "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText('航线: 曙光星', 300, 60);
+    g.fillText('冬眠舱 正常', 300, 110);
+    g.fillText('燃料 78%', 300, 160);
+    g.fillStyle = '#3dffa8';
+    g.fillRect(300, 180, 160, 12);
+  });
+  const consoleGroup = new THREE.Group();
+  {
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.75, 0.8), M.darkMetal);
+    desk.position.y = 0.375;
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.75), new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false }));
+    screen.position.set(0, 1.05, -0.2);
+    screen.rotation.x = -0.35;
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.85, 0.05), M.darkMetal);
+    frame.position.set(0, 1.05, -0.23);
+    frame.rotation.x = -0.35;
+    consoleGroup.add(shadow(desk), shadow(frame), screen);
+    for (let i = 0; i < 8; i++) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.08), glowMat([0xff4060, 0x3dffa8, 0xffd84d][i % 3], 2));
+      b.position.set(-0.6 + i * 0.17, 0.76, 0.2);
+      consoleGroup.add(b);
+    }
+  }
+  consoleGroup.position.set(-4.9, FLOOR, -3.6);
+  consoleGroup.rotation.y = 0.9;
+  add(consoleGroup);
+  // 穿梭机: 停在右边, 机身、三角翼、尾翼、驾驶舱的玻璃、发动机的光
+  const shuttle = new THREE.Group();
+  {
+    const white = new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.3, roughness: 0.45 });
+    const fuse = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.9, 8, 20), white);
+    fuse.rotation.x = Math.PI / 2;
+    const wingShape = new THREE.Shape([new THREE.Vector2(0, 0.6), new THREE.Vector2(1.3, -0.7), new THREE.Vector2(-1.3, -0.7)]);
+    const wing = new THREE.Mesh(new THREE.ExtrudeGeometry(wingShape, { depth: 0.06, bevelEnabled: false }), white);
+    wing.rotation.x = Math.PI / 2;
+    wing.position.set(0, -0.05, 0.1);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.6), white);
+    fin.position.set(0, 0.42, 0.85);
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x2a6a9a, roughness: 0.05, metalness: 0.2, clearcoat: 1 }));
+    glass.position.set(0, 0.18, -0.8);
+    glass.scale.set(1, 0.7, 1.4);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 1.6), bandMat);
+    stripe.position.set(0, 0.3, 0.1);
+    const engines = [-0.18, 0.18].map((x) => {
+      const e = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.2, 16), glowMat(0x6ab8ff, 2));
+      e.rotation.x = Math.PI / 2;
+      e.position.set(x, 0, 1.3);
+      return e;
+    });
+    const gear = [[-0.5, 0.2], [0.5, 0.2], [0, -0.7]].map(([x, z]) => {
+      const g2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8), M.darkMetal);
+      g2.position.set(x, -0.45, z);
+      return g2;
+    });
+    shuttle.add(shadow(fuse), shadow(wing), shadow(fin), glass, stripe, ...engines, ...gear);
+  }
+  shuttle.position.set(6.1, FLOOR + 0.68, 1.4);
+  shuttle.rotation.y = -0.7;
+  add(shuttle);
+  // 柱子 (上面一圈灯) 和后面开着的机库大门
+  const lampRing = glowMat(0x9fd8ff, 1.6);
+  for (const [x, z] of [[-4.2, -6.4], [4.2, -6.4], [-7.5, 2], [7.5, -1], [-4.2, 7.2], [4.2, 7.2]]) {
+    const col = add(shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 4, 12), M.darkMetal)));
+    col.position.set(x, FLOOR + 2, z);
+    const ring = add(new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.03, 6, 20), lampRing));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, FLOOR + 1.4, z);
+  }
+  {
+    const doorMat = new THREE.MeshStandardMaterial({ map: stripeTex.clone(), roughness: 0.6, metalness: 0.4 });
+    doorMat.map.repeat.set(12, 1);
+    doorMat.map.needsUpdate = true;
+    for (const [w, h, x, y] of [[0.6, 7, -7.5, 2.5], [0.6, 7, 7.5, 2.5], [15.6, 0.6, 0, 6.2]]) {
+      const f = add(new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.6), doorMat));
+      f.position.set(x, FLOOR + y, -10.5);
+    }
+  }
+
+  // 挡板下面那块 (apron) 上的两条表: 左边护盾还剩多久, 右边任务还剩多久 / 危机的血 / 曲速几级
+  const meters = [0, 1].map((k) => {
+    const track = add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.02, 0.12), M.darkMetal));
+    const x = k ? X(418) : X(142);
+    track.position.set(x, 0.125, Z(1034));
+    const fillMat = glowMat(k ? 0x3fd8ff : 0x6cff8f, 2);
+    const fill = add(new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, 0.08), fillMat));
+    fill.position.set(x, 0.13, Z(1034));
+    return { fill, x, mat: fillMat };
+  });
+
   // ---- 天上的星星 (镜头歪的时候看得见) ----
   {
     const n = 1500;
@@ -653,7 +1152,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   let view = null; // { pitch, dist, lookZ, zTop, zBot }
   const camState = { z: 0, shake: 0 };
   const V = (x, y, z) => new THREE.Vector3(X(x), z * S, Z(y));
-  const EDGE = [...outline.map(([x, y]) => V(x, Math.min(y, 1060), 50)), V(12, 1060, 0), V(588, 1060, 0), V(70, 110, 160), V(535, 95, 190)];
+  const EDGE = [...outline.map(([x, y]) => V(x, Math.min(y, 1060), 50)), V(12, 1060, 0), V(588, 1060, 0), V(70, 110, 160), V(535, 95, 190), V(300, 52, 140)];
   const TOP = V(300, 0, 50);
   const BOTTOM = V(300, 1030, 0);
   const SIDES = [V(0, 500, 50), V(600, 500, 50)];
@@ -759,6 +1258,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
 
   // ---- 每帧 ----
   const blink = (now, ms = 260) => Math.floor(now / ms) % 2 === 0;
+  let robotWave = 0;
   let spinAngle = 0;
   function lamp(id, on, strength = 1) {
     const m = lamps.get(id);
@@ -828,6 +1328,43 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     lamp('shield', s.saveLeft > 0 && (s.saveLeft > 3 || blink(now, 150)));
     const aimed = new Set([...game.aims()].flatMap((x) => AIM[x] ?? []));
     for (const id of ['aimRamp', 'aimOrbit', 'aimHole', 'aimDrops', 'aimTargets', 'aimBumpers']) lamp(id, aimed.has(id) && blink(now, s.boss || s.final ? 160 : 300));
+    // 黑洞旁边的任务 / 危机 / 着陆, 对接了几次, 连击, 五个星系, 奖励的球
+    lamp('iMission', s.mission ? true : s.missionReady && blink(now, 220));
+    lamp('iBoss', s.boss ? blink(now, 120) : s.bossReady && blink(now, 220));
+    lamp('iLand', s.final ? blink(now, 140) : s.finalReady && blink(now, 220));
+    lamp('dock0', s.docks >= 1 || s.lockLit);
+    lamp('dock1', s.lockLit);
+    lamp('combo', s.combo.n >= 2 && game.time - s.combo.at < game.perk.comboWindow);
+    const ending = s.final || s.finalReady;
+    for (let i = 0; i < 4; i++) lamp(`chapter${i}`, i < s.chapter || ending || (i === s.chapter && blink(now, 600)));
+    lamp('chapter4', ending && blink(now, 300));
+    lamp('extra', s.extra > 0);
+    // 对接舱: 灯一个一个跑, 打上去的时候夹子合一下
+    const chase = Math.floor(now / 110) % gantryLights.length;
+    gantryLights.forEach((l, i) => l.scale.setScalar(fl.dock > 0 || i === chase ? 1.4 : 0.7));
+    gantry.userData.clamps.forEach((arm, i) => (arm.position.x = (i ? 1 : -1) * (0.36 - Math.min(1, fl.dock * 2) * 0.13)));
+    // 远航号、雷达、机器人
+    ark.userData.ring.rotation.x += dt * 0.8;
+    ark.position.y = 1.15 + Math.sin(now / 900) * 0.04;
+    radar.rotation.y += dt * 0.9;
+    radar.userData.tip.visible = blink(now, 500);
+    robot.userData.eye.scale.x = Math.floor(now / 160) % 25 === 0 ? 0.2 : 1;
+    robot.userData.bulb.visible = blink(now, 700);
+    robotWave = Math.max(0, robotWave - dt);
+    robot.userData.arms.forEach((a, i) => (a.rotation.z = robotWave > 0 ? (i ? -1 : 1) * (1.6 + Math.sin(now / 90) * 0.5) : (i ? -1 : 1) * 0.1));
+    // 两条表
+    const m0 = Math.min(1, s.saveLeft / Math.max(1, game.perk.saveTime));
+    let m1 = s.warp / WARP_MAX;
+    let c1 = 0x3fd8ff;
+    if (s.mission) m1 = s.mission.left / s.mission.total;
+    else if (s.boss) [m1, c1] = [s.boss.hp / s.boss.max, 0xff3f6d];
+    else if (s.final) [m1, c1] = [1 - s.final.lit.length / 6, 0xffd84d];
+    meters.forEach((m, i) => {
+      const k = Math.max(0.001, i ? m1 : m0);
+      m.fill.scale.x = k;
+      m.fill.position.x = m.x - (1.24 * (1 - k)) / 2;
+    });
+    meters[1].mat.color.set(c1).multiplyScalar(2);
     // 这一章的颜色
     paint(s.final || s.finalReady ? PALETTES[4] : PALETTES[s.chapter], Math.min(1, dt * 1.5));
     // 危机
@@ -869,7 +1406,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       else if (e.type === 'sling') burst(e.x, e.y, 0xff5ec8, 10);
       else if (e.type === 'hole' || e.type === 'eject') burst(ho.x, ho.y, 0xffa040, 24, 0.1);
       else if (e.type === 'wormhole') burst(e.x, 72, 0xb07dff, 20, 0.1);
-      else if (e.type === 'bossHit') burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffffff, 26, 1.6);
+      if (['bossDown', 'missionDone', 'jackpot', 'landing', 'skill'].includes(e.type)) robotWave = 2;
+      if (e.type === 'dock') burstAt(gantry.position.x, 0.6, gantry.position.z, 0xffcf5e, 24, 1.4);
+      if (e.type === 'bossHit') burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffffff, 26, 1.6);
       else if (e.type === 'bossDown') {
         bossView.dying = 1;
         camState.shake = 1.4;

@@ -137,6 +137,11 @@ export function play(e) {
       stopHum();
       tone(ctx, { f0: 300, f1: 90, len: 0.3, type: 'sawtooth', vol: 0.04 });
       break;
+    case 'dock':
+      stopHum();
+      notes(ctx, [392, 587, 784, 1175], { gap: 0.07, len: 0.18, type: 'square', vol: 0.05 });
+      hiss(ctx, { len: 0.25, freq: 600, f1: 1800, q: 2, vol: 0.08 });
+      break;
     case 'ramp':
       stopHum();
       notes(ctx, [523, 659, 784, 1047], { gap: 0.06, len: 0.16, vol: 0.09 });
