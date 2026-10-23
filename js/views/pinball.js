@@ -44,7 +44,7 @@ export function renderPinball({ store }) {
   let last = 0;
   let overScore = null;
   let dirty = true; // 暂停的时候要不要重画一张
-  const perf = { since: 0, frames: 0, time: 0, more: true };
+  const perf = { since: 0, frames: 0, time: 0, more: true, before: 0, miss: 0 };
 
   const dmdCanvas = h('canvas', { class: 'pb-dmd', 'aria-hidden': 'true' });
   const dmd = createDmd(dmdCanvas);
@@ -181,7 +181,8 @@ export function renderPinball({ store }) {
     }
   }
 
-  // 每 3 秒看一次快不快: 平均一帧超过 1/45 秒就降一级
+  // 每 3 秒看一次快不快: 平均一帧超过 1/45 秒就降一级画面, 再看 3 秒; 降了没快多少就退回来, 下回试下一级。
+  // 连着两级都不见快, 就不是画面的问题 (比如 iPhone 省电模式本来就只给 30 帧), 不再试 (不然白白变糊)
   function watch(now, raw) {
     if (!perf.more || document.visibilityState !== 'visible' || raw > 0.25) return;
     if (!perf.since) perf.since = now + 1500; // 刚开始编译着色器, 先不算
@@ -189,7 +190,17 @@ export function renderPinball({ store }) {
     perf.frames++;
     perf.time += raw;
     if (now - perf.since < 3000) return;
-    if (perf.time / perf.frames > 1 / 45) perf.more = scene.degrade();
+    const avg = perf.time / perf.frames;
+    if (perf.before) {
+      if (avg > perf.before * 0.88) {
+        scene.undo();
+        if (++perf.miss >= 2) perf.more = false;
+      } else perf.miss = 0;
+      perf.before = 0;
+    } else if (avg > 1 / 45) {
+      if (scene.degrade()) perf.before = avg;
+      else perf.more = false;
+    }
     Object.assign(perf, { since: now, frames: 0, time: 0 });
   }
 

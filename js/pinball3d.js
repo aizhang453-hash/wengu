@@ -14,7 +14,8 @@ const Z = (y) => (y - H / 2) * S;
 
 export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   const low = quality === 'low';
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !low, powerPreference: 'high-performance' });
+  // (画面是画到后期的 EffectComposer 里再贴到屏幕上的, 抗锯齿在那边做, 这里不用)
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
   renderer.shadowMap.enabled = true;
@@ -77,7 +78,8 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
 
   // ---- 台面 ----
   const art = document.createElement('canvas');
-  const k = low ? 1.6 : 3.2; // 贴图一个台面单位几个像素
+  // 贴图一个台面单位几个像素: 手机屏幕一般一千多像素宽, 贴图要比屏幕上的台面还细才不糊 (也不能超过显卡能用的最大贴图)
+  const k = Math.min(low ? 2.6 : 3.4, renderer.capabilities.maxTextureSize / H);
   art.width = Math.round(W * k);
   art.height = Math.round(H * k);
   const actx = art.getContext('2d');
@@ -1130,7 +1132,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   }
 
   // ---- 后期: 发光 ----
-  const composer = new THREE.EffectComposer(renderer);
+  // 后期画面用多重采样 (MSAA) 抗锯齿: 边上不会一格一格的
+  const samples = renderer.capabilities.isWebGL2 ? 4 : 0;
+  const composer = new THREE.EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples }));
   composer.addPass(new THREE.RenderPass(scene, camera));
   const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), low ? 0.5 : 0.6, 0.35, 0.95);
   composer.addPass(bloom);
@@ -1141,8 +1145,8 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   //   「跟着球」: 低一点、近一点, 宽度放得下, 镜头跟着最下面那个球上下走 (到头了就停)
   let width = 1;
   let height = 1;
-  let maxRatio = low ? 1.5 : 2;
-  let level = 0; // 画面降了几级 (太卡的时候)
+  let maxRatio = 2; // 最多按 2 倍像素画 (3 倍屏的手机放大 1.5 倍, 看不太出来)
+  let level = 0; // 太卡的时候试到第几级了
   let follow = true;
   let view = null; // { pitch, dist, lookZ, zTop, zBot }
   const camState = { z: 0, shake: 0 };
@@ -1240,15 +1244,26 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     }
   }
 
-  // 太卡了: 一级一级降 (像素 → 影子 → 发光), 降到头返回 false
+  // 太卡了一级一级降: 先降看不太出来的 (影子 → 发光), 最后才降像素 (最低 1.5 倍, 再低就糊了);
+  // 每一级都能退回来 (页面那边降了不见快, 就退回来试下一级)
+  const setRatio = (r) => {
+    maxRatio = r;
+    resize(width, height);
+  };
+  const STEPS = [
+    [() => (key.castShadow = false), () => (key.castShadow = true)],
+    [() => (bloom.enabled = false), () => (bloom.enabled = true)],
+    [() => setRatio(1.5), () => setRatio(2)],
+  ];
+  // 试下一级, 试了返回 true (都试过了返回 false)
   function degrade() {
-    level++;
-    if (level === 1) {
-      maxRatio = 1;
-      resize(width, height);
-    } else if (level === 2) key.castShadow = false;
-    else if (level === 3) bloom.enabled = false;
-    return level < 3;
+    if (level >= STEPS.length) return false;
+    STEPS[level++][0]();
+    return true;
+  }
+  // 刚试的那一级退回来
+  function undo() {
+    if (level > 0) STEPS[level - 1][1]();
   }
 
   // ---- 每帧 ----
@@ -1435,6 +1450,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     render,
     resize,
     degrade,
+    undo,
     setFollow(on) {
       follow = on;
       fitView();
