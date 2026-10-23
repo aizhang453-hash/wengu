@@ -42,7 +42,7 @@ import {
 
 const PREFS_KEY = 'wengu:pet';
 // 出来的页面
-const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'search', 'games', 'sync']);
+const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'search', 'games', 'sync', 'arcade']);
 const QUOTE_EVERY = [6 * 60e3, 12 * 60e3]; // 自己念《论语》: 隔 6–12 分钟一次
 
 // 这台设备上的: hidden 不显示, quiet 不自己说话, mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」,

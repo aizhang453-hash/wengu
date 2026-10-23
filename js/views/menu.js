@@ -1,5 +1,5 @@
 // 左边的菜单: 顶上的 ☰ 点开, 所有地方都在这里 ——
-// 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 游戏、新建、导入、题目集; 你的文件夹; 多设备同步、小乌龟温温
+// 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 学习游戏、新建、导入、题目集; 你的文件夹; 游戏厅; 多设备同步、小乌龟温温
 
 import { h, icon } from '../dom.js';
 import { todayAll } from './plan.js';
@@ -74,7 +74,7 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         item('#/mistakes', 'book', '错题集', { badge: mistakes, match: starts('#/mistakes') }),
         sep(),
         title('学习、新建'),
-        item('#/games', 'game', '游戏', { match: starts('#/games') }),
+        item('#/games', 'game', '学习游戏', { sub: '拿卡片集玩', match: starts('#/games') }),
         item('#/new', 'plus', '新建卡片集'),
         item('#/import', 'import', '导入'),
         item('#/new-quiz', 'quiz', '新建题目集', { sub: '选择题、判断题, 限时答' }),
@@ -94,6 +94,9 @@ export function setupMenu({ store, go, syncer, pet = null }) {
           icon('plus', 22),
           h('span', { class: 'menu-text' }, '新文件夹'),
         ),
+        sep(),
+        title('休息一下'),
+        item('#/arcade', 'arcade', '游戏厅', { sub: '弹珠台', match: starts('#/arcade') }),
         sep(),
         item('#/sync', 'cloud', syncText, { match: starts('#/sync') }),
         pet

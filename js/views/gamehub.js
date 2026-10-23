@@ -25,13 +25,13 @@ export function renderGames({ store }, key = null) {
 
   const hasSets = store.allSets().some((s) => s.kind !== 'quiz');
   return {
-    title: '游戏',
+    title: '学习游戏',
     el: h(
       'section',
       { class: 'games-hub' },
       h('a', { class: 'back', href: '#/' }, '← 主页'),
-      h('h1', {}, '🎮 游戏'),
-      h('p', { class: 'muted' }, '挑一个游戏, 再挑拿哪个卡片集来玩。'),
+      h('h1', {}, '🎮 学习游戏'),
+      h('p', { class: 'muted' }, '挑一个游戏, 再挑拿哪个卡片集来玩。学累了想玩别的? 去 ', h('a', { href: '#/arcade' }, '游戏厅'), '。'),
       tabs,
       h('h2', { class: 'games-title' }, `拿哪个卡片集玩「${g.name}」`),
       hasSets

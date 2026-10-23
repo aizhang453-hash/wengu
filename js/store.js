@@ -6,6 +6,7 @@ import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, hi
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
 import { cleanPet, mergePet, bankDays } from './pet.js';
+import { cleanArcade, mergeArcade, addScore } from './arcade.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -27,10 +28,11 @@ export function newId() {
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
 // undone: 撤销了的复习记录 (跟 revlog 一样存), 同步时别从另一台设备又合回来; 留 120 天
 // pet: 小乌龟温温 (pet.js), 还没见过是 null
+// arcade: 游戏厅的成绩 (arcade.js), 没玩过是 null
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null };
+  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -249,6 +251,7 @@ export function cleanData(raw) {
   data.revlog = subtractLogs(revlog, data.undone);
   data.settings = cleanSettings(raw?.settings);
   data.pet = cleanPet(raw?.pet);
+  data.arcade = cleanArcade(raw?.arcade);
   if (raw && Array.isArray(raw.mistakes)) {
     const seen = new Set();
     for (const m of raw.mistakes) {
@@ -932,6 +935,14 @@ export class Store {
     for (const k of gone) delete this.data.activity[k];
   }
 
+  // 游戏厅玩完一局: 记成绩 (最高的 5 次)。返回 { rank 排第几 (前 5 以外是 0), best 破纪录了没有 }
+  recordArcade(key, score, now = Date.now()) {
+    const { arcade, rank, best } = addScore(this.data.arcade, key, score, now);
+    this.data.arcade = arcade;
+    this.save();
+    return { rank, best };
+  }
+
   // 温温: 改名字、换装扮 (stamp: 记下改的时间, 同步时听后改的); 解锁、长大、庆祝过的直接合
   updatePet(patch, { stamp = false, now = Date.now() } = {}) {
     const old = this.data.pet ?? cleanPet({});
@@ -1037,6 +1048,7 @@ export class Store {
     this.data.revlog = subtractLogs(mergeLogs(this.data.revlog, incoming.revlog), this.data.undone);
     this.data.settings = mergeSettings(this.data.settings, incoming.settings);
     this.data.pet = mergePet(this.data.pet, incoming.pet);
+    this.data.arcade = mergeArcade(this.data.arcade, incoming.arcade);
     this.applyParameters({ recompute: true });
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
