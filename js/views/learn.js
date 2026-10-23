@@ -3,7 +3,7 @@
 // 卡片多的 (从 Anki 搬来的上千张) 不一下全学: 「学哪些」选接着学 N 个 / 今天的新词 / 星标的 / 全部 (scope.js)
 
 import { h, fill, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
-import { speak, canSpeak, canSay, sayCard, stopSpeaking } from '../speech.js';
+import { speak, canSpeak, canSay, sayCard, stopSpeaking, setLang } from '../speech.js';
 import { rich, cardImage, sayButton } from '../cardview.js';
 import { otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
@@ -260,9 +260,9 @@ export function renderLearn({ store }, id) {
 
   // ---- 一道题 ----
   // 不是这张卡片自己的字 (判断题给的答案), 只能朗读
-  function speakBtn(text, lang) {
+  function speakBtn(text, lang, side) {
     return canSpeak() && text.trim()
-      ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: (e) => (e.stopPropagation(), speak(text, lang)) }, '🔊')
+      ? h('button', { class: 'icon-btn', title: '朗读', 'aria-label': '朗读', onclick: (e) => (e.stopPropagation(), speak(text, lang, { hint: lang === 'auto' ? setLang(set, side) : null })) }, '🔊')
       : null;
   }
 
@@ -405,7 +405,7 @@ export function renderLearn({ store }, id) {
           { class: 'tf-shown' },
           h('span', { class: 'muted small' }, answerName),
           h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)'),
-          speakBtn(q.shown, answerLang),
+          speakBtn(q.shown, answerLang, q.side === 'def' ? 'def' : 'term'),
         ),
         h('div', { class: 'options-grid two' }, tfButtons),
       );

@@ -91,7 +91,10 @@ test('Quizlet: 找不到就是空的', () => {
 test('语言代码: Quizlet 的 en、es、zh-TW 换成温故有的', () => {
   assert.equal(normalizeLang('en'), 'en-US');
   assert.equal(normalizeLang('es'), 'es-ES');
-  assert.equal(normalizeLang('zh-TW'), 'zh-CN');
+  assert.equal(normalizeLang('zh-TW'), 'zh-TW');
+  assert.equal(normalizeLang('zh'), 'zh-CN');
+  assert.equal(normalizeLang('pt'), 'pt-BR');
+  assert.equal(normalizeLang('es_MX'), 'es-MX');
   assert.equal(normalizeLang('ja-JP'), 'ja-JP');
   assert.equal(normalizeLang('chem'), 'auto');
   assert.equal(normalizeLang(''), 'auto');

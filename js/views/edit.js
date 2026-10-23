@@ -6,7 +6,7 @@ import { makeSet, makeCard, makeFolder, FOLDER_PREFIX } from '../store.js';
 import { deckFolders } from '../cardfile.js';
 import { planOf, newSeed } from '../plan.js';
 import { parseCards, guessTermSep, guessCardSep } from '../parse.js';
-import { LANGS } from '../speech.js';
+import { LANGS, guessLangOf } from '../speech.js';
 import { MARKS, toggleMark } from '../rich.js';
 import { putMedia, mediaURL, shrinkImage, cleanMedia } from '../media.js';
 import { canRecord, record } from '../recorder.js';
@@ -64,6 +64,21 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     );
   const termLang = langSelect(draft.termLang);
   const defLang = langSelect(draft.defLang);
+  // 「自动」后面写着按现在的卡片猜是什么语言 (单看一个词常看不出来, 看整个卡片集)
+  function drawAutoLangs() {
+    for (const [select, key] of [
+      [termLang, 'termEl'],
+      [defLang, 'defEl'],
+    ]) {
+      const texts = rows.slice(0, 400).map((r) => r[key].value);
+      const name = texts.some((t) => t.trim()) ? LANGS.find(([code]) => code === guessLangOf(texts))?.[1] : null;
+      select.options[0].textContent = name ? `自动 (像是${name.replace(/ \(.*\)$/, '')})` : '自动';
+    }
+  }
+  for (const select of [termLang, defLang]) {
+    select.addEventListener('focus', drawAutoLangs);
+    select.addEventListener('pointerdown', drawAutoLangs);
+  }
   // 每天背新词时先背哪些 (plan.js): 照卡片的顺序 (导入的就是文件里的顺序), 或者打乱
   const orderSel = h('select', { class: 'input', onchange: markDirty }, h('option', { value: 'set' }, '按卡片的顺序'), h('option', { value: 'random' }, '随机'));
   orderSel.value = planOf(draft).order;
@@ -469,6 +484,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   document.addEventListener('keydown', onEsc);
 
   for (const card of draft.cards) addRow(card, { grow: false });
+  drawAutoLangs();
   // 新建时先给几行空的
   while (rows.length < (existing ? 1 : 3)) addRow();
   buildDiagram();
