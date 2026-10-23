@@ -1,7 +1,7 @@
-// 游戏厅: 学累了玩一会儿的正经游戏 (不是拿卡片集玩的那种)。现在有弹珠台。
+// 游戏厅: 学累了玩一会儿的正经游戏 (不是拿卡片集玩的那种)。现在有弹珠台「星际远航」。
 // 成绩: data.arcade = { pinball: { top: [{ score, at }] 最高的 5 次 } }; 同步、备份时两边的合起来
 
-export const ARCADE = [{ key: 'pinball', name: '弹珠台', hint: '三个球, 打亮「温故而知新」', href: '#/arcade/pinball' }];
+export const ARCADE = [{ key: 'pinball', name: '星际远航 · 弹珠台', hint: '3D 太空弹珠台: 曲速坡道、黑洞、做任务升军衔、三个球一起玩', href: '#/arcade/pinball' }];
 const KEYS = new Set(ARCADE.map((g) => g.key));
 export const TOP_N = 5;
 
