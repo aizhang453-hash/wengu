@@ -5,7 +5,7 @@
 //   镜头: 横着的屏幕跟着球上下走; 竖着的屏幕从上面看整张台
 
 import { W, H, BALL_R, LANE_X, CHAPTERS, WARP_MAX } from './pinball.js';
-import { paintPlayfield, INSERTS, insertPath, AIM } from './pinart.js';
+import { paintPlayfield, INSERTS, insertPath, AIM, COLORS } from './pinart.js';
 
 const S = 0.01;
 const X = (x) => (x - W / 2) * S;
@@ -20,15 +20,15 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x03030c);
+  scene.background = new THREE.Color(0x02040b);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.28;
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
 
   // ---- 灯光 ----
-  scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x1a0b2e, 0.35));
-  const key = new THREE.DirectionalLight(0xfff4e8, 1.5);
+  scene.add(new THREE.HemisphereLight(0xa8c4ff, 0x0a1020, 0.38));
+  const key = new THREE.DirectionalLight(0xf2f6ff, 1.5);
   key.position.set(1.8, 9, 5);
   key.target.position.set(0, 0, -0.5);
   key.castShadow = true;
@@ -38,9 +38,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   key.shadow.normalBias = 0.02;
   key.shadow.radius = 3;
   scene.add(key, key.target);
-  const pink = new THREE.PointLight(0xff3fb0, 3, 7, 1.6);
+  const pink = new THREE.PointLight(0x3a6dff, 2.2, 7, 1.6); // 左上: 深一点的蓝
   pink.position.set(-2.2, 1.6, -3);
-  const cyan = new THREE.PointLight(0x3fd8ff, 3, 7, 1.6);
+  const cyan = new THREE.PointLight(0x9fd4ff, 2.6, 7, 1.6); // 右下: 浅的冰蓝
   cyan.position.set(2.3, 1.4, 1.2);
   scene.add(pink, cyan);
 
@@ -48,19 +48,19 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   const M = {
     chrome: new THREE.MeshStandardMaterial({ color: 0xc4ccdc, metalness: 1, roughness: 0.2 }),
     darkMetal: new THREE.MeshStandardMaterial({ color: 0x1c2040, metalness: 0.7, roughness: 0.35 }),
-    cabinet: new THREE.MeshStandardMaterial({ color: 0x150d33, metalness: 0.4, roughness: 0.5 }),
+    cabinet: new THREE.MeshStandardMaterial({ color: 0x0c1222, metalness: 0.4, roughness: 0.5 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0xcfcfd6, roughness: 0.6 }),
-    rubberRed: new THREE.MeshStandardMaterial({ color: 0xd8203f, roughness: 0.5 }),
+    rubberRed: new THREE.MeshStandardMaterial({ color: 0x23262f, roughness: 0.55 }), // (挡板的橡皮: 黑的)
     flipper: new THREE.MeshPhysicalMaterial({ color: 0xd8dae4, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
-    slingPlastic: new THREE.MeshPhysicalMaterial({ color: 0xff3d9a, roughness: 0.15, transparent: true, opacity: 0.85, clearcoat: 1, emissive: 0xff1e8a, emissiveIntensity: 0.15 }),
-    rampPlastic: new THREE.MeshPhysicalMaterial({ color: 0x6fe7ff, roughness: 0.08, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 }),
-    throat: new THREE.MeshPhysicalMaterial({ color: 0x6fe7ff, roughness: 0.1, transparent: true, opacity: 0.55, clearcoat: 1 }),
+    slingPlastic: new THREE.MeshPhysicalMaterial({ color: 0x24448a, roughness: 0.15, transparent: true, opacity: 0.85, clearcoat: 1, emissive: 0x4a8aff, emissiveIntensity: 0.15 }),
+    rampPlastic: new THREE.MeshPhysicalMaterial({ color: 0xb4dcff, roughness: 0.08, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false, clearcoat: 1 }),
+    throat: new THREE.MeshPhysicalMaterial({ color: 0xb4dcff, roughness: 0.1, transparent: true, opacity: 0.55, clearcoat: 1 }),
     ball: new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.08, envMapIntensity: 3.2 }),
     rock: new THREE.MeshStandardMaterial({ color: 0x8c7b6b, roughness: 0.95, metalness: 0.05, flatShading: true }),
-    drop: new THREE.MeshPhysicalMaterial({ color: 0xffd54d, roughness: 0.3, clearcoat: 1, emissive: 0xffb000, emissiveIntensity: 0.1 }),
-    target: new THREE.MeshPhysicalMaterial({ color: 0xff5a3d, roughness: 0.3, clearcoat: 1, emissive: 0xff3000, emissiveIntensity: 0.1 }),
-    led: new THREE.MeshBasicMaterial({ color: new THREE.Color(0x3fd8ff).multiplyScalar(2), toneMapped: false }),
-    ledPink: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3fb0).multiplyScalar(2), toneMapped: false }),
+    drop: new THREE.MeshPhysicalMaterial({ color: 0xdfe8f5, roughness: 0.3, clearcoat: 1, emissive: 0x7fd0ff, emissiveIntensity: 0.1 }),
+    target: new THREE.MeshPhysicalMaterial({ color: 0xffb44d, roughness: 0.3, clearcoat: 1, emissive: 0xff9a20, emissiveIntensity: 0.1 }),
+    led: new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd0ff).multiplyScalar(2), toneMapped: false }),
+    ledPink: new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd0ff).multiplyScalar(2), toneMapped: false }),
   };
 
   const meshes = []; // 都放这, 关的时候一起扔掉
@@ -177,22 +177,22 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     c.height = 128;
     const g = c.getContext('2d');
     const bg = g.createLinearGradient(0, 0, 0, 128);
-    bg.addColorStop(0, '#261750');
-    bg.addColorStop(1, '#0b0820');
+    bg.addColorStop(0, '#13203f');
+    bg.addColorStop(1, '#060a16');
     g.fillStyle = bg;
     g.fillRect(0, 0, 1024, 128);
     g.font = '900 40px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.shadowColor = '#ff9b3d';
+    g.shadowColor = '#7fd0ff';
     g.shadowBlur = 18;
-    g.fillStyle = '#ffe3a8';
+    g.fillStyle = '#e8f2ff';
     g.fillText('星 际 远 航', 512, 60);
     g.shadowBlur = 0;
     g.font = '800 22px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
-    g.fillStyle = '#9dffb6';
+    g.fillStyle = '#9fd4ff';
     g.fillText('护 盾', 248, 34);
-    g.fillStyle = '#9fe8ff';
+    g.fillStyle = '#9fd4ff';
     g.fillText('任 务 · 危 机', 776, 34);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -207,7 +207,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     g.position.set(X(b.x), 0, Z(b.y));
     const base = new THREE.Mesh(new THREE.CylinderGeometry(b.r * S, b.r * S + 0.01, 0.05, 32), M.darkMetal);
     base.position.y = 0.025;
-    const color = [0xffb03d, 0x3fe0ff, 0xff5ec8][i];
+    const color = [0x7fd0ff, 0xa8e0ff, 0x6ab0ff][i];
     const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), toneMapped: false, transparent: true, opacity: 0.9 });
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(b.r * S + 0.01, b.r * S + 0.01, 0.1, 32, 1, true), ringMat);
     ring.position.y = 0.11;
@@ -272,7 +272,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   const sp = table.spinner;
   const spinner = new THREE.Group();
   spinner.position.set(X((sp.ax + sp.bx) / 2), 0.2, Z(sp.y));
-  const plate = new THREE.Mesh(new THREE.BoxGeometry((sp.bx - sp.ax) * S * 0.85, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0xffcf5e, metalness: 0.9, roughness: 0.25 }));
+  const plate = new THREE.Mesh(new THREE.BoxGeometry((sp.bx - sp.ax) * S * 0.85, 0.16, 0.012), new THREE.MeshStandardMaterial({ color: 0xc8d2e4, metalness: 0.9, roughness: 0.25 }));
   spinner.add(shadow(plate));
   add(spinner);
   for (const x of [sp.ax + 3, sp.bx - 3]) post(x, sp.y, { r: 0.012, h: 0.28 });
@@ -320,7 +320,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
 
   // ---- 对接坡道: 金色的铁丝坡道 (下面两根托着球, 两边各一根拦着), 一圈一圈的箍, 几根柱子 ----
   {
-    const gold = new THREE.MeshStandardMaterial({ color: 0xe0b86a, metalness: 1, roughness: 0.22 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xc8d0de, metalness: 1, roughness: 0.2 }); // (铁丝: 镀铬的)
     const pts = table.ramps[1].path.pts.map((p) => new THREE.Vector3(X(p[0]), p[2] * S + BALL_R * S, Z(p[1])));
     const up = new THREE.Vector3(0, 1, 0);
     const frames = pts.map((c, i) => {
@@ -373,12 +373,13 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       const g = c.getContext('2d');
       g.fillStyle = '#141a33';
       g.fillRect(0, 0, 256, 48);
-      g.fillStyle = '#ffcf5e';
-      for (let x = 0; x < 256; x += 24) g.fillRect(x, 0, 12, 5), g.fillRect(x + 12, 43, 12, 5);
+      g.fillStyle = '#7fd0ff';
+      g.fillRect(0, 0, 256, 3);
+      g.fillRect(0, 45, 256, 3);
       g.font = '900 28px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillStyle = '#ffe9b0';
+      g.fillStyle = '#e8f2ff';
       g.fillText('对 接 舱', 128, 25);
       const t = new THREE.CanvasTexture(c);
       t.colorSpace = THREE.SRGBColorSpace;
@@ -388,7 +389,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     beam.position.set(0, 0.66, 0);
     gantry.add(shadow(beam));
     for (let i = 0; i < 6; i++) {
-      const l = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), glowMat(0xffcf5e, 2));
+      const l = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), glowMat(0x7fd0ff, 2));
       l.position.set(-0.4 + i * 0.16, 0.59, 0.045);
       gantry.add(l);
       gantryLights.push(l);
@@ -413,16 +414,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     bg.addColorStop(1, '#140a36');
     g.fillStyle = bg;
     g.fillRect(0, 0, c.width, c.height);
-    // 一圈警戒线、几颗星、字
-    g.fillStyle = 'rgba(255,210,60,0.75)';
-    for (let x = -c.height; x < c.width; x += 18) {
-      g.beginPath();
-      g.moveTo(x, 10);
-      g.lineTo(x + 9, 10);
-      g.lineTo(x + 19, 0);
-      g.lineTo(x + 10, 0);
-      g.fill();
-    }
+    // 上边一条亮线、几颗星、字
+    g.fillStyle = 'rgba(127,208,255,0.85)';
+    g.fillRect(0, 0, c.width, 4);
     g.fillStyle = 'rgba(255,255,255,0.8)';
     for (let i = 0; i < 30; i++) g.fillRect(((i * 97) % c.width), 14 + ((i * 53) % (c.height - 16)), 1.5, 1.5);
     if (text) {
@@ -470,15 +464,15 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   table.slingShapes.forEach((tri, i) => {
     const cx = tri.reduce((n, p) => n + p[0], 0) / 3;
     const cy = tri.reduce((n, p) => n + p[1], 0) / 3;
-    plastic(tri.map(([x, y]) => [cx + (x - cx) * 1.12, cy + (y - cy) * 1.12]), i ? '#c2187e' : '#2a64d8', i ? '海盗' : '护航');
+    plastic(tri.map(([x, y]) => [cx + (x - cx) * 1.12, cy + (y - cy) * 1.12]), '#24448a', i ? '远航' : '护航');
   });
   // 两边回球道的导轨上面
-  plastic([[30, 640], [64, 640], [64, 690], [44, 720], [30, 720]], '#7b3dff', '');
-  plastic([[mx(30), 640], [mx(64), 640], [mx(64), 690], [mx(44), 720], [mx(30), 720]].reverse(), '#7b3dff', '');
+  plastic([[30, 640], [64, 640], [64, 690], [44, 720], [30, 720]], '#1c3670', '');
+  plastic([[mx(30), 640], [mx(64), 640], [mx(64), 690], [mx(44), 720], [mx(30), 720]].reverse(), '#1c3670', '');
   // 星座靶上面 (靠墙一条)
-  plastic([[20, 424], [44, 424], [44, 600], [20, 600]], '#b38a1a', '星座', { y: 0.34 });
+  plastic([[20, 424], [44, 424], [44, 600], [20, 600]], '#1c3670', '星座', { y: 0.34 });
   // 顶上通道上面一块弯的
-  plastic([[205, 86], [395, 86], [380, 100], [220, 100]], '#1a6a8a', '', { y: 0.27, depth: 0.02 });
+  plastic([[205, 86], [395, 86], [380, 100], [220, 100]], '#1c3670', '', { y: 0.27, depth: 0.02 });
   add(new THREE.Mesh(THREE.mergeGeometries(plasticPosts), M.chrome));
 
   // ---- 远航号: 飘在台面顶上, 船身、转着的冬眠舱环、太阳能板、发动机的光 ----
@@ -524,7 +518,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     const dish = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 12, 0, Math.PI * 2, 0, Math.PI / 3.2), new THREE.MeshStandardMaterial({ color: 0xe8ecf4, metalness: 0.4, roughness: 0.4, side: THREE.DoubleSide }));
     dish.rotation.x = Math.PI * 0.62;
     dish.position.y = 0.5;
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), glowMat(0xff4060, 2.5));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), glowMat(0xe8f2ff, 2.5));
     tip.position.set(0, 0.56, 0.12);
     radar.add(shadow(pole), shadow(dish), tip);
     radar.userData.dish = dish;
@@ -536,17 +530,17 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   // ---- 左下的维修机器人: 站在机柜边上, 眼睛会闪, 打中东西的时候挥手 ----
   const robot = new THREE.Group();
   {
-    const body = new THREE.MeshStandardMaterial({ color: 0xe8a23a, metalness: 0.5, roughness: 0.45 });
+    const body = new THREE.MeshStandardMaterial({ color: 0xd0d6e2, metalness: 0.5, roughness: 0.45 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x2b2f3d, metalness: 0.6, roughness: 0.5 });
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.14), body);
     torso.position.y = 0.26;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.12), body);
     head.position.y = 0.44;
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.01), glowMat(0x38e8ff, 2.4));
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.025, 0.01), glowMat(0x7fd0ff, 2.4));
     eye.position.set(0, 0.45, 0.065);
     const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.1, 6), dark);
     antenna.position.set(0.04, 0.54, 0);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), glowMat(0xff4060, 2.4));
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), glowMat(0x7fd0ff, 2.4));
     bulb.position.set(0.04, 0.6, 0);
     const legs = [-1, 1].map((k) => {
       const l = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.08), dark);
@@ -580,7 +574,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       const t = Math.random();
       const a = t * Math.PI * 8 + Math.random() * 0.4;
       const r = 40 + t * 80;
-      g.fillStyle = `hsla(${20 + Math.random() * 40}, 100%, ${55 + Math.random() * 25}%, ${0.5 * (1 - t) + 0.1})`;
+      g.fillStyle = `hsla(${200 + Math.random() * 25}, 80%, ${70 + Math.random() * 20}%, ${0.5 * (1 - t) + 0.1})`;
       g.beginPath();
       g.arc(Math.cos(a) * r, Math.sin(a) * r, 1 + Math.random() * 2.5, 0, Math.PI * 2);
       g.fill();
@@ -591,7 +585,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   const disk = add(new THREE.Mesh(new THREE.RingGeometry(0.16, 0.52, 48), diskMat));
   disk.rotation.x = -Math.PI / 2;
   disk.position.set(X(ho.x), 0.004, Z(ho.y));
-  const rim = add(new THREE.Mesh(new THREE.TorusGeometry(ho.r * S + 0.02, 0.018, 10, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff9b3d).multiplyScalar(1.6), toneMapped: false })));
+  const rim = add(new THREE.Mesh(new THREE.TorusGeometry(ho.r * S + 0.02, 0.018, 10, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xbfe4ff).multiplyScalar(1.5), toneMapped: false })));
   rim.rotation.x = Math.PI / 2;
   rim.position.set(X(ho.x), 0.01, Z(ho.y));
   const ufo = new THREE.Group();
@@ -601,7 +595,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshPhysicalMaterial({ color: 0x88f0ff, transparent: true, opacity: 0.55, roughness: 0.05, clearcoat: 1 }));
     dome.position.y = 0.13;
     ufo.add(shadow(hull), dome);
-    const lightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7dffb0).multiplyScalar(2), toneMapped: false });
+    const lightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd0ff).multiplyScalar(2), toneMapped: false });
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       const l = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), lightMat);
@@ -613,12 +607,12 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   ufo.position.set(X(ho.x), 0.75, Z(ho.y));
   ufo.scale.setScalar(0.8);
   add(ufo);
-  const beam = add(new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.7, 32, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7dffb0), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })));
+  const beam = add(new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.7, 32, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x9fd4ff), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })));
   beam.position.set(X(ho.x), 0.37, Z(ho.y));
 
   // 顶上三个虫洞
   const wormholes = table.wormholes.map((w) => {
-    const m = add(new THREE.Mesh(new THREE.RingGeometry(0.06, 0.16, 32), new THREE.MeshBasicMaterial({ map: diskTex, color: new THREE.Color(0xb07dff), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })));
+    const m = add(new THREE.Mesh(new THREE.RingGeometry(0.06, 0.16, 32), new THREE.MeshBasicMaterial({ map: diskTex, color: new THREE.Color(0x9fd4ff), transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })));
     m.rotation.x = -Math.PI / 2;
     m.position.set(X(w.x), 0.006, Z(w.y));
     return m;
@@ -632,13 +626,13 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     c.height = 128;
     const g = c.getContext('2d');
     for (let y = 0; y < 128; y += 4) {
-      g.fillStyle = `hsl(${25 + Math.sin(y * 0.3) * 12}, 70%, ${40 + Math.sin(y * 0.17) * 15}%)`;
+      g.fillStyle = `hsl(${215 + Math.sin(y * 0.3) * 10}, 18%, ${48 + Math.sin(y * 0.17) * 14}%)`;
       g.fillRect(0, y, 256, 4);
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.32, 32, 20), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 48), new THREE.MeshStandardMaterial({ color: 0xe8d2a8, transparent: true, opacity: 0.7, side: THREE.DoubleSide, roughness: 0.6 }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 48), new THREE.MeshStandardMaterial({ color: 0xc8d2e4, transparent: true, opacity: 0.7, side: THREE.DoubleSide, roughness: 0.6 }));
     ring.rotation.x = Math.PI / 2.4;
     planet.add(shadow(ball, true, false), ring);
   }
@@ -655,7 +649,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       coil.push(new THREE.Vector3(Math.cos(a) * 0.07, 0.1 + Math.sin(a) * 0.07, (i / 80) * 0.3));
     }
     const spring = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 200, 0.008, 6), M.chrome);
-    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 20), new THREE.MeshStandardMaterial({ color: 0xe04f5f, roughness: 0.4 }));
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.06, 20), new THREE.MeshStandardMaterial({ color: 0x5a78b8, roughness: 0.4, metalness: 0.4 }));
     tip.rotation.x = Math.PI / 2;
     tip.position.set(0, 0.1, 0);
     plunger.add(spring, tip);
@@ -792,9 +786,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     // 黑洞潮汐: 黑球, 外面一圈紫光, 斜着一个吸积环
     const g = new THREE.Group();
     const hole = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 20), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    const rim = new THREE.Mesh(new THREE.SphereGeometry(0.42, 32, 20), glowMat(0x9b5cff, 1.6, 0.35));
+    const rim = new THREE.Mesh(new THREE.SphereGeometry(0.42, 32, 20), glowMat(0xbfe0ff, 1.6, 0.35));
     rim.material.side = THREE.BackSide;
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.95, 64), new THREE.MeshBasicMaterial({ map: diskTex, color: new THREE.Color(0xd0a0ff).multiplyScalar(1.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.95, 64), new THREE.MeshBasicMaterial({ map: diskTex, color: new THREE.Color(0xbfe0ff).multiplyScalar(1.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2 + 0.45;
     g.add(hole, rim, ring);
     bossModels.void = { g, mats: [], spin: (dt) => (ring.rotation.z -= dt * 1.5) };
@@ -847,11 +841,12 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
 
   // 每章的颜色 (台面、两盏彩灯、两边的灯条、背景), 终章金色
   const PALETTES = [
-    { floor: 0xe6eeff, a: 0x3fd8ff, b: 0xb07dff, bg: 0x02030c },
-    { floor: 0xffe8de, a: 0xff8a3d, b: 0xff3f7a, bg: 0x0a0306 },
-    { floor: 0xdcffea, a: 0x3dffa8, b: 0x3fd8ff, bg: 0x020a07 },
-    { floor: 0xeadcff, a: 0xb07dff, b: 0xff3fb0, bg: 0x06020d },
-    { floor: 0xfff2da, a: 0xffd84d, b: 0xff9b3d, bg: 0x0a0702 },
+    // (四章都是冷色的太空, 只有终章「曙光」暖一点; 颜色差一点点, 不要乱)
+    { floor: 0xeef3ff, a: 0x9fd4ff, b: 0x3a6dff, bg: 0x02040b },
+    { floor: 0xf0f2ff, a: 0xa8d0ff, b: 0x4a64ff, bg: 0x03040c },
+    { floor: 0xecf6ff, a: 0x9fe0ff, b: 0x3a80ff, bg: 0x02060b },
+    { floor: 0xeef0ff, a: 0xb4c8ff, b: 0x4a5aff, bg: 0x03030b },
+    { floor: 0xfff7ee, a: 0xffe2b8, b: 0x7fb0ff, bg: 0x050608 },
   ].map((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, new THREE.Color(v)])));
   const ledA = M.led.color;
   const ledB = M.ledPink.color;
@@ -926,9 +921,9 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   deck.receiveShadow = true;
   // 台子周围一圈黄黑的停机线
   const stripeTex = canvasTex(256, 32, (g, w, h) => {
-    g.fillStyle = '#16130a';
+    g.fillStyle = '#0d121e';
     g.fillRect(0, 0, w, h);
-    g.fillStyle = '#e8b430';
+    g.fillStyle = '#4a6494';
     for (let x = -h; x < w; x += 32) {
       g.beginPath();
       g.moveTo(x, h);
@@ -953,7 +948,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     g.fillRect(0, 0, w, h);
     g.strokeStyle = 'rgba(120,140,220,0.35)';
     for (let x = 0; x < w; x += 128) g.strokeRect(x + 2, 6, 124, h - 12);
-    g.fillStyle = '#e8b430';
+    g.fillStyle = '#7fd0ff';
     g.fillRect(0, h - 8, w, 4);
     g.font = '900 58px "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
     g.textBaseline = 'middle';
@@ -992,7 +987,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       g.textAlign = 'center';
       g.fillText(label, w / 2, h / 2 + 15);
     });
-  const crateMats = [crateTex('补给', '#5a6a3a'), crateTex('种子', '#6a4a2a'), crateTex('氧气', '#2a4a6a')].map((map) => new THREE.MeshStandardMaterial({ map, roughness: 0.8 }));
+  const crateMats = [crateTex('补给', '#3a4a66'), crateTex('种子', '#46526e'), crateTex('氧气', '#2e3c58')].map((map) => new THREE.MeshStandardMaterial({ map, roughness: 0.8 }));
   for (const [x, y, z, size, k, rot] of [[-4.6, 0, 2.4, 0.9, 0, 0.1], [-4.6, 0.9, 2.5, 0.8, 1, -0.2], [-5.7, 0, 3.0, 0.9, 2, 0.4], [-4.8, 0, 4.4, 0.6, 1, 0.8], [4.6, 0, -3.2, 0.8, 2, -0.3], [5.4, 0, -2.6, 0.6, 0, 0.5]]) {
     const c = add(shadow(new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMats[k])));
     c.position.set(x, FLOOR + y + size / 2, z);
@@ -1000,7 +995,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   }
   // 燃料罐: 躺着的两个, 有红色的箍
   const tankMat = new THREE.MeshStandardMaterial({ color: 0xc8ccd6, metalness: 0.7, roughness: 0.3 });
-  const bandMat = new THREE.MeshStandardMaterial({ color: 0xc0283a, roughness: 0.5 });
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0x3a5a9a, roughness: 0.5 });
   for (const z of [-1.4, -0.4]) {
     const tank = add(shadow(new THREE.Mesh(new THREE.CapsuleGeometry(0.38, 1.4, 6, 16), tankMat)));
     tank.rotation.z = Math.PI / 2;
@@ -1048,7 +1043,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     frame.rotation.x = -0.35;
     consoleGroup.add(shadow(desk), shadow(frame), screen);
     for (let i = 0; i < 8; i++) {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.08), glowMat([0xff4060, 0x3dffa8, 0xffd84d][i % 3], 2));
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.08), glowMat([0x7fd0ff, 0xe8f2ff, 0x7fd0ff][i % 3], 2));
       b.position.set(-0.6 + i * 0.17, 0.76, 0.2);
       consoleGroup.add(b);
     }
@@ -1113,7 +1108,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     const track = add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.02, 0.12), M.darkMetal));
     const x = k ? X(418) : X(142);
     track.position.set(x, 0.125, Z(1034));
-    const fillMat = glowMat(k ? 0x3fd8ff : 0x6cff8f, 2);
+    const fillMat = glowMat(0x7fd0ff, 2);
     const fill = add(new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.025, 0.08), fillMat));
     fill.position.set(x, 0.13, Z(1034));
     return { fill, x, mat: fillMat };
@@ -1305,7 +1300,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     disk.rotation.z -= dt * (0.8 + fl.hole * 4);
     ufo.rotation.y += dt * (0.6 + fl.hole * 6);
     ufo.position.y = 0.75 + Math.sin(now / 600) * 0.04;
-    ufo.userData.lightMat.color.setHSL((now / 3000) % 1, 1, fl.hole > 0 ? 0.75 : 0.55).multiplyScalar(fl.hole > 0 ? 2.5 : 1.6);
+    ufo.userData.lightMat.color.set(0x7fd0ff).multiplyScalar(fl.hole > 0 ? 2.6 : 1.5);
     beam.material.opacity = fl.hole > 0 ? 0.25 + 0.1 * Math.sin(now / 50) : s.lockLit ? 0.08 + 0.06 * Math.sin(now / 200) : 0;
     wormholes.forEach((w) => (w.rotation.z += dt * 2));
     planet.rotation.y += dt * 0.15;
@@ -1355,10 +1350,10 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     // 两条表
     const m0 = Math.min(1, s.saveLeft / Math.max(1, game.perk.saveTime));
     let m1 = s.warp / WARP_MAX;
-    let c1 = 0x3fd8ff;
+    let c1 = 0x7fd0ff;
     if (s.mission) m1 = s.mission.left / s.mission.total;
-    else if (s.boss) [m1, c1] = [s.boss.hp / s.boss.max, 0xff3f6d];
-    else if (s.final) [m1, c1] = [1 - s.final.lit.length / 6, 0xffd84d];
+    else if (s.boss) [m1, c1] = [s.boss.hp / s.boss.max, 0xff4a5a];
+    else if (s.final) [m1, c1] = [1 - s.final.lit.length / 6, 0xffb44d];
     meters.forEach((m, i) => {
       const k = Math.max(0.001, i ? m1 : m0);
       m.fill.scale.x = k;
@@ -1402,12 +1397,12 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     home.userData.globe.rotation.y += dt * 0.12;
     // 火花
     for (const e of game.events) {
-      if (e.type === 'bumper') burst(e.x, e.y, [0xffb03d, 0x3fe0ff, 0xff5ec8][e.i], 16, 0.25);
-      else if (e.type === 'sling') burst(e.x, e.y, 0xff5ec8, 10);
-      else if (e.type === 'hole' || e.type === 'eject') burst(ho.x, ho.y, 0xffa040, 24, 0.1);
-      else if (e.type === 'wormhole') burst(e.x, 72, 0xb07dff, 20, 0.1);
+      if (e.type === 'bumper') burst(e.x, e.y, 0x9fd4ff, 16, 0.25);
+      else if (e.type === 'sling') burst(e.x, e.y, 0xbfe0ff, 10);
+      else if (e.type === 'hole' || e.type === 'eject') burst(ho.x, ho.y, 0xdfeeff, 24, 0.1);
+      else if (e.type === 'wormhole') burst(e.x, 72, 0x9fd4ff, 20, 0.1);
       if (['bossDown', 'missionDone', 'jackpot', 'landing', 'skill'].includes(e.type)) robotWave = 2;
-      if (e.type === 'dock') burstAt(gantry.position.x, 0.6, gantry.position.z, 0xffcf5e, 24, 1.4);
+      if (e.type === 'dock') burstAt(gantry.position.x, 0.6, gantry.position.z, 0x9fd4ff, 24, 1.4);
       if (e.type === 'bossHit') burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffffff, 26, 1.6);
       else if (e.type === 'bossDown') {
         bossView.dying = 1;
@@ -1415,7 +1410,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
         burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffb040, 90, 3.2);
       } else if (e.type === 'landing') {
         camState.shake = 1.2;
-        burstAt(home.position.x, home.position.y, home.position.z + 1, 0xffe28a, 90, 3);
+        burstAt(home.position.x, home.position.y, home.position.z + 1, 0xffe8c8, 90, 3);
       } else if (['jackpot', 'multiball', 'hyperspace', 'bossStart', 'finalStart', 'travel'].includes(e.type)) camState.shake = 1;
       else if (e.type === 'tilt' || e.type === 'bump') camState.shake = 0.6;
     }

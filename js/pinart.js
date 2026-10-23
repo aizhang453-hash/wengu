@@ -6,6 +6,10 @@
 import { W, H, LANE_X } from './pinball.js';
 
 const FONT = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
+
+// 配色: 冷色的太空 (深蓝的底、冰蓝、白), 点缀只有两种: 琥珀色 = 该打这里 (箭头、任务), 红色 = 危机。3D 那边也照这个
+export const COLORS = { ice: '#7fd0ff', white: '#e8f2ff', amber: '#ffb44d', danger: '#ff4a5a', deep: '#050913' };
+const { ice: ICE, white: WHITE, amber: AMBER, danger: DANGER } = COLORS;
 const rnd = (seed) => () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
 // 坡道入口往外 (往右下) 一串箭头: 曲速几级
@@ -16,47 +20,47 @@ const rampAngle = Math.atan2(-RAMP_OUT.y, -RAMP_OUT.x); // 箭头指着坡道里
 // 灯: id, 形状 (circle 圆 | arrow 箭头 | star 星 | ring 圈 | rect 字牌), 位置 (台面坐标), 大小, 角度 (箭头指的方向), 颜色, 字
 export const INSERTS = [
   // 顶上三条再入通道
-  ...[250, 300, 350].map((x, i) => ({ id: `lane${i}`, shape: 'circle', x, y: 128, size: 8, color: '#ffd84d' })),
+  ...[250, 300, 350].map((x, i) => ({ id: `lane${i}`, shape: 'circle', x, y: 128, size: 8, color: ICE })),
   // 曲速 1–5 级
-  ...[52, 72, 92, 112, 132].map((k, i) => ({ id: `warp${i}`, shape: 'arrow', ...rampArrow(k), size: 11 - i * 0.6, angle: rampAngle, color: '#38e8ff' })),
+  ...[52, 72, 92, 112, 132].map((k, i) => ({ id: `warp${i}`, shape: 'arrow', ...rampArrow(k), size: 11 - i * 0.6, angle: rampAngle, color: ICE })),
   // 打坡道 (多球的时候是超级大奖)
-  { id: 'jackpot', shape: 'star', ...rampArrow(160), size: 14, color: '#ff5ec8', label: '大奖' },
+  { id: 'jackpot', shape: 'star', ...rampArrow(160), size: 14, color: WHITE, label: '大奖' },
   // 环绕轨道、推进器
-  { id: 'orbit', shape: 'arrow', x: 520, y: 600, size: 13, angle: -Math.PI / 2, color: '#ff9b3d', label: '' },
-  { id: 'spinner', shape: 'arrow', x: 520, y: 640, size: 10, angle: -Math.PI / 2, color: '#ffcf5e' },
+  { id: 'orbit', shape: 'arrow', x: 520, y: 600, size: 13, angle: -Math.PI / 2, color: ICE, label: '' },
+  { id: 'spinner', shape: 'arrow', x: 520, y: 640, size: 10, angle: -Math.PI / 2, color: ICE },
   // 黑洞: 两边任务、危机, 下面锁球、着陆, 有事等着的时候箭头闪
-  { id: 'iMission', shape: 'rect', x: 224, y: 538, size: 11, color: '#ff6b4f', label: '任务' },
-  { id: 'iBoss', shape: 'rect', x: 326, y: 538, size: 11, color: '#ff3f6d', label: '危机' },
-  { id: 'ready', shape: 'arrow', x: 275, y: 574, size: 11, angle: -Math.PI / 2, color: '#ff4f6d' },
-  { id: 'lock', shape: 'circle', x: 275, y: 602, size: 10, color: '#9b7bff', label: '锁' },
-  { id: 'iLand', shape: 'rect', x: 275, y: 628, size: 11, color: '#ffd84d', label: '着陆' },
+  { id: 'iMission', shape: 'rect', x: 224, y: 538, size: 11, color: AMBER, label: '任务' },
+  { id: 'iBoss', shape: 'rect', x: 326, y: 538, size: 11, color: DANGER, label: '危机' },
+  { id: 'ready', shape: 'arrow', x: 275, y: 574, size: 11, angle: -Math.PI / 2, color: AMBER },
+  { id: 'lock', shape: 'circle', x: 275, y: 602, size: 10, color: ICE, label: '锁' },
+  { id: 'iLand', shape: 'rect', x: 275, y: 628, size: 11, color: WHITE, label: '着陆' },
   // 对接坡道: 口子里两个箭头 (对接了几次), 口子下面一个
-  { id: 'dock0', shape: 'arrow', x: 262, y: 432, size: 9, angle: -Math.PI / 2, color: '#ffcf5e' },
-  { id: 'dock1', shape: 'arrow', x: 288, y: 432, size: 9, angle: -Math.PI / 2, color: '#ffcf5e' },
-  { id: 'aimCenter', shape: 'arrow', x: 275, y: 478, size: 12, angle: -Math.PI / 2, color: '#ffffff' },
+  { id: 'dock0', shape: 'arrow', x: 262, y: 432, size: 9, angle: -Math.PI / 2, color: ICE },
+  { id: 'dock1', shape: 'arrow', x: 288, y: 432, size: 9, angle: -Math.PI / 2, color: ICE },
+  { id: 'aimCenter', shape: 'arrow', x: 275, y: 478, size: 12, angle: -Math.PI / 2, color: AMBER },
   // 左边环绕轨道的口、连击
-  { id: 'aimOrbitL', shape: 'arrow', x: 74, y: 404, size: 12, angle: -Math.PI * 0.72, color: '#ffffff' },
-  { id: 'combo', shape: 'rect', x: 118, y: 404, size: 10, color: '#38e8ff', label: '连击' },
+  { id: 'aimOrbitL', shape: 'arrow', x: 74, y: 404, size: 12, angle: -Math.PI * 0.72, color: AMBER },
+  { id: 'combo', shape: 'rect', x: 118, y: 404, size: 10, color: ICE, label: '连击' },
   // 五个星系 (过了的亮, 现在的闪)
-  ...['柯', '比', '翠', '渊', '曙'].map((label, i) => ({ id: `chapter${i}`, shape: 'circle', x: 208 + i * 36, y: 684, size: 12, color: ['#8fd8ff', '#ff8a3d', '#3dffa8', '#b07dff', '#ffd84d'][i], label })),
+  ...['柯', '比', '翠', '渊', '曙'].map((label, i) => ({ id: `chapter${i}`, shape: 'circle', x: 208 + i * 36, y: 684, size: 12, color: i < 4 ? ICE : WHITE, label })),
   // 奖励的球
-  { id: 'extra', shape: 'rect', x: 280, y: 930, size: 10, color: '#ff9b3d', label: '加球' },
+  { id: 'extra', shape: 'rect', x: 280, y: 930, size: 10, color: AMBER, label: '加球' },
   // 任务靶下面
-  ...[[400, 455], [425, 485], [450, 515]].map(([x, y], i) => ({ id: `target${i}`, shape: 'circle', x: x - 16, y: y + 22, size: 7, color: '#ff6b4f' })),
+  ...[[400, 455], [425, 485], [450, 515]].map(([x, y], i) => ({ id: `target${i}`, shape: 'circle', x: x - 16, y: y + 22, size: 7, color: AMBER })),
   // 星座 (五颗星, 掉落靶旁边)
-  ...[440, 472, 504, 536, 568].map((y, i) => ({ id: `drop${i}`, shape: 'star', x: 64, y: y + 13, size: 8, color: '#fff1a0' })),
+  ...[440, 472, 504, 536, 568].map((y, i) => ({ id: `drop${i}`, shape: 'star', x: 64, y: y + 13, size: 8, color: WHITE })),
   // 奖励倍数
-  ...[2, 3, 4, 5].map((n, i) => ({ id: `mult${i}`, shape: 'circle', x: 226 + i * 36, y: 712, size: 13, color: '#5fe0ff', label: `×${n}` })),
+  ...[2, 3, 4, 5].map((n, i) => ({ id: `mult${i}`, shape: 'circle', x: 226 + i * 36, y: 712, size: 13, color: ICE, label: `×${n}` })),
   // 救生舱、护盾
-  { id: 'kickback', shape: 'arrow', x: 39, y: 918, size: 11, angle: -Math.PI / 2, color: '#6cff8f' },
-  { id: 'shield', shape: 'ring', x: 280, y: 962, size: 16, color: '#6cff8f' },
+  { id: 'kickback', shape: 'arrow', x: 39, y: 918, size: 11, angle: -Math.PI / 2, color: ICE },
+  { id: 'shield', shape: 'ring', x: 280, y: 962, size: 16, color: ICE },
   // 任务箭头 (现在的任务该往哪打)
-  { id: 'aimRamp', shape: 'arrow', ...rampArrow(190), size: 16, angle: rampAngle, color: '#ffffff' },
-  { id: 'aimOrbit', shape: 'arrow', x: 520, y: 690, size: 14, angle: -Math.PI / 2, color: '#ffffff' },
-  { id: 'aimHole', shape: 'arrow', x: 275, y: 656, size: 13, angle: -Math.PI / 2, color: '#ffffff' },
-  { id: 'aimDrops', shape: 'arrow', x: 92, y: 520, size: 13, angle: Math.PI, color: '#ffffff' },
-  { id: 'aimTargets', shape: 'arrow', x: 395, y: 545, size: 13, angle: -Math.PI * 0.8, color: '#ffffff' },
-  { id: 'aimBumpers', shape: 'arrow', x: 280, y: 405, size: 13, angle: -Math.PI / 2, color: '#ffffff' },
+  { id: 'aimRamp', shape: 'arrow', ...rampArrow(190), size: 16, angle: rampAngle, color: AMBER },
+  { id: 'aimOrbit', shape: 'arrow', x: 520, y: 690, size: 14, angle: -Math.PI / 2, color: AMBER },
+  { id: 'aimHole', shape: 'arrow', x: 275, y: 656, size: 13, angle: -Math.PI / 2, color: AMBER },
+  { id: 'aimDrops', shape: 'arrow', x: 92, y: 520, size: 13, angle: Math.PI, color: AMBER },
+  { id: 'aimTargets', shape: 'arrow', x: 395, y: 545, size: 13, angle: -Math.PI * 0.8, color: AMBER },
+  { id: 'aimBumpers', shape: 'arrow', x: 280, y: 405, size: 13, angle: -Math.PI / 2, color: AMBER },
 ];
 
 // 要打的路线 (pinball.js 的 aims()) → 该亮哪几个箭头
@@ -113,7 +117,7 @@ function planet(ctx, x, y, r, stops, { bands = 0, seed = 1, ring = null } = {}) 
   // 条纹 (气态行星) / 斑点
   for (let i = 0; i < bands; i++) {
     const yy = y - r + (2 * r * (i + rand() * 0.5)) / bands;
-    ctx.fillStyle = `rgba(${rand() < 0.5 ? '255,240,220' : '80,40,20'},${0.08 + rand() * 0.12})`;
+    ctx.fillStyle = `rgba(${rand() < 0.5 ? '235,240,255' : '30,40,70'},${0.08 + rand() * 0.12})`;
     ctx.fillRect(x - r, yy, r * 2, (r * 2) / bands / (1.5 + rand()));
   }
   // 背光那边暗下去
@@ -155,20 +159,20 @@ export function paintPlayfield(ctx, table) {
   const rand = rnd(42);
   // 底: 深蓝紫
   const base = ctx.createLinearGradient(0, 0, 0, H);
-  base.addColorStop(0, '#120a3a');
-  base.addColorStop(0.45, '#0a0f35');
-  base.addColorStop(1, '#040616');
+  base.addColorStop(0, '#071026');
+  base.addColorStop(0.45, '#050b1d');
+  base.addColorStop(1, '#03060f');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
   // 星云
   ctx.globalCompositeOperation = 'lighter';
   for (const [x, y, r, c] of [
-    [150, 240, 300, 'rgba(150,60,255,0.32)'],
-    [460, 420, 260, 'rgba(255,60,170,0.22)'],
-    [300, 720, 330, 'rgba(20,190,220,0.18)'],
-    [90, 860, 220, 'rgba(60,90,255,0.25)'],
-    [500, 140, 220, 'rgba(255,140,60,0.16)'],
-    [275, 530, 160, 'rgba(120,80,255,0.25)'],
+    [150, 240, 300, 'rgba(50,100,220,0.28)'],
+    [460, 420, 260, 'rgba(40,140,220,0.16)'],
+    [300, 720, 330, 'rgba(30,120,200,0.14)'],
+    [90, 860, 220, 'rgba(50,80,200,0.18)'],
+    [500, 140, 220, 'rgba(120,170,255,0.1)'],
+    [275, 530, 160, 'rgba(80,140,255,0.2)'],
   ])
     glow(ctx, x, y, r, c);
   // 银河: 斜着的一条
@@ -176,7 +180,7 @@ export function paintPlayfield(ctx, table) {
   ctx.translate(300, 500);
   ctx.rotate(-0.95);
   ctx.scale(1, 0.18);
-  glow(ctx, 0, 0, 620, 'rgba(200,190,255,0.16)');
+  glow(ctx, 0, 0, 620, 'rgba(200,215,255,0.16)');
   ctx.restore();
   for (let i = 0; i < 900; i++) {
     const t = rand() * 2 - 1;
@@ -224,20 +228,20 @@ export function paintPlayfield(ctx, table) {
       const rr = 24 + t * 92;
       const x = Math.cos(a) * rr + (rand() - 0.5) * 8;
       const y = Math.sin(a) * rr * 0.92 + (rand() - 0.5) * 8;
-      ctx.fillStyle = `rgba(${150 + rand() * 80},${120 + rand() * 60},255,${0.35 * (1 - t) + 0.08})`;
+      ctx.fillStyle = `rgba(${170 + rand() * 60},${200 + rand() * 40},255,${0.35 * (1 - t) + 0.08})`;
       ctx.beginPath();
       ctx.arc(x, y, 0.6 + rand() * 1.6, 0, Math.PI * 2);
       ctx.fill();
     }
   }
-  glow(ctx, 0, 0, 60, 'rgba(255,170,90,0.45)');
+  glow(ctx, 0, 0, 60, 'rgba(150,200,255,0.35)');
   ctx.globalCompositeOperation = 'source-over';
   // 吸积盘 + 黑的洞
   const disk = ctx.createRadialGradient(0, 0, 10, 0, 0, 34);
   disk.addColorStop(0, 'rgba(0,0,0,1)');
-  disk.addColorStop(0.45, 'rgba(255,150,60,0.9)');
-  disk.addColorStop(0.7, 'rgba(255,90,140,0.5)');
-  disk.addColorStop(1, 'rgba(120,60,255,0)');
+  disk.addColorStop(0.45, 'rgba(220,240,255,0.9)');
+  disk.addColorStop(0.7, 'rgba(120,180,255,0.45)');
+  disk.addColorStop(1, 'rgba(60,100,255,0)');
   ctx.fillStyle = disk;
   ctx.beginPath();
   ctx.arc(0, 0, 34, 0, Math.PI * 2);
@@ -249,7 +253,7 @@ export function paintPlayfield(ctx, table) {
   ctx.restore();
   // 行星
   planet(ctx, 112, 178, 44, [[0, '#7ad2ff'], [0.45, '#2b78d8'], [0.7, '#2e9a5a'], [1, '#0a2c5c']], { bands: 0, seed: 3 });
-  planet(ctx, 468, 770, 62, [[0, '#ffd79a'], [0.5, '#d88a4a'], [1, '#6a2e1a']], { bands: 9, seed: 5, ring: { tilt: 0.3, angle: -0.3 } });
+  planet(ctx, 468, 770, 62, [[0, '#e4e8f0'], [0.5, '#9aa6bc'], [1, '#2e3648']], { bands: 9, seed: 5, ring: { tilt: 0.3, angle: -0.3, color: 'rgba(200,215,240,0.5)' } });
   planet(ctx, 505, 330, 17, [[0, '#e6e6ef'], [1, '#55556a']], { seed: 9 });
   // 小月亮的坑
   for (const [dx, dy, r] of [[-5, -3, 3], [4, 4, 2.2], [3, -6, 1.6]]) {
@@ -259,7 +263,7 @@ export function paintPlayfield(ctx, table) {
     ctx.fill();
   }
   // 星座的连线 (左边掉落靶旁边)
-  ctx.strokeStyle = 'rgba(255,241,160,0.28)';
+  ctx.strokeStyle = 'rgba(200,225,255,0.3)';
   ctx.lineWidth = 1;
   ctx.setLineDash([3, 3]);
   ctx.beginPath();
@@ -333,9 +337,9 @@ export function paintPlayfield(ctx, table) {
     ctx.beginPath();
     ctx.rect(x0, y0, w, h);
     ctx.clip();
-    ctx.fillStyle = 'rgba(20,16,0,0.55)';
+    ctx.fillStyle = 'rgba(4,8,20,0.55)';
     ctx.fillRect(x0, y0, w, h);
-    ctx.fillStyle = 'rgba(255,200,40,0.45)';
+    ctx.fillStyle = 'rgba(127,208,255,0.28)';
     for (let k = -h; k < w + h; k += 14) {
       ctx.beginPath();
       ctx.moveTo(x0 + k, y0 + h);
@@ -395,7 +399,7 @@ export function paintPlayfield(ctx, table) {
   ctx.beginPath();
   ctx.ellipse(-50, 0, 9, 26, 0, 0, Math.PI * 2); // 转着的环 (冬眠舱)
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,230,150,0.9)';
+  ctx.fillStyle = 'rgba(200,235,255,0.9)';
   for (let x = -20; x < 66; x += 9) ctx.fillRect(x, -2, 4, 3); // 窗
   ctx.restore();
 
@@ -442,21 +446,21 @@ export function paintPlayfield(ctx, table) {
     ctx.restore();
     title(text, x, y + 0.5, size, color, angle, 0.95);
   };
-  title('星 际 远 航', 280, 806, 22, '#ffd884');
-  title('温故而知新', 280, 826, 9, '#c9b8ff', 0, 0.75);
-  banner('曲速坡道', 206, 628, 12, '#7ff3ff', Math.atan2(RAMP_OUT.y, RAMP_OUT.x) - Math.PI / 2);
-  banner('对接坡道', 352, 456, 10, '#ffcf5e');
-  banner('环绕轨道', 503, 760, 10, '#ffb070', -Math.PI / 2);
-  banner('推进器', 505, 520, 9, '#ffcf5e', -Math.PI / 2);
-  title('黑洞', 275, 500, 11, '#ffb36b', 0, 0.85);
-  banner('任务靶', 458, 562, 10, '#ff8a6b', -0.5);
-  banner('星座', 86, 612, 10, '#fff1a0');
-  title('小行星带', 280, 266, 10, '#c9b8ff', 0, 0.7);
-  title('再 入', 300, 172, 10, '#ffe58a', 0, 0.75);
-  title('奖励倍数', 280, 734, 9, '#9feaff', 0, 0.7);
-  title('五 个 星 系', 280, 664, 8, '#c9b8ff', 0, 0.6);
-  title('救生舱', 40, 945, 9, '#9dffb6', 0, 0.75);
-  title('护 盾', 280, 990, 9, '#9dffb6', 0, 0.75);
+  title('星 际 远 航', 280, 806, 22, WHITE);
+  title('温故而知新', 280, 826, 9, ICE, 0, 0.7);
+  banner('曲速坡道', 206, 628, 12, ICE, Math.atan2(RAMP_OUT.y, RAMP_OUT.x) - Math.PI / 2);
+  banner('对接坡道', 352, 456, 10, ICE);
+  banner('环绕轨道', 503, 760, 10, ICE, -Math.PI / 2);
+  banner('推进器', 505, 520, 9, ICE, -Math.PI / 2);
+  title('黑洞', 275, 500, 11, WHITE, 0, 0.85);
+  banner('任务靶', 458, 562, 10, AMBER, -0.5);
+  banner('星座', 86, 612, 10, ICE);
+  title('小行星带', 280, 266, 10, ICE, 0, 0.65);
+  title('再 入', 300, 172, 10, ICE, 0, 0.7);
+  title('奖励倍数', 280, 734, 9, ICE, 0, 0.65);
+  title('五 个 星 系', 280, 664, 8, ICE, 0, 0.6);
+  title('救生舱', 40, 945, 9, ICE, 0, 0.7);
+  title('护 盾', 280, 990, 9, ICE, 0, 0.7);
 
   // 灯 (暗的: 有颜色的塑料片, 一圈细边)
   for (const ins of INSERTS) {
@@ -485,7 +489,7 @@ export function paintPlayfield(ctx, table) {
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(LANE_X, 380, W - LANE_X, H - 380);
   for (let y = 520; y < 940; y += 46) {
-    ctx.fillStyle = 'rgba(255,190,80,0.25)';
+    ctx.fillStyle = 'rgba(127,208,255,0.22)';
     ctx.beginPath();
     ctx.moveTo(560, y);
     ctx.lineTo(570, y + 16);
