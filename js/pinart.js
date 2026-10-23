@@ -43,8 +43,8 @@ export const INSERTS = [
   { id: 'aimBumpers', shape: 'arrow', x: 280, y: 405, size: 13, angle: -Math.PI / 2, color: '#ffffff' },
 ];
 
-// 任务的事件 → 该亮哪个箭头
-export const AIM = { ramp: 'aimRamp', jackpot: 'aimRamp', multiball: 'aimHole', orbit: 'aimOrbit', spin: 'aimOrbit', hole: 'aimHole', constellation: 'aimDrops', target: 'aimTargets', bumper: 'aimBumpers' };
+// 要打的路线 (pinball.js 的 aims()) → 该亮哪几个箭头
+export const AIM = { ramp: ['aimRamp'], orbit: ['aimOrbit'], spinner: ['aimOrbit'], hole: ['aimHole'], drops: ['aimDrops'], targets: ['aimTargets'], bumpers: ['aimBumpers'], slings: ['aimBumpers'], combo: ['aimRamp', 'aimOrbit', 'aimHole'] };
 
 // 一盏灯的形状 (画在 ctx 上, 台面坐标)
 export function insertPath(ctx, ins) {

@@ -1,9 +1,9 @@
-// 弹珠台「星际远航」: 物理 (发射、挡板、托球、坡道、穿墙、卡住) 和规则 (技巧射击、倍数、星座救生舱、任务升军衔、
-// 锁球多球、超级大奖、跃迁、护盾、倾斜、几个球), 成绩怎么存、怎么合
+// 弹珠台「星际远航」: 物理 (发射、挡板、托球、坡道、穿墙、卡住) 和规则 (技巧射击、倍数、星座救生舱、锁球多球、超级大奖、跃迁、
+// 章节任务、危机、终章着陆、连击、补给舱、护盾、倾斜、几个球), 队员的本事和经验, 成绩和养成进度怎么存、怎么合
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Pinball, W, H, MISSIONS, RANKS, WARP_MAX } from '../js/pinball.js';
-import { cleanArcade, mergeArcade, addScore, bestOf } from '../js/arcade.js';
+import { Pinball, W, H, WARP_MAX, CHAPTERS, FINAL, CREW, perks, crewLevel, xpFor, LEVEL_XP } from '../js/pinball.js';
+import { cleanArcade, mergeArcade, addScore, bestOf, progressOf } from '../js/arcade.js';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 
@@ -209,31 +209,210 @@ test('星座: 五个靶都打倒 → 救生舱亮, 一会儿靶子起来; 救生
   assert.ok(types(g).includes('dropsReset'));
 });
 
-test('任务: 三个任务靶都亮 → 进黑洞接任务, 做完升军衔; 到上尉送一个球', () => {
+// 进黑洞 (球放在洞口慢慢滚进去), 等它吸住
+function intoHole(g, seconds = 0.3) {
+  Object.assign(g.ball, { x: 275, y: 505, vx: 0, vy: 150 });
+  run(g, seconds);
+}
+
+test('任务: 三个任务靶都亮 → 进黑洞按挡板选任务; 要打的路线亮; 做完了加分, 这一章做完三个 → 危机准备好', () => {
   const g = playing();
   [0, 1, 2].forEach((i) => g.targetHit(i));
   assert.equal(g.state.missionReady, true);
-  g.holeIn(g.ball);
-  assert.deepEqual(g.state.mission, { i: 0, have: 0 });
-  assert.equal(MISSIONS[0].event, 'ramp');
+  assert.ok(g.aims().has('hole'));
+  intoHole(g);
+  assert.ok(g.state.pick, '黑洞里选任务');
+  assert.deepEqual(g.state.pick.options, [0, 1, 2]);
+  g.input.right = true;
+  run(g, 0.05);
+  g.input.right = false;
+  assert.equal(g.state.pick.i, 1, '按右挡板换下一个');
+  run(g, 3.2);
+  assert.equal(g.state.pick, null);
+  assert.equal(g.state.mission.i, 1);
+  const def = CHAPTERS[0].missions[1];
   assert.ok(types(g).includes('missionStart'));
+  assert.deepEqual(new Set(g.state.mission.lit), new Set(def.each));
+  for (const x of def.each) assert.ok(g.aims().has(x), `${x} 亮着`);
+  // 一样一样打
   const before = g.state.score;
-  g.rampDone();
+  g.shot('targets');
+  assert.ok(!g.state.mission.lit.includes('targets'));
+  g.shot('drops');
+  g.shot('spinner', 5);
   assert.equal(g.state.mission, null);
-  assert.equal(g.state.rank, 1);
-  assert.equal(RANKS[g.state.rank], '少尉');
-  assert.ok(g.state.score - before >= 10000);
-  // 一步一步: 小行星 15 下
-  const b = playing();
-  b.state.mission = { i: 1, have: 0 };
-  for (let i = 0; i < 14; i++) b.progress('bumper');
-  assert.equal(b.state.mission.have, 14);
-  assert.ok(types(b).includes('missionStep'));
-  b.state.rank = 2;
-  b.progress('bumper');
-  assert.equal(b.state.rank, 3);
-  assert.equal(b.state.extra, 1, '升上尉送一个球');
-  assert.equal(b.state.missionIndex, 1, '下一个任务');
+  assert.deepEqual(g.state.done, [1]);
+  assert.ok(g.state.score - before >= 40000);
+  assert.ok(types(g).includes('missionDone'));
+  // 剩下两个: 直接开 (测试里不选), 做完 → 危机
+  g.startMission(0);
+  for (let i = 0; i < 12; i++) g.shot('bumpers');
+  g.startMission(2);
+  g.shot('ramp');
+  assert.deepEqual(g.state.done.sort(), [0, 1, 2]);
+  assert.equal(g.state.bossReady, true);
+  assert.equal(g.state.stats.missions, 3);
+  // 任务都做完了, 任务靶不再亮
+  [0, 1, 2].forEach((i) => g.targetHit(i));
+  assert.equal(g.state.missionReady, false);
+});
+
+test('任务的时间: 到了没做完先停下, 做到哪留着, 再接接着做; 冬眠舱故障的分数一直往下掉', () => {
+  const g = playing();
+  g.startMission(0); // 采冰补水: 小行星 12 下
+  for (let i = 0; i < 5; i++) g.shot('bumpers');
+  Object.assign(g.ball, { x: 300, y: 600, vx: 0, vy: 0 });
+  run(g, CHAPTERS[0].missions[0].time + 1, (x) => Object.assign(x.ball, { x: 300, y: 600, vx: 0, vy: 0, slow: 0 }));
+  assert.equal(g.state.mission, null);
+  assert.ok(types(g).includes('missionFail'));
+  assert.equal(g.state.partial[0].have, 5);
+  g.startMission(0);
+  assert.equal(g.state.mission.have, 5, '接着做');
+  // 冬眠舱故障 (第三章): 分数往下掉, 进黑洞拿到当时的分
+  const h = playing();
+  h.state.chapter = 2;
+  h.startMission(1);
+  const start = h.state.mission.value;
+  run(h, 10, (x) => Object.assign(x.ball, { x: 300, y: 600, vx: 0, vy: 0, slow: 0 }));
+  const now = h.state.mission.value;
+  assert.ok(now < start && now > start * 0.25, `${start} → ${now}`);
+  const score = h.state.score;
+  h.shot('hole');
+  assert.equal(h.state.mission, null);
+  assert.ok(h.state.score - score >= Math.round(now * 0.9));
+});
+
+test('危机: 打进黑洞开始, 两个球, 打亮着的路线扣血, 血扣完跃迁到下一章 (第二章送一个球); 黑洞潮汐把球往黑洞拉', () => {
+  const g = playing();
+  g.state.bossReady = true;
+  intoHole(g);
+  const boss = g.state.boss;
+  assert.ok(boss, '开打了');
+  assert.equal(boss.hp, CHAPTERS[0].boss.hp);
+  assert.equal(boss.lit.length, 2);
+  assert.ok(types(g).includes('bossStart'));
+  run(g, 1.5);
+  assert.equal(g.balls.length, 2, '两个球');
+  assert.ok(g.state.saveLeft > 0);
+  while (g.state.boss) {
+    const lit = g.state.boss.lit[0];
+    const hp = g.state.boss.hp;
+    g.shot(lit);
+    if (g.state.boss) {
+      assert.equal(g.state.boss.hp, hp - 1);
+      assert.ok(!g.state.boss.lit.includes(lit), '换别的路线亮');
+    }
+  }
+  assert.ok(types(g).includes('bossDown'));
+  assert.equal(g.state.stats.bosses, 1);
+  run(g, 2.6, (x) => x.balls.forEach((b) => Object.assign(b, { x: 300, y: 600, vx: 0, vy: 0, slow: 0, held: null })));
+  assert.equal(g.state.chapter, 1);
+  assert.ok(types(g).includes('travel'));
+  assert.equal(g.state.extra, 1, '到第二章送一个球');
+  assert.deepEqual(g.state.done, []);
+  // 打不中亮着的不扣血
+  const m = playing();
+  m.startBoss();
+  const off = ['ramp', 'orbit', 'spinner', 'hole', 'drops', 'targets'].find((x) => !m.state.boss.lit.includes(x));
+  m.shot(off);
+  assert.equal(m.state.boss.hp, CHAPTERS[0].boss.hp);
+  // 第四章的危机: 黑洞附近的球被往里拉
+  const v = playing();
+  v.state.chapter = 3;
+  v.startBoss();
+  Object.assign(v.ball, { x: 275, y: 650, vx: 0, vy: 0 });
+  const plain = playing();
+  Object.assign(plain.ball, { x: 275, y: 650, vx: 0, vy: 0 });
+  run(v, 0.1);
+  run(plain, 0.1);
+  assert.ok(v.ball.y < plain.ball.y - 3, `往上拉 (${v.ball.y} < ${plain.ball.y})`);
+});
+
+test('终章: 四章都过了打进黑洞, 四个球; 五条路线打一遍再进黑洞着陆, 又出发 (分数更高); 球剩一个就没成', () => {
+  const g = playing();
+  g.state.chapter = 3;
+  g.travel();
+  assert.equal(g.state.finalReady, true);
+  intoHole(g);
+  assert.ok(g.state.final);
+  assert.ok(types(g).includes('finalStart'));
+  run(g, 4, (x) => x.balls.forEach((b) => b.x < 540 && Object.assign(b, { x: 300, y: 600, vx: 0, vy: 0, slow: 0, held: null })));
+  assert.equal(g.balls.length, 4, '四个球');
+  for (const x of FINAL.lit) g.shot(x);
+  assert.equal(g.state.final.landing, true);
+  assert.deepEqual([...g.aims()], ['hole']);
+  const score = g.state.score;
+  g.shot('hole');
+  assert.ok(g.state.score - score >= 2000000);
+  assert.ok(types(g).includes('landing'));
+  assert.deepEqual([g.state.final, g.state.voyage, g.state.chapter, g.state.stats.landings], [null, 1, 0, 1]);
+  assert.equal(g.tier, 5, '第二次远航, 每样东西更值钱');
+  // 着陆前球掉得只剩一个: 这次没成, 再打进黑洞重来
+  const f = playing();
+  f.state.chapter = 3;
+  f.state.finalReady = true;
+  f.startFinal();
+  run(f, 4, (x) => x.balls.forEach((b) => b.x < 540 && Object.assign(b, { x: 300, y: 600, vx: 0, vy: 0, slow: 0, held: null })));
+  f.state.saveLeft = 0;
+  while (f.balls.length > 1) f.drainBall(f.balls[0]);
+  assert.equal(f.state.final, null);
+  assert.equal(f.state.finalReady, true);
+  assert.ok(types(f).includes('finalEnd'));
+});
+
+test('连击: 坡道、轨道、黑洞几秒内接着打中, 越连越多; 隔太久重新算; 补给舱随便给一样', () => {
+  const g = playing();
+  g.shot('ramp');
+  run(g, 1);
+  g.shot('orbit');
+  assert.equal(g.state.combo.n, 2);
+  run(g, 1);
+  g.shot('hole');
+  assert.equal(g.state.combo.n, 3);
+  assert.equal(types(g).filter((t) => t === 'combo').length, 2);
+  run(g, 4);
+  g.shot('ramp');
+  assert.equal(g.state.combo.n, 1);
+  // 补给舱: 没事的时候进黑洞
+  const m = playing({ rand: seeded(3) });
+  intoHole(m);
+  assert.ok(types(m).includes('mystery'));
+});
+
+test('队员: 每个人的本事 (护盾、救生舱、任务时间、危机伤害、急救、开局倍数); 经典模式没有; 开局还能换, 发射了就不能换', () => {
+  assert.deepEqual(perks(null), perks({ id: 'nobody', level: 3 }));
+  assert.equal(new Pinball({ crew: { id: 'engineer', level: 2 } }).perk.saveTime, 14);
+  assert.equal(new Pinball({ crew: { id: 'engineer', level: 1 } }).state.kickback, true);
+  const sci = new Pinball({ crew: { id: 'scientist', level: 5 } });
+  sci.state.status = 'play';
+  sci.startMission(0);
+  assert.equal(sci.state.mission.left, CHAPTERS[0].missions[0].time + 20);
+  const sec = new Pinball({ crew: { id: 'security', level: 3 } });
+  sec.state.status = 'play';
+  sec.startBoss();
+  sec.shot(sec.state.boss.lit[0]);
+  assert.equal(sec.state.boss.hp, CHAPTERS[0].boss.hp - 2, '一下顶两下');
+  assert.equal(new Pinball({ crew: { id: 'navigator', level: 5 } }).state.mult, 3);
+  // 医生: 护盾过了球掉了也救回来
+  const med = new Pinball({ crew: { id: 'medic', level: 3 } });
+  med.state.status = 'play';
+  assert.equal(med.state.medic, 2);
+  med.drainBall(med.ball);
+  assert.ok(types(med).includes('medic'));
+  assert.deepEqual([med.state.status, med.state.ball, med.state.medic], ['ready', 1, 1]);
+  // 换队员
+  const g = new Pinball({ crew: { id: 'pilot', level: 1 } });
+  assert.equal(g.setCrew({ id: 'navigator', level: 2 }), true);
+  assert.equal(g.state.mult, 2);
+  g.state.status = 'play';
+  assert.equal(g.setCrew({ id: 'pilot', level: 1 }), false);
+  // 经验和等级
+  assert.equal(crewLevel(0), 1);
+  assert.equal(crewLevel(LEVEL_XP[1]), 2);
+  assert.equal(crewLevel(99999), LEVEL_XP.length);
+  assert.equal(xpFor({ score: 250000, missions: 2, bosses: 1, landings: 0 }), 10 + 25 + 80 + 150);
+  assert.equal(CREW.filter((c) => c.unlock === 0).length, 3, '一开始有三个队员');
+  for (const c of CREW) for (let lv = 1; lv <= 5; lv++) assert.ok(c.skill(lv).length > 4);
 });
 
 test('护盾: 开始 10 秒内掉了救回来 (还是这个球), 救过一次就不救了; 奖励分 × 倍数; 三个球掉完结束; 奖励的球先用', () => {
@@ -332,4 +511,17 @@ test('游戏厅的成绩: 留最高的 5 次, 两台设备的合起来, 破纪�
   b.importBackup(store.exportBackup());
   assert.equal(bestOf(b.data.arcade, 'pinball'), 1234);
   assert.equal(cleanData({}).arcade, null);
+  // 养成进度 (队员经验、渡过几场危机): 两边取大的, 坏的扔掉; 经典模式单独一个排行榜
+  const p1 = addScore(null, 'pinball', 0, 1, { xp: { pilot: 120 }, bosses: 1, landings: 0 }).arcade;
+  assert.deepEqual(progressOf(p1, 'pinball'), { xp: { pilot: 120 }, bosses: 1, landings: 0 });
+  const p2 = mergeArcade(p1, { pinball: { top: [], progress: { xp: { pilot: 50, medic: 9 }, bosses: 0, landings: 2 } }, 'pinball-classic': { top: [{ score: 777, at: 3 }] } });
+  assert.deepEqual(progressOf(p2, 'pinball'), { xp: { pilot: 120, medic: 9 }, bosses: 1, landings: 2 });
+  assert.equal(bestOf(p2, 'pinball-classic'), 777);
+  assert.deepEqual(cleanArcade({ pinball: { progress: { xp: { 'BAD ID': 5, pilot: -3 }, bosses: 'x' } } }), null);
+  const s2 = new Store(memoryStorage());
+  s2.recordArcade('pinball', 5000, 10, { xp: { scientist: 80 }, bosses: 2, landings: 0 });
+  const back = new Store(memoryStorage());
+  back.importBackup(s2.exportBackup());
+  assert.equal(progressOf(back.data.arcade, 'pinball').xp.scientist, 80);
+  assert.equal(progressOf(cleanData(mergeData(s2.data, cleanData({}))).arcade, 'pinball').bosses, 2);
 });

@@ -1,9 +1,10 @@
-// 点阵屏: 真弹珠机顶上那块橙色的屏, 160 × 40 个点。平时显示分数、第几个球、倍数、军衔 (有任务显示任务进度);
+// 点阵屏: 真弹珠机顶上那块橙色的屏, 160 × 40 个点。平时显示分数、第几个球、倍数、第几章 (有任务显示任务进度和剩下的时间,
+// 危机显示血条, 黑洞里选任务显示选的哪个);
 // 台子说话的时候显示那句话 (太长了就滚动); 大事 (跃迁、多球、超级大奖、升军衔、倾斜……) 放一小段动画。
 //   画法: 先在 160 × 40 的小画布上写字、画画 (白色), 每个点按亮度分成 4 档涂成橙色, 放大画到屏上,
 //         再盖一层「点阵」(圆点透明、点之间黑的), 看起来就是一个一个的灯点
 
-import { BALLS, RANKS, MISSIONS } from './pinball.js';
+import { BALLS, CHAPTERS, FINAL } from './pinball.js';
 
 export const DMD_W = 160;
 export const DMD_H = 40;
@@ -16,8 +17,14 @@ const fmt = (n) => n.toLocaleString('en-US');
 const FX = {
   hyperspace: { len: 2.4, kind: 'stars' },
   multiball: { len: 2.6, kind: 'ships' },
+  medic: { len: 1.4, kind: 'flash' },
   jackpot: { len: 2.2, kind: 'flash' },
-  rankUp: { len: 2.6, kind: 'burst' },
+  missionDone: { len: 2.2, kind: 'burst' },
+  bossStart: { len: 2.4, kind: 'flash' },
+  bossDown: { len: 2.6, kind: 'burst' },
+  travel: { len: 3, kind: 'stars' },
+  finalStart: { len: 2.6, kind: 'ships' },
+  landing: { len: 5, kind: 'stars' },
   skill: { len: 1.8, kind: 'flash' },
   tilt: { len: 2.5, kind: 'flash' },
   missionStart: { len: 3, kind: 'scan' },
@@ -94,15 +101,25 @@ export function createDmd(canvas) {
     if (f) fx = { kind: f.kind, start: now, len: f.len * 1000 };
   }
 
-  // 平时: 大的分数 + 下面一行小字
+  // 平时: 大的分数 + 下面一行小字 (+ 一条进度: 任务剩下的时间、危机的血)
   function info(s) {
-    if (s.status === 'over') return '游戏结束 · 按「再来一局」';
+    if (s.status === 'over') return { text: '游戏结束 · 按「再来一局」' };
+    const ch = CHAPTERS[s.chapter];
+    if (s.pick) return { text: `◀ ${ch.missions[s.pick.options[s.pick.i]].name} ▶` };
     if (s.mission) {
-      const m = MISSIONS[s.mission.i];
-      return `任务 ${m.name} ${Math.min(s.mission.have, m.need)}/${m.need}`;
+      const def = ch.missions[s.mission.i];
+      const m = s.mission;
+      const left = Math.max(0, Math.ceil(m.left));
+      if (m.value) return { text: `${def.name} ${Math.round(m.value).toLocaleString('en-US')} · ${left}秒`, bar: m.left / m.total };
+      if (m.lit) return { text: `${def.name} 还剩${m.lit.length}样 · ${left}秒`, bar: m.left / m.total };
+      const step = def.steps[m.step];
+      return { text: `${def.name} ${m.have}/${step.need} · ${left}秒`, bar: m.left / m.total };
     }
+    if (s.boss) return { text: `危机 ${ch.boss.name}`, bar: s.boss.hp / s.boss.max, hp: true };
+    if (s.final) return { text: s.final.landing ? '打进黑洞 着陆!' : `着陆准备 ${FINAL.lit.length - s.final.lit.length}/${FINAL.lit.length}` };
     const ball = `球 ${s.ball}/${BALLS}${s.extra ? `+${s.extra}` : ''}`;
-    return `${ball}  ×${s.mult}  ${RANKS[s.rank]}${s.multiball ? '  多球' : ''}`;
+    const where = s.finalReady ? '终章' : `第${'一二三四'[s.chapter]}章${s.voyage ? `·${s.voyage + 1}航` : ''}`;
+    return { text: `${ball}  ×${s.mult}  ${where}${s.multiball ? '  多球' : ''}` };
   }
 
   function draw(game, now) {
@@ -112,7 +129,8 @@ export function createDmd(canvas) {
     if (fx && now - fx.start > fx.len) fx = null;
     const msg = s.messageLeft > 0 ? s.message : '';
     // 什么都没变就不重画 (滚动、动画的时候每帧画)
-    const key = `${s.score}|${msg}|${info(s)}|${s.status}|${s.pull > 0}`;
+    const inf = info(s);
+    const key = `${s.score}|${msg}|${inf.text}|${inf.bar?.toFixed(2)}|${s.status}|${s.pull > 0}`;
     const moving = fx || (msg && measure(msg) > DMD_W - 6) || s.status === 'ready';
     if (!moving && key === lastKey) return;
     lastKey = key;
@@ -183,8 +201,17 @@ export function createDmd(canvas) {
       text('星 际 远 航', DMD_W / 2, 14, 18, { alpha: 0.6 + 0.4 * Math.sin(t * 4) });
       line(s.pull > 0 ? '松开发射!' : '拉弹簧 · 松开发射', 32, 11, t);
     } else {
-      text(fmt(s.score), DMD_W / 2, 15, 26, { font: DIGITS, weight: 900 });
-      line(s.status === 'ready' ? (s.pull > 0 ? '松开发射!' : `${info(s)} · 发射`) : info(s), 33, 11, t);
+      text(fmt(s.score), DMD_W / 2, 14, 24, { font: DIGITS, weight: 900 });
+      line(s.status === 'ready' ? (s.pull > 0 ? '松开发射!' : `${inf.text} · 发射`) : inf.text, inf.bar != null ? 31 : 33, 11, t);
+    }
+    // 进度条 (任务的时间、危机的血): 最下面两行
+    if (inf.bar != null && !msg) {
+      const w = Math.round((DMD_W - 8) * Math.max(0, Math.min(1, inf.bar)));
+      sctx.globalAlpha = 0.35;
+      sctx.fillRect(4, 37, DMD_W - 8, 2);
+      sctx.globalAlpha = 1;
+      if (inf.hp) for (let x = 4; x < 4 + w; x += 3) sctx.fillRect(x, 37, 2, 2);
+      else sctx.fillRect(4, 37, w, 2);
     }
     sctx.globalCompositeOperation = 'source-over';
 

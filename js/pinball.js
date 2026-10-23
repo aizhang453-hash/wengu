@@ -4,15 +4,18 @@
 //         法向速度按弹性反过来、切向按摩擦减一点; 挡板是转动的胶囊, 碰撞时算上挡板那一点的速度; 几个球之间也会撞
 //   坡道: 球从入口冲上去就离开台面, 沿着坡道的路线走 (上坡减速、下坡加速), 冲不上去就滚回来; 下来落到右边回球道
 //
+// 故事: 殖民方舟「远航号」载着十万名在冬眠舱里睡着的人, 去找一颗能住的星球。你是新来的舰长。
+//   四个星系是四章 (CHAPTERS), 每章三个限时任务, 都做完了来一场危机 (大敌人, 有血条, 两个球一起打);
+//   渡过危机跃迁到下一个星系。四章都过了, 打进黑洞「着陆曙光星」(终极模式, 四个球), 着陆了再出发 (分数更高)
+//
 // 玩法:
-//   发射: 顶上三条「再入」通道有一条在闪, 一发射就落进那条 → 技巧射击
-//   顶上三条通道都亮 → 奖励倍数 +1 (最多 ×5, 按挡板挪亮着的灯)
-//   小行星 (蘑菇头)、弹弓、环绕轨道 (沿顶上圆弧绕一圈)、推进器 (右边的转片)
-//   曲速坡道: 打上去一次曲速 +1, 到 5 级「跃迁」大奖; 打上去两次锁球灯亮
-//   黑洞: 吸进去从顶上的虫洞吐出来; 锁球灯亮着: 锁住一个球, 锁满两个「舰队出击」三个球一起玩, 坡道是超级大奖
-//   星座: 左边五个掉落靶都打倒 → 连成一个星座, 左下的救生舱亮 (球掉进左边出局道弹回去一次)
-//   任务: 右边三个任务靶都打亮 → 打进黑洞接任务; 做完升军衔 (学员 → …… → 舰队司令), 军衔越高分越多, 到上尉、上校各送一个球
+//   发射: 顶上三条「再入」通道有一条在闪, 一发射就落进那条 → 技巧射击; 三条都亮 → 奖励倍数 +1 (按挡板挪亮着的灯)
+//   任务: 右边三个任务靶都打亮 → 打进黑洞选任务 (按挡板换), 任务开着的时候要打的路线亮箭头; 时间到了没做完先停下, 做到哪留着, 下次接着做
+//   连击: 坡道、轨道、黑洞几秒内接着打中
+//   曲速坡道: 打上去一次曲速 +1, 到 5 级「跃迁」大奖; 打上去两次锁球灯亮, 锁满两个球「穿梭机出动」三个球, 坡道是超级大奖
+//   黑洞: 没别的事的时候是补给舱 (随机奖励); 星座: 五个掉落靶都打倒 → 救生舱亮
 //   护盾: 每个球开始 10 秒内掉了救回来; 撞台子 (N 键 / 按钮) 能把球撞开, 撞太多倾斜, 这个球挡板不动、不算分
+//   队员 (CREW): 远航模式开局选一个队员, 各有本事, 等级跨局累积 (存在页面那边); 经典模式没有队员, 比分数公平
 
 export const W = 600;
 export const H = 1000;
@@ -29,22 +32,103 @@ const SAVE_TIME = 10;
 const PULL_TIME = 0.9; // 弹簧拉满要几秒
 export const LANE_X = 540; // 发射通道在这右边
 
-export const RANKS = ['学员', '少尉', '中尉', '上尉', '少校', '中校', '上校', '准将', '舰队司令'];
-export const EXTRA_BALL_RANKS = [3, 6];
-// 任务: 做什么 (事件)、几次
-export const MISSIONS = [
-  { name: '发射训练', goal: '打上曲速坡道 1 次', event: 'ramp', need: 1 },
-  { name: '小行星带', goal: '打小行星 15 下', event: 'bumper', need: 15 },
-  { name: '侦察', goal: '环绕轨道 2 圈', event: 'orbit', need: 2 },
-  { name: '星座导航', goal: '打倒一整排星座靶', event: 'constellation', need: 1 },
-  { name: '推进器', goal: '推进器转 40 圈', event: 'spin', need: 40 },
-  { name: '跃迁训练', goal: '打上曲速坡道 3 次', event: 'ramp', need: 3 },
-  { name: '黑洞探索', goal: '进黑洞 2 次', event: 'hole', need: 2 },
-  { name: '雷达扫描', goal: '打任务靶 6 次', event: 'target', need: 6 },
-  { name: '舰队出击', goal: '锁住两个球, 开始多球', event: 'multiball', need: 1 },
+// ---- 故事 ----
+export const STORY = {
+  intro: [
+    '公元 2387 年, 殖民方舟「远航号」载着十万名在冬眠舱里睡着的人出发, 去找一颗能住的星球。',
+    '你是新来的舰长。穿过四个星系, 完成任务、渡过危机, 带大家抵达新家园「曙光星」。',
+  ],
+  ending: '十万名乘客在曙光星上醒来了! 远航号又出发, 去找下一颗星球',
+};
+
+// 能「亮」的路线 (任务、危机、终章要打的), 还有别的算数的东西
+export const SHOTS = ['ramp', 'orbit', 'spinner', 'hole', 'drops', 'targets'];
+export const SHOT_NAMES = { ramp: '坡道', orbit: '环绕轨道', spinner: '推进器', hole: '黑洞', drops: '星座靶', targets: '任务靶', bumpers: '小行星', slings: '弹弓', lanes: '顶上通道', combo: '连击' };
+const MAJOR = new Set(['ramp', 'orbit', 'hole']); // 算连击的
+
+// 任务: steps 一步一步 (每步打哪些、几下), each 亮着的路线各打一次, hurry 分数从这么多往下掉 (越快打中越多)
+const mission = (name, goal, time, rule) => ({ name, goal, time, ...rule });
+export const CHAPTERS = [
+  {
+    name: '柯伊伯带',
+    intro: '远航号离开太阳系, 穿过冰冷的柯伊伯带',
+    missions: [
+      mission('采冰补水', '打小行星 12 下', 50, { steps: [{ shots: ['bumpers'], need: 12 }] }),
+      mission('校准星图', '亮着的三样各打一次', 60, { each: ['targets', 'drops', 'spinner'] }),
+      mission('曲速试车', '打上坡道 1 次', 60, { steps: [{ shots: ['ramp'], need: 1 }] }),
+    ],
+    boss: { kind: 'comet', name: '巨型彗星', hp: 4, say: '一颗巨型彗星冲着远航号来了' },
+  },
+  {
+    name: '比邻星',
+    intro: '第一站: 离太阳最近的红色恒星',
+    missions: [
+      mission('扫描比邻 b', '打小行星 6 下让行星显出来, 再打坡道扫描', 65, { steps: [{ shots: ['bumpers'], need: 6 }, { shots: ['ramp'], need: 1 }] }),
+      mission('展开太阳帆', '打倒 5 个星座靶', 60, { steps: [{ shots: ['drops'], need: 5 }] }),
+      mission('推进器加速', '推进器转 30 圈', 55, { steps: [{ shots: ['spinner'], need: 30 }] }),
+    ],
+    boss: { kind: 'flare', name: '恒星耀斑', hp: 5, say: '比邻星爆发了耀斑' },
+  },
+  {
+    name: '翡翠星云',
+    intro: '一片绿色的星云, 里面藏着信号',
+    missions: [
+      mission('星云采气', '绕环绕轨道 2 圈', 70, { steps: [{ shots: ['orbit'], need: 2 }] }),
+      mission('冬眠舱故障', '分数一直在掉, 快打进黑洞修好', 45, { hurry: 400000, steps: [{ shots: ['hole'], need: 1 }] }),
+      mission('寻找信号', '亮着的四样各打一次', 80, { each: ['ramp', 'spinner', 'hole', 'drops'] }),
+    ],
+    boss: { kind: 'pirate', name: '星际海盗', hp: 6, say: '星际海盗盯上了远航号的货舱' },
+  },
+  {
+    name: '深渊黑洞',
+    intro: '曙光星就在黑洞另一边',
+    missions: [
+      mission('引力弹弓', '连击 2 次 (坡道、轨道、黑洞接着打)', 75, { steps: [{ shots: ['combo'], need: 2 }] }),
+      mission('穿越小行星带', '打小行星和弹弓 20 下', 50, { steps: [{ shots: ['bumpers', 'slings'], need: 20 }] }),
+      mission('穿越虫洞', '进黑洞 2 次', 70, { steps: [{ shots: ['hole'], need: 2 }] }),
+    ],
+    boss: { kind: 'void', name: '黑洞潮汐', hp: 7, say: '黑洞潮汐! 引力在把球往里拉', gravity: true },
+  },
 ];
+export const FINAL = { name: '着陆曙光星', lit: ['ramp', 'orbit', 'spinner', 'drops', 'targets'] };
 export const CONSTELLATIONS = ['猎户座', '北斗七星', '天蝎座', '仙后座', '天鹅座', '狮子座'];
 export const WARP_MAX = 5;
+
+// ---- 队员 ----
+//   unlock: 一共渡过几场危机以后加入 (页面那边记着); 等级 1–5, 经验够了升级
+export const LEVEL_XP = [0, 100, 300, 700, 1500];
+export const MAX_LEVEL = LEVEL_XP.length;
+const medicSaves = (lv) => (lv >= 5 ? 3 : lv >= 3 ? 2 : 1);
+const navMult = (lv) => 1 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 1 : 0);
+export const CREW = [
+  { id: 'pilot', name: '林舟', role: '驾驶员', mark: '舟', color: '#38e8ff', unlock: 0, skill: (lv) => `连击时间 +${(0.4 * lv).toFixed(1)} 秒, 连击分 +${20 * lv}%` },
+  { id: 'engineer', name: '阿铁', role: '工程师', mark: '铁', color: '#ffb03d', unlock: 0, skill: (lv) => `护盾 +${2 * lv} 秒; 救生舱开局就亮${lv >= 3 ? ', 每个球都亮' : ''}` },
+  { id: 'scientist', name: '苏眠', role: '科学家', mark: '苏', color: '#7dffb0', unlock: 0, skill: (lv) => `任务时间 +${4 * lv} 秒, 任务分 +${10 * lv}%` },
+  { id: 'security', name: '雷雅', role: '安全官', mark: '雷', color: '#ff5e7a', unlock: 1, skill: (lv) => `打危机的分 +${25 * lv}%${lv >= 3 ? ', 打一下顶两下' : ''}, 危机的护盾 +${2 * lv} 秒` },
+  { id: 'medic', name: '白芷', role: '医生', mark: '芷', color: '#ff9be6', unlock: 2, skill: (lv) => `一局能急救 ${medicSaves(lv)} 次 (护盾过了, 球掉了也救回来)` },
+  { id: 'navigator', name: '星野', role: '领航员', mark: '野', color: '#b07dff', unlock: 3, skill: (lv) => `开局奖励倍数 ×${navMult(lv)}, 技巧射击分 +${50 * lv}%` },
+];
+export const crewById = (id) => CREW.find((c) => c.id === id) ?? null;
+export function crewLevel(xp) {
+  let lv = 1;
+  while (lv < MAX_LEVEL && xp >= LEVEL_XP[lv]) lv++;
+  return lv;
+}
+// 一局得多少经验: 玩了就有 10, 加上分数、做完的任务、渡过的危机、着陆
+export const xpFor = ({ score, missions, bosses, landings }) => 10 + Math.floor(score / 10000) + 40 * missions + 150 * bosses + 500 * landings;
+
+// 队员的本事 → 规则里的数 (crew: { id, level } 或 null 经典模式)
+export function perks(crew) {
+  const p = { saveTime: SAVE_TIME, missionTime: 0, missionMult: 1, comboWindow: 3.5, comboMult: 1, bossDamage: 1, bossScore: 1, bossSave: 15, medic: 0, mult: 1, skillMult: 1, kickback: 0 };
+  const lv = crew?.level ?? 0;
+  if (crew?.id === 'pilot') Object.assign(p, { comboWindow: 3.5 + 0.4 * lv, comboMult: 1 + 0.2 * lv });
+  else if (crew?.id === 'engineer') Object.assign(p, { saveTime: 10 + 2 * lv, kickback: lv >= 3 ? 2 : 1 });
+  else if (crew?.id === 'scientist') Object.assign(p, { missionTime: 4 * lv, missionMult: 1 + 0.1 * lv });
+  else if (crew?.id === 'security') Object.assign(p, { bossDamage: lv >= 3 ? 2 : 1, bossScore: 1 + 0.25 * lv, bossSave: 15 + 2 * lv });
+  else if (crew?.id === 'medic') p.medic = medicSaves(lv);
+  else if (crew?.id === 'navigator') Object.assign(p, { mult: navMult(lv), skillMult: 1 + 0.5 * lv });
+  return p;
+}
 
 // ---- 台面 ----
 const seg = (ax, ay, bx, by, o = {}) => ({ ax, ay, bx, by, e: 0.45, mu: 0.08, r: 0, ...o });
@@ -61,13 +145,13 @@ function norm(x, y) {
   return { x: x / l, y: y / l };
 }
 
-// 坡道入口: 口子中间 M, 朝里的方向 d (往左上), 宽 50, 深 55
+// 坡道入口: 口子中间 M, 朝里的方向 d (往左上), 宽 60, 深 55
 const RAMP_M = [150, 560];
 const RAMP_D = norm(-0.546, -0.838);
 const RAMP_P = { x: -RAMP_D.y, y: RAMP_D.x }; // 跟口子平行
 const at = (p, v, k) => [p[0] + v.x * k, p[1] + v.y * k];
-const RAMP_A = at(RAMP_M, RAMP_P, 25);
-const RAMP_B = at(RAMP_M, RAMP_P, -25);
+const RAMP_A = at(RAMP_M, RAMP_P, 30);
+const RAMP_B = at(RAMP_M, RAMP_P, -30);
 const RAMP_A2 = at(RAMP_A, RAMP_D, 55);
 const RAMP_B2 = at(RAMP_B, RAMP_D, 55);
 
@@ -305,14 +389,17 @@ function crossed(px, py, qx, qy, a, b) {
 }
 
 // ---- 一局 ----
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+
 export class Pinball {
-  constructor({ rand = Math.random } = {}) {
+  // crew: { id, level } 远航模式的队员, null 是经典模式
+  constructor({ rand = Math.random, crew = null } = {}) {
     this.rand = rand;
     this.table = buildTable();
     this.input = { left: false, right: false, plunger: false, nudge: false };
     this.prevInput = { ...this.input };
     this.events = []; // 给画面、声音用: { type, ... }
-    this.flash = { bumper: [0, 0, 0], sling: [0, 0], drop: [0, 0, 0, 0, 0], target: [0, 0, 0], lane: [0, 0, 0], hole: 0, orbit: 0, ramp: 0, spinner: 0, warp: 0, shake: 0 };
+    this.flash = { bumper: [0, 0, 0], sling: [0, 0], drop: [0, 0, 0, 0, 0], target: [0, 0, 0], lane: [0, 0, 0], hole: 0, orbit: 0, ramp: 0, spinner: 0, warp: 0, shake: 0, boss: 0 };
     this.acc = 0;
     this.time = 0;
     this.timer = 0;
@@ -326,6 +413,7 @@ export class Pinball {
       score: 0,
       ball: 1, // 第几个球
       extra: 0, // 奖励的球
+      extraGiven: false, // 补给舱的「加一个球」一局一次
       mult: 1, // 奖励倍数 (顶上通道)
       bonus: 0,
       lanes: [false, false, false],
@@ -334,27 +422,63 @@ export class Pinball {
       kickback: false,
       saved: false, // 这个球用过护盾了
       saveLeft: 0,
+      medic: 0, // 还能急救几次
       pull: 0, // 弹簧拉了多少 0–1
       warp: 0, // 曲速几级
       ramps: 0, // 这一阵打上坡道几次 (两次锁球灯亮)
       lockLit: false,
       locked: 0, // 锁住了几个球
-      multiball: false,
-      rank: 0,
+      multiball: false, // 穿梭机出动 (锁球的多球)
       targets: [false, false, false],
+      chapter: 0, // 第几章 (CHAPTERS)
+      voyage: 0, // 着陆过几次 (又出发了, 分数更高)
+      done: [], // 这一章做完的任务
+      partial: {}, // 没做完的任务做到哪了 (任务第几个 → { step, have, lit })
       missionReady: false,
-      mission: null, // { i 第几个任务, have 做了几次 }
-      missionIndex: 0, // 下一个是第几个任务
+      mission: null, // { i 这一章第几个, step, have, lit (each 的), left 还剩几秒, total, value (hurry 的) }
+      pick: null, // 黑洞里选任务: { options, i }
+      bossReady: false,
+      boss: null, // { hp, max, lit }
+      finalReady: false,
+      final: null, // { lit, landing }
+      combo: { n: 0, at: -99 },
+      stats: { missions: 0, bosses: 0, landings: 0 },
       tilt: false,
       message: '拉弹簧, 松开发射',
       messageLeft: 6,
     };
+    this.setCrew(crew);
     this.addBall();
+  }
+
+  // 换队员 (只有开局还没发射的时候能换)
+  setCrew(crew) {
+    const s = this.state;
+    if (s.score > 0 || s.ball > 1 || s.status !== 'ready') return false;
+    this.crew = crew;
+    this.perk = perks(crew);
+    s.mult = this.perk.mult;
+    s.kickback = this.perk.kickback > 0;
+    s.medic = this.perk.medic;
+    return true;
   }
 
   // 第一个球 (只有一个球的时候就是它)
   get ball() {
     return this.balls[0] ?? null;
+  }
+
+  // 越往后越值钱: 第几章 + 着陆过几次
+  get tier() {
+    return this.state.chapter + 1 + this.state.voyage * CHAPTERS.length;
+  }
+
+  get chapter() {
+    return CHAPTERS[this.state.chapter];
+  }
+
+  missionDef(m = this.state.mission) {
+    return m ? this.chapter.missions[m.i] : null;
   }
 
   emit(type, extra = {}) {
@@ -367,7 +491,7 @@ export class Pinball {
   }
 
   add(points) {
-    if (!this.state.tilt) this.state.score += points;
+    if (!this.state.tilt) this.state.score += Math.round(points);
   }
 
   after(seconds, fn) {
@@ -379,6 +503,20 @@ export class Pinball {
     if (this.cool.has(key)) return false;
     this.cool.set(key, this.time + seconds);
     return true;
+  }
+
+  // 现在该打哪些路线 (画面上亮箭头): 任务、危机、终章, 还有黑洞里等着的事
+  aims() {
+    const s = this.state;
+    const out = new Set();
+    const m = s.mission;
+    if (m) for (const x of m.lit ?? this.missionDef().steps[m.step].shots) out.add(x);
+    if (s.boss) for (const x of s.boss.lit) out.add(x);
+    if (s.final) for (const x of s.final.landing ? ['hole'] : s.final.lit) out.add(x);
+    if (!s.mission && !s.boss && !s.final && (s.missionReady || s.bossReady || s.finalReady)) out.add('hole');
+    if (s.lockLit) out.add('hole');
+    if (s.multiball) out.add('ramp');
+    return out;
   }
 
   // 一个新球放进发射通道 (auto: 自己发射, 多球、锁球、护盾以后用)
@@ -424,11 +562,17 @@ export class Pinball {
     while (this.later.length && this.later[0].at <= this.time) this.later.shift().fn();
     const input = this.input;
     const live = !s.tilt;
-    // 按下挡板: 顶上亮着的通道跟着挪
+    // 按下挡板: 顶上亮着的通道跟着挪; 黑洞里选任务的时候是换任务
     for (const side of ['left', 'right']) {
       if (input[side] && !this.prevInput[side] && live) {
         this.emit('flip', { side });
-        if (s.status === 'play') s.lanes = side === 'left' ? [...s.lanes.slice(1), s.lanes[0]] : [s.lanes[2], ...s.lanes.slice(0, 2)];
+        if (s.pick) {
+          const n = s.pick.options.length;
+          s.pick.i = (s.pick.i + (side === 'left' ? n - 1 : 1)) % n;
+          const def = this.chapter.missions[s.pick.options[s.pick.i]];
+          this.say(`选任务: ${def.name} · ${def.goal}`, 3);
+          this.emit('pick');
+        } else if (s.status === 'play') s.lanes = side === 'left' ? [...s.lanes.slice(1), s.lanes[0]] : [s.lanes[2], ...s.lanes.slice(0, 2)];
       }
     }
     for (const f of t.flippers) {
@@ -449,7 +593,7 @@ export class Pinball {
         b.vx = 0;
         if (s.status === 'ready') {
           s.status = 'play';
-          if (!s.saved) s.saveLeft = SAVE_TIME;
+          if (!s.saved) s.saveLeft = Math.max(s.saveLeft, this.perk.saveTime);
         }
         this.emit('launch', { power: s.pull });
       }
@@ -461,7 +605,16 @@ export class Pinball {
       if (this.timer <= 0) this.nextBall();
       return;
     }
-    if (s.saveLeft > 0 && s.status === 'play') s.saveLeft = Math.max(0, s.saveLeft - h);
+    if (s.status === 'play') {
+      if (s.saveLeft > 0) s.saveLeft = Math.max(0, s.saveLeft - h);
+      // 任务的时间 (球都在黑洞里的时候不走)
+      const m = s.mission;
+      if (m && this.balls.some((b) => !b.held)) {
+        m.left -= h;
+        if (m.value) m.value = Math.max(m.value * 0.25, m.value - (m.start * 0.75 * h) / m.total);
+        if (m.left <= 0) this.missionFail();
+      }
+    }
 
     for (const b of [...this.balls]) this.moveBall(b, h);
     // 球跟球
@@ -493,6 +646,17 @@ export class Pinball {
     const px = b.x;
     const py = b.y;
     b.vy += GRAVITY * h;
+    // 黑洞潮汐: 黑洞附近的球被往里拉
+    if (s.boss && this.chapter.boss.gravity && b.x < LANE_X) {
+      const dx = t.hole.x - b.x;
+      const dy = t.hole.y - b.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 1 && d < 220) {
+        const a = 2200 * (1 - d / 220);
+        b.vx += (dx / d) * a * h;
+        b.vy += (dy / d) * a * h;
+      }
+    }
     const speed = Math.hypot(b.vx, b.vy);
     if (speed > MAX_SPEED) {
       b.vx *= MAX_SPEED / speed;
@@ -533,19 +697,20 @@ export class Pinball {
         const hit = hitSegment(b, w);
         if (w.sling !== undefined && hit > 60 && this.cooled(`sling${w.sling}`, 0.1)) {
           this.flash.sling[w.sling] = 0.15;
-          this.add(50);
+          this.add(50 * this.tier);
           s.bonus += 5;
           this.emit('sling', { i: w.sling, x: b.x, y: b.y });
+          this.shot('slings');
         }
       }
       t.bumpers.forEach((p, i) => {
         const hit = resolve(b, p.x, p.y, p.r, { e: 0.5, kick: s.tilt ? 0 : 900 });
         if (hit > 30 && this.cooled(`bumper${i}`, 0.08)) {
           this.flash.bumper[i] = 0.18;
-          this.add(100 * (s.rank + 1));
+          this.add(100 * this.tier);
           s.bonus += 10;
           this.emit('bumper', { i, x: b.x, y: b.y });
-          this.progress('bumper');
+          this.shot('bumpers');
         }
       });
       t.drops.forEach((d, i) => {
@@ -602,22 +767,24 @@ export class Pinball {
     t.lanes.forEach((l, i) => {
       if (!inside(b, l) || !this.cooled(`lane${b.id}:${i}`, 0.6)) return;
       this.flash.lane[i] = 0.4;
-      this.add(500);
+      this.add(500 * this.tier);
       s.bonus += 20;
       if (s.skillLane >= 0) {
         if (s.skillLane === i) {
-          this.add(15000);
-          this.say('技巧射击! +15,000', 3);
+          const pts = 15000 * this.tier * this.perk.skillMult;
+          this.add(pts);
+          this.say(`技巧射击! +${fmt(pts)}`, 3);
           this.emit('skill');
         }
         s.skillLane = -1;
       }
       s.lanes[i] = true;
       this.emit('lane', { i });
+      this.shot('lanes');
       if (s.lanes.every(Boolean)) {
         s.lanes = [false, false, false];
         if (s.mult < 5) s.mult++;
-        this.add(2000);
+        this.add(2000 * this.tier);
         this.say(`再入大气层! 奖励 ×${s.mult}`);
         this.emit('mult', { mult: s.mult });
       }
@@ -627,32 +794,32 @@ export class Pinball {
     // 环绕轨道
     if (play && inside(b, t.orbit) && Math.abs(b.vx) > 500 && this.cooled(`orbit${b.id}`, 1.5)) {
       this.flash.orbit = 0.6;
-      const points = 1500 * (s.rank + 1);
+      const points = 1500 * this.tier;
       this.add(points);
       s.bonus += 30;
-      this.say(`环绕轨道! +${points.toLocaleString('en-US')}`, 1.5);
+      if (!s.mission && !s.boss && !s.final) this.say(`环绕轨道! +${fmt(points)}`, 1.5);
       this.emit('orbit');
-      this.progress('orbit');
+      this.shot('orbit');
     }
     // 推进器 (转片): 冲过去转几圈
     const sp = t.spinner;
     if (crossed(px, py, b.x, b.y, [sp.ax, sp.y], [sp.bx, sp.y]) && this.cooled(`spin${b.id}`, 0.3)) {
       const spins = Math.max(1, Math.min(20, Math.round(Math.abs(b.vy) / 160)));
       this.flash.spinner = Math.min(2, spins * 0.08);
-      this.add(100 * spins);
+      this.add(100 * spins * this.tier);
       s.bonus += spins;
       this.emit('spinner', { spins });
-      this.progress('spin', spins);
+      this.shot('spinner', spins);
     }
     t.inlanes.forEach((l, i) => {
       if (inside(b, l) && this.cooled(`in${b.id}:${i}`, 0.6)) {
-        this.add(200);
+        this.add(200 * this.tier);
         this.emit('inlane', { i });
       }
     });
     t.outlanes.forEach((l, i) => {
       if (!inside(b, l) || !this.cooled(`out${b.id}:${i}`, 0.6)) return;
-      this.add(500);
+      this.add(500 * this.tier);
       if (i === 0 && s.kickback) {
         s.kickback = false;
         Object.assign(b, { x: l.x, y: l.y, vx: 0, vy: -2300 });
@@ -686,22 +853,45 @@ export class Pinball {
 
   // ---- 打中了什么 ----
 
+  // 打中了一条路线: 连击、任务、危机、终章都看这个
+  shot(name, n = 1) {
+    const s = this.state;
+    if (s.tilt) return;
+    if (MAJOR.has(name)) this.comboShot();
+    if (s.mission) this.missionShot(name, n);
+    if (s.boss?.lit.includes(name)) this.bossHit(name);
+    if (s.final) this.finalShot(name);
+  }
+
+  comboShot() {
+    const s = this.state;
+    const c = s.combo;
+    c.n = this.time - c.at < this.perk.comboWindow ? c.n + 1 : 1;
+    c.at = this.time;
+    if (c.n < 2) return;
+    const pts = 10000 * c.n * this.tier * this.perk.comboMult;
+    this.add(pts);
+    this.say(`连击 ×${c.n}! +${fmt(pts)}`, 1.8);
+    this.emit('combo', { n: c.n });
+    this.shot('combo');
+  }
+
   dropHit(i) {
     const s = this.state;
     const d = this.table.drops[i];
     d.up = false;
     this.flash.drop[i] = 0.3;
-    this.add(500 * (s.rank + 1));
+    this.add(500 * this.tier);
     s.bonus += 30;
     this.emit('drop', { i });
+    this.shot('drops');
     if (this.table.drops.every((x) => !x.up)) {
       const name = CONSTELLATIONS[s.drops % CONSTELLATIONS.length];
       s.drops++;
-      this.add(5000 * (s.rank + 1));
+      this.add(5000 * this.tier);
       s.kickback = true;
       this.say(`连成了${name}! 救生舱准备好了`);
       this.emit('constellation', { name });
-      this.progress('constellation');
       this.after(1.5, () => {
         this.table.drops.forEach((x) => (x.up = true));
         this.emit('dropsReset');
@@ -712,15 +902,16 @@ export class Pinball {
   targetHit(i) {
     const s = this.state;
     this.flash.target[i] = 0.3;
-    this.add(300 * (s.rank + 1));
+    this.add(300 * this.tier);
     s.bonus += 20;
     this.emit('target', { i });
-    this.progress('target');
-    if (s.mission || s.missionReady) return;
+    this.shot('targets');
+    // 任务开着、危机、终章、这一章任务都做完了: 不亮任务
+    if (s.mission || s.missionReady || s.boss || s.final || s.bossReady || s.finalReady || s.done.length >= 3) return;
     s.targets[i] = true;
     if (s.targets.every(Boolean)) {
       s.missionReady = true;
-      this.say(`任务准备好了: 打进黑洞接「${MISSIONS[s.missionIndex].name}」`, 3);
+      this.say('任务准备好了: 打进黑洞选任务', 3);
       this.emit('missionReady');
     }
   }
@@ -730,22 +921,23 @@ export class Pinball {
     this.flash.ramp = 0.8;
     s.ramps++;
     if (s.multiball) {
-      const jackpot = 30000 * (s.rank + 1);
+      const jackpot = 30000 * this.tier;
       this.add(jackpot);
-      this.say(`超级大奖! +${jackpot.toLocaleString('en-US')}`, 3);
+      this.say(`超级大奖! +${fmt(jackpot)}`, 3);
       this.emit('jackpot', { points: jackpot });
     }
     s.warp = Math.min(WARP_MAX, s.warp + 1);
-    this.add(2000 * s.warp);
+    this.add(2000 * s.warp * this.tier);
     s.bonus += 50;
     this.flash.warp = 1;
+    const quiet = s.multiball || s.mission || s.boss || s.final;
     if (s.warp >= WARP_MAX) {
-      const prize = 25000 * (s.rank + 1);
+      const prize = 25000 * this.tier;
       this.add(prize);
       s.warp = 0;
-      this.say(`跃迁! +${prize.toLocaleString('en-US')}`, 3);
+      this.say(`跃迁! +${fmt(prize)}`, 3);
       this.emit('hyperspace', { points: prize });
-    } else if (!s.multiball) this.say(`曲速 ${s.warp} 级`, 1.5);
+    } else if (!quiet) this.say(`曲速 ${s.warp} 级`, 1.5);
     if (!s.multiball && !s.lockLit && s.locked < 2 && s.ramps >= 2) {
       s.lockLit = true;
       s.ramps = 0;
@@ -753,20 +945,23 @@ export class Pinball {
       this.emit('lockLit');
     }
     this.emit('ramp', { warp: s.warp });
-    this.progress('ramp');
+    this.shot('ramp');
   }
 
-  // 进了黑洞: 锁球 / 接任务 / 吸住一会儿从虫洞出来
+  // 进了黑洞: 先算打中 (任务、危机、终章), 再看有什么事: 锁球 / 终章 / 危机 / 选任务 / 补给舱; 吸住一会儿从虫洞出来
   holeIn(b) {
     const s = this.state;
     const ho = this.table.hole;
     Object.assign(b, { x: ho.x, y: ho.y, vx: 0, vy: 0 });
     this.flash.hole = 1.4;
-    this.add(2500 * (s.rank + 1));
+    this.add(2500 * this.tier);
     s.bonus += 50;
     this.emit('hole');
-    this.progress('hole');
-    if (s.lockLit && !s.multiball) {
+    const was = { busy: Boolean(s.mission || s.boss || s.final), mission: s.missionReady, boss: s.bossReady, final: s.finalReady, landing: s.voyage };
+    this.shot('hole');
+    const out = () => (b.held = { left: 1.3, then: () => this.wormhole(b) });
+    if (s.voyage !== was.landing) return out(); // 刚着陆
+    if (s.lockLit && !s.multiball && !s.boss && !s.final) {
       s.lockLit = false;
       s.locked++;
       this.balls.splice(this.balls.indexOf(b), 1);
@@ -778,15 +973,62 @@ export class Pinball {
       }
       return;
     }
-    if (s.missionReady && !s.mission) {
-      s.missionReady = false;
-      s.targets = [false, false, false];
-      s.mission = { i: s.missionIndex, have: 0 };
-      const m = MISSIONS[s.missionIndex];
-      this.say(`任务「${m.name}」: ${m.goal}`, 4);
-      this.emit('missionStart', { name: m.name });
-    } else this.say('黑洞! 从虫洞出来了', 1.5);
-    b.held = { left: 1.3, then: () => this.wormhole(b) };
+    if (!s.boss && !s.final && !s.mission) {
+      if (was.final) {
+        this.startFinal();
+        return out();
+      }
+      if (was.boss) {
+        this.startBoss();
+        return out();
+      }
+      if (was.mission) {
+        // 选任务: 剩下几个就按挡板换 (多球的时候不选, 直接接第一个)
+        const options = this.chapter.missions.map((_, i) => i).filter((i) => !s.done.includes(i));
+        s.missionReady = false;
+        if (options.length > 1 && this.balls.length === 1) {
+          s.pick = { options, i: 0 };
+          const def = this.chapter.missions[options[0]];
+          this.say(`选任务 (按挡板换): ${def.name} · ${def.goal}`, 3);
+          this.emit('pickStart');
+          b.held = {
+            left: 3,
+            then: () => {
+              const i = s.pick.options[s.pick.i];
+              s.pick = null;
+              this.startMission(i);
+              this.wormhole(b);
+            },
+          };
+          return;
+        }
+        this.startMission(options[0]);
+        return out();
+      }
+    }
+    if (!was.busy) this.mystery();
+    else if (!s.messageLeft || s.messageLeft < 1) this.say('黑洞! 从虫洞出来了', 1.5);
+    out();
+  }
+
+  // 补给舱: 随便给一样
+  mystery() {
+    const s = this.state;
+    const awards = [
+      [3, `补给舱: +${fmt(50000 * this.tier)}`, () => this.add(50000 * this.tier)],
+      [2, '补给舱: 护盾 10 秒', () => (s.saveLeft = Math.max(s.saveLeft, 10))],
+      [2, '补给舱: 救生舱亮了', () => (s.kickback = true)],
+      [2, '补给舱: 奖励倍数 +1', () => (s.mult = Math.min(5, s.mult + 1))],
+      [s.multiball || s.locked >= 2 || s.lockLit ? 0 : 1, '补给舱: 锁球灯亮了', () => (s.lockLit = true)],
+      [s.done.length >= 3 || s.bossReady || s.finalReady ? 0 : 1, '补给舱: 任务靶全亮', () => ((s.targets = [true, true, true]), (s.missionReady = true))],
+      [s.extraGiven ? 0 : 0.4, '补给舱: 加一个球!', () => ((s.extra += 1), (s.extraGiven = true))],
+    ];
+    const total = awards.reduce((n, a) => n + a[0], 0);
+    let r = this.rand() * total;
+    const pick = awards.find((a) => (r -= a[0]) < 0) ?? awards[0];
+    pick[2]();
+    this.say(pick[1], 2);
+    this.emit('mystery');
   }
 
   // 从顶上随便一个虫洞吐出来, 掉进下面那条通道
@@ -796,13 +1038,13 @@ export class Pinball {
     this.emit('wormhole', { x: w.x });
   }
 
+  // 穿梭机出动: 锁住的两个从黑洞吐出来, 再发射一个
   startMultiball() {
     const s = this.state;
     s.multiball = true;
     s.locked = 0;
-    s.saveLeft = SAVE_TIME;
+    s.saveLeft = Math.max(s.saveLeft, 10);
     const ho = this.table.hole;
-    // 锁住的两个从黑洞吐出来, 再发射一个
     for (let k = 0; k < 2; k++) {
       this.after(0.3 + k * 0.5, () => {
         this.balls.push({ id: this.nextId++, x: ho.x, y: ho.y, z: 0, vx: (k ? 1 : -1) * 380, vy: 300, r: BALL_R, ramp: null, held: null, slow: 0 });
@@ -810,37 +1052,194 @@ export class Pinball {
       });
     }
     this.addBall({ auto: true });
-    this.say('舰队出击! 三个球, 坡道是超级大奖', 4);
+    this.say('穿梭机出动! 三个球, 坡道是超级大奖', 4);
     this.emit('multiball');
-    this.progress('multiball');
   }
 
-  // 任务进度
-  progress(event, n = 1) {
+  // ---- 任务 ----
+
+  startMission(i) {
     const s = this.state;
-    if (!s.mission || s.tilt) return;
-    const m = MISSIONS[s.mission.i];
-    if (m.event !== event) return;
-    s.mission.have += n;
-    if (s.mission.have < m.need) {
-      this.emit('missionStep', { have: s.mission.have, need: m.need });
+    const def = this.chapter.missions[i];
+    const time = def.time + this.perk.missionTime;
+    const was = s.partial[i]; // 上次做到哪了
+    delete s.partial[i];
+    s.mission = { i, step: was?.step ?? 0, have: was?.have ?? 0, lit: was?.lit ?? (def.each ? [...def.each] : null), left: time, total: time, value: def.hurry ? def.hurry * this.tier : 0, start: def.hurry ? def.hurry * this.tier : 0 };
+    s.missionReady = false;
+    s.targets = [false, false, false];
+    this.say(`任务「${def.name}」: ${def.goal}`, 4);
+    this.emit('missionStart', { name: def.name });
+  }
+
+  missionShot(name, n) {
+    const s = this.state;
+    const m = s.mission;
+    const def = this.missionDef();
+    const each = Math.round(3000 * this.tier * this.perk.missionMult);
+    if (m.lit) {
+      if (!m.lit.includes(name)) return;
+      m.lit = m.lit.filter((x) => x !== name);
+      this.add(each);
+      if (m.lit.length) {
+        this.say(`${def.name}: 还剩 ${m.lit.map((x) => SHOT_NAMES[x]).join('、')}`, 2);
+        this.emit('missionStep');
+      } else this.missionDone();
       return;
     }
-    // 做完了: 升军衔
-    const award = 10000 * (s.rank + 1);
+    const step = def.steps[m.step];
+    if (!step.shots.includes(name)) return;
+    m.have = Math.min(step.need, m.have + n);
+    if (!m.value) this.add(each);
+    if (m.have < step.need) {
+      this.emit('missionStep', { have: m.have, need: step.need });
+      return;
+    }
+    if (m.step + 1 < def.steps.length) {
+      m.step++;
+      m.have = 0;
+      this.say(`${def.name}: 下一步, 打${def.steps[m.step].shots.map((x) => SHOT_NAMES[x]).join('、')}`, 2.5);
+      this.emit('missionStep');
+      return;
+    }
+    this.missionDone();
+  }
+
+  missionDone() {
+    const s = this.state;
+    const m = s.mission;
+    const def = this.missionDef();
+    const award = m.value ? m.value : (40000 + 1000 * Math.ceil(m.left)) * this.tier * this.perk.missionMult;
     this.add(award);
     s.mission = null;
-    s.missionIndex = (s.missionIndex + 1) % MISSIONS.length;
-    if (s.rank < RANKS.length - 1) {
-      s.rank++;
-      const ball = EXTRA_BALL_RANKS.includes(s.rank);
-      if (ball) s.extra++;
-      this.say(`任务完成! 升为${RANKS[s.rank]} +${award.toLocaleString('en-US')}${ball ? ' · 奖励一个球' : ''}`, 4);
-      this.emit('rankUp', { rank: s.rank, name: RANKS[s.rank] });
-    } else {
-      this.say(`任务完成! +${award.toLocaleString('en-US')}`, 3);
-      this.emit('missionDone');
+    s.done.push(m.i);
+    s.stats.missions++;
+    this.say(`任务完成: ${def.name} +${fmt(award)}`, 3);
+    this.emit('missionDone', { name: def.name });
+    if (s.done.length >= this.chapter.missions.length) {
+      s.bossReady = true;
+      s.targets = [false, false, false];
+      this.after(3, () => this.say(`危机! ${this.chapter.boss.say}。打进黑洞迎战`, 4));
+      this.emit('bossReady');
     }
+  }
+
+  missionFail() {
+    const s = this.state;
+    const def = this.missionDef();
+    const m = s.mission;
+    s.mission = null;
+    if (!def.hurry) s.partial[m.i] = { step: m.step, have: m.have, lit: m.lit };
+    this.say(`时间到: ${def.name} 没做完${def.hurry ? '' : ', 做到哪留着'} (再打亮任务靶接着做)`, 3);
+    this.emit('missionFail', { name: def.name });
+  }
+
+  // ---- 危机 (大敌人) ----
+
+  // 随便挑 n 条路线亮 (不要刚打过的)
+  pickShots(n, not = []) {
+    const pool = SHOTS.filter((x) => !not.includes(x));
+    const out = [];
+    while (out.length < n && pool.length) out.push(pool.splice(Math.floor(this.rand() * pool.length), 1)[0]);
+    return out;
+  }
+
+  startBoss() {
+    const s = this.state;
+    const def = this.chapter.boss;
+    s.bossReady = false;
+    s.boss = { hp: def.hp, max: def.hp, lit: this.pickShots(2) };
+    s.saveLeft = Math.max(s.saveLeft, this.perk.bossSave);
+    this.addBall({ auto: true }); // 两个球一起打
+    this.say(`危机: ${def.name}! 打亮着的路线`, 4);
+    this.emit('bossStart', { kind: def.kind, name: def.name });
+  }
+
+  bossHit(name) {
+    const s = this.state;
+    const def = this.chapter.boss;
+    const boss = s.boss;
+    boss.hp = Math.max(0, boss.hp - this.perk.bossDamage);
+    this.flash.boss = 0.5;
+    this.add(15000 * this.tier * this.perk.bossScore);
+    this.emit('bossHit', { hp: boss.hp });
+    if (boss.hp > 0) {
+      boss.lit = this.pickShots(2, [name]);
+      this.say(`${def.name} 还剩 ${boss.hp}/${boss.max}`, 1.5);
+      return;
+    }
+    s.boss = null;
+    s.stats.bosses++;
+    const award = 250000 * this.tier * this.perk.bossScore;
+    this.add(award);
+    this.say(`渡过危机: ${def.name}! +${fmt(award)}`, 3);
+    this.emit('bossDown', { kind: def.kind });
+    this.after(2.5, () => this.travel());
+  }
+
+  // 跃迁到下一个星系; 四章都过了: 终章准备好了
+  travel() {
+    const s = this.state;
+    if (s.chapter < CHAPTERS.length - 1) {
+      s.chapter++;
+      s.done = [];
+      s.partial = {};
+      s.targets = [false, false, false];
+      const extra = s.chapter === 1 || s.chapter === 3;
+      if (extra) s.extra++;
+      this.say(`第 ${s.chapter + 1} 章 · ${this.chapter.name}: ${this.chapter.intro}${extra ? ' · 奖励一个球' : ''}`, 4);
+      this.emit('travel', { chapter: s.chapter });
+    } else {
+      s.finalReady = true;
+      this.say('前方就是曙光星! 打进黑洞准备着陆', 4);
+      this.emit('finalReady');
+    }
+  }
+
+  // ---- 终章: 着陆曙光星 ----
+
+  startFinal() {
+    const s = this.state;
+    s.finalReady = false;
+    s.final = { lit: [...FINAL.lit], landing: false };
+    s.saveLeft = Math.max(s.saveLeft, 20);
+    for (let k = 0; k < 3; k++) this.after(0.2 + k * 1.1, () => s.final && this.addBall({ auto: true }));
+    this.say('终章: 着陆曙光星! 四个球, 亮着的路线都是大奖', 4);
+    this.emit('finalStart');
+  }
+
+  finalShot(name) {
+    const s = this.state;
+    const f = s.final;
+    if (f.landing) {
+      if (name === 'hole') this.landing();
+      return;
+    }
+    if (!f.lit.includes(name)) return;
+    f.lit = f.lit.filter((x) => x !== name);
+    const jackpot = 100000 * this.tier;
+    this.add(jackpot);
+    this.emit('finalJackpot', { points: jackpot });
+    if (f.lit.length) this.say(`着陆准备 ${FINAL.lit.length - f.lit.length}/${FINAL.lit.length} +${fmt(jackpot)}`, 2);
+    else {
+      f.landing = true;
+      this.say('都准备好了: 打进黑洞, 着陆!', 4);
+      this.emit('landingReady');
+    }
+  }
+
+  landing() {
+    const s = this.state;
+    const award = 2000000 * (s.voyage + 1);
+    this.add(award);
+    s.stats.landings++;
+    s.final = null;
+    s.voyage++;
+    s.chapter = 0;
+    s.done = [];
+    s.partial = {};
+    s.targets = [false, false, false];
+    this.say(`${STORY.ending} +${fmt(award)}`, 6);
+    this.emit('landing', { points: award });
   }
 
   // 撞台子: 把球撞开一点; 8 秒内撞第 3 次就倾斜
@@ -868,44 +1267,70 @@ export class Pinball {
     }
   }
 
+  // 多球剩一个了
+  endMulti() {
+    const s = this.state;
+    if (s.multiball) {
+      s.multiball = false;
+      this.say('穿梭机回来了', 2);
+      this.emit('multiballEnd');
+    }
+    if (s.final) {
+      s.final = null;
+      s.finalReady = true;
+      this.say('着陆失败, 再打进黑洞重来', 3);
+      this.emit('finalEnd');
+    }
+  }
+
   drainBall(b) {
     const s = this.state;
     this.balls.splice(this.balls.indexOf(b), 1);
-    // 护盾: 救回来 (多球的时候每个都救)
+    const others = this.balls.length > 0;
+    // 护盾: 救回来 (多球的时候每个都救, 自己发射)
     if (s.saveLeft > 0 && !s.tilt) {
-      if (!s.multiball) {
+      if (!others) {
         s.saveLeft = 0;
         s.saved = true;
       }
       this.say('护盾! 再来一次');
       this.emit('save');
-      this.addBall({ auto: s.multiball });
+      this.addBall({ auto: others });
       return;
     }
-    if (this.balls.length) {
-      if (s.multiball && this.balls.length === 1) {
-        s.multiball = false;
-        this.say('舰队回来了', 2);
-        this.emit('multiballEnd');
-      }
+    if (others) {
+      if (this.balls.length === 1) this.endMulti();
       return;
     }
-    s.multiball = false;
+    // 医生急救
+    if (s.medic > 0 && !s.tilt) {
+      s.medic--;
+      this.say(`急救! ${crewById('medic').name}把球救回来了${s.medic ? ` (还能 ${s.medic} 次)` : ''}`, 2.5);
+      this.emit('medic');
+      this.addBall();
+      return;
+    }
+    // 这个球没了: 任务失败, 终章没成 (危机还在, 下个球接着打)
+    if (s.mission) this.missionFail();
+    s.pick = null;
+    this.endMulti();
     const bonus = s.tilt ? 0 : s.bonus * s.mult;
     this.add(bonus);
     s.status = 'drained';
     this.timer = 2;
-    this.say(s.tilt ? '倾斜了, 这个球没有奖励分' : bonus ? `球掉了 · 奖励分 ${s.bonus.toLocaleString('en-US')} × ${s.mult} = ${bonus.toLocaleString('en-US')}` : '球掉了', 2);
+    this.say(s.tilt ? '倾斜了, 这个球没有奖励分' : bonus ? `球掉了 · 奖励分 ${fmt(s.bonus)} × ${s.mult} = ${fmt(bonus)}` : '球掉了', 2);
     this.emit('drain', { bonus });
   }
 
   nextBall() {
     const s = this.state;
-    s.mult = 1;
+    s.mult = this.perk.mult;
     s.bonus = 0;
     s.saved = false;
     s.tilt = false;
     s.warp = 0;
+    s.combo = { n: 0, at: -99 };
+    if (this.perk.kickback >= 2) s.kickback = true;
     if (s.extra > 0) {
       s.extra--;
       this.say('奖励的球, 再来!');

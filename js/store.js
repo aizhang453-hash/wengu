@@ -935,9 +935,9 @@ export class Store {
     for (const k of gone) delete this.data.activity[k];
   }
 
-  // 游戏厅玩完一局: 记成绩 (最高的 5 次)。返回 { rank 排第几 (前 5 以外是 0), best 破纪录了没有 }
-  recordArcade(key, score, now = Date.now()) {
-    const { arcade, rank, best } = addScore(this.data.arcade, key, score, now);
+  // 游戏厅玩完一局: 记成绩 (最高的 5 次), 有养成的连进度一起记。返回 { rank 排第几 (前 5 以外是 0), best 破纪录了没有 }
+  recordArcade(key, score, now = Date.now(), progress = null) {
+    const { arcade, rank, best } = addScore(this.data.arcade, key, score, now, progress);
     this.data.arcade = arcade;
     this.save();
     return { rank, best };

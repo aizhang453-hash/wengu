@@ -4,7 +4,7 @@
 //         黑洞 (吸积盘在转) 和上面飘着的飞碟、顶上三个虫洞、带环的行星、弹簧; 灯亮了会发光 (bloom)
 //   镜头: 横着的屏幕跟着球上下走; 竖着的屏幕从上面看整张台
 
-import { W, H, BALL_R, LANE_X, MISSIONS } from './pinball.js';
+import { W, H, BALL_R, LANE_X, CHAPTERS } from './pinball.js';
 import { paintPlayfield, INSERTS, insertPath, AIM } from './pinart.js';
 
 const S = 0.01;
@@ -434,7 +434,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   });
 
   // ---- 火花 ----
-  const SPARKS = 90;
+  const SPARKS = 220;
   const sparkPos = new Float32Array(SPARKS * 3);
   const sparkCol = new Float32Array(SPARKS * 3);
   const sparkVel = new Float32Array(SPARKS * 3);
@@ -454,6 +454,169 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
       sparkVel.set([Math.cos(a) * sp2, 0.5 + Math.random() * 1.5, Math.sin(a) * sp2], j * 3);
       sparkCol.set([c.r, c.g, c.b], j * 3);
       sparkLife[j] = 0.35 + Math.random() * 0.3;
+    }
+  }
+
+  // ---- 危机 (大敌人): 飘在台面上空左右晃, 下面一排血点; 每章一个样子。打中了闪一下, 打败了炸开 ----
+  //   彗星 (冰块 + 彗尾)、耀斑 (一团火 + 火环)、海盗船、黑洞潮汐 (黑球 + 一圈光)
+  const BOSS_AT = { x: X(290), y: 1.5, z: Z(420) };
+  const bossGroup = new THREE.Group();
+  bossGroup.visible = false;
+  add(bossGroup);
+  const glowMat = (color, k = 1.8, opacity = 1) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(k), transparent: opacity < 1, opacity, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: opacity >= 1, toneMapped: false, side: opacity < 1 ? THREE.DoubleSide : THREE.FrontSide });
+  function lumpy(r, seed, detail = 2, rough = 0.2) {
+    const geo = new THREE.IcosahedronGeometry(r, detail);
+    const pos = geo.attributes.position;
+    const v = new THREE.Vector3();
+    for (let j = 0; j < pos.count; j++) {
+      v.fromBufferAttribute(pos, j);
+      const n = 1 + rough * Math.sin(v.x * 9 + seed) * Math.sin(v.y * 11 + seed * 2) * Math.sin(v.z * 7 + seed * 3);
+      pos.setXYZ(j, v.x * n, v.y * n, v.z * n);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+  const bossModels = {};
+  {
+    // 彗星
+    const g = new THREE.Group();
+    const ice = new THREE.MeshStandardMaterial({ color: 0xd8ecff, roughness: 0.45, metalness: 0.1, emissive: 0x3f7dff, emissiveIntensity: 0.3, flatShading: true });
+    g.add(new THREE.Mesh(lumpy(0.38, 3, 2, 0.25), ice));
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.4, 24, 1, true), glowMat(0x8fd8ff, 1.4, 0.28));
+    tail.geometry.rotateX(-Math.PI / 2);
+    tail.position.set(0, 0.25, -1.2);
+    tail.rotation.x = -0.2;
+    g.add(tail);
+    bossModels.comet = { g, mats: [ice], spin: (dt) => g.children[0].rotation.set(g.children[0].rotation.x + dt * 0.7, g.children[0].rotation.y + dt * 0.4, 0) };
+  }
+  {
+    // 耀斑: 一团火, 两个火环
+    const g = new THREE.Group();
+    const fire = glowMat(0xff8a2a, 2.2);
+    const core = new THREE.Mesh(lumpy(0.36, 7, 3, 0.12), fire);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 16), glowMat(0xff5a1a, 1.2, 0.18));
+    const rings = [0, 1].map((k) => {
+      const m = new THREE.Mesh(new THREE.TorusGeometry(0.62 + k * 0.12, 0.025, 8, 48), glowMat(k ? 0xffd84d : 0xff5a1a, 2, 0.8));
+      m.rotation.set(1.2 + k * 0.6, k * 0.8, 0);
+      return m;
+    });
+    g.add(core, halo, ...rings);
+    bossModels.flare = { g, mats: [], spin: (dt, now) => (core.scale.setScalar(1 + Math.sin(now / 120) * 0.05), rings.forEach((r, k) => (r.rotation.z += dt * (k ? -1.4 : 1.1)))) };
+  }
+  {
+    // 海盗船: 尖头冲着你, 两边翅膀, 红色的灯
+    const g = new THREE.Group();
+    const hullMat = new THREE.MeshStandardMaterial({ color: 0x2a2e3a, metalness: 0.8, roughness: 0.35, emissive: 0x400010, emissiveIntensity: 0.4, flatShading: true });
+    const hull = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.2, 4), hullMat);
+    hull.geometry.rotateX(Math.PI / 2);
+    hull.rotation.z = Math.PI / 4;
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.04, 0.38), hullMat);
+    wing.position.z = -0.2;
+    const fins = [-1, 1].map((k) => {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.32, 0.4), hullMat);
+      f.position.set(k * 0.72, 0.12, -0.25);
+      return f;
+    });
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 10), glowMat(0xff2040, 2.4));
+    eye.position.set(0, 0.12, 0.15);
+    const engines = [-0.4, 0, 0.4].map((x) => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8), glowMat(0xff5040, 2.2, 0.9));
+      e.position.set(x, 0, -0.62);
+      return e;
+    });
+    g.add(hull, wing, ...fins, eye, ...engines);
+    bossModels.pirate = { g, mats: [hullMat], spin: (dt, now) => ((g.rotation.z = Math.sin(now / 500) * 0.25), engines.forEach((e, k) => e.scale.setScalar(1 + 0.3 * Math.sin(now / 60 + k)))) };
+  }
+  {
+    // 黑洞潮汐: 黑球, 外面一圈紫光, 斜着一个吸积环
+    const g = new THREE.Group();
+    const hole = new THREE.Mesh(new THREE.SphereGeometry(0.34, 32, 20), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    const rim = new THREE.Mesh(new THREE.SphereGeometry(0.42, 32, 20), glowMat(0x9b5cff, 1.6, 0.35));
+    rim.material.side = THREE.BackSide;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.95, 64), new THREE.MeshBasicMaterial({ map: diskTex, color: new THREE.Color(0xd0a0ff).multiplyScalar(1.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2 + 0.45;
+    g.add(hole, rim, ring);
+    bossModels.void = { g, mats: [], spin: (dt) => (ring.rotation.z -= dt * 1.5) };
+  }
+  for (const m of Object.values(bossModels)) {
+    m.g.visible = false;
+    bossGroup.add(m.g);
+  }
+  // 血点
+  const pipOn = glowMat(0xff3050, 2.2);
+  const pipOff = new THREE.MeshBasicMaterial({ color: 0x3a3a48 });
+  const pips = Array.from({ length: 10 }, () => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), pipOff);
+    bossGroup.add(m);
+    return m;
+  });
+  const bossView = { kind: null, appear: 0, dying: 0 };
+
+  // ---- 终章: 新家园曙光星从台面顶上升起来 ----
+  const home = new THREE.Group();
+  {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#1d5fb8';
+    g.fillRect(0, 0, 512, 256);
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = `hsl(${95 + rnd() * 40}, 45%, ${32 + rnd() * 18}%)`;
+      g.beginPath();
+      g.ellipse(rnd() * 512, 40 + rnd() * 176, 20 + rnd() * 60, 10 + rnd() * 30, rnd() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let i = 0; i < 40; i++) g.fillRect(rnd() * 512, rnd() * 256, 30 + rnd() * 80, 3 + rnd() * 5);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(0.62, 48, 32), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7, emissive: 0x0a2040, emissiveIntensity: 0.4 }));
+    const air = new THREE.Mesh(new THREE.SphereGeometry(0.72, 48, 32), glowMat(0x7fd8ff, 1.2, 0.22));
+    air.material.side = THREE.BackSide;
+    home.add(globe, air);
+    home.userData.globe = globe;
+  }
+  home.position.set(X(535), 1.3, Z(95)); // 右上角 (跟左上角那颗带环的对称)
+  home.visible = false;
+  home.scale.setScalar(0.001);
+  add(home);
+
+  // 每章的颜色 (台面、两盏彩灯、两边的灯条、背景), 终章金色
+  const PALETTES = [
+    { floor: 0xe6eeff, a: 0x3fd8ff, b: 0xb07dff, bg: 0x02030c },
+    { floor: 0xffe8de, a: 0xff8a3d, b: 0xff3f7a, bg: 0x0a0306 },
+    { floor: 0xdcffea, a: 0x3dffa8, b: 0x3fd8ff, bg: 0x020a07 },
+    { floor: 0xeadcff, a: 0xb07dff, b: 0xff3fb0, bg: 0x06020d },
+    { floor: 0xfff2da, a: 0xffd84d, b: 0xff9b3d, bg: 0x0a0702 },
+  ].map((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, new THREE.Color(v)])));
+  const ledA = M.led.color;
+  const ledB = M.ledPink.color;
+  const tmp = new THREE.Color();
+  function paint(pal, k) {
+    floorMat.color.lerp(pal.floor, k);
+    cyan.color.lerp(pal.a, k);
+    pink.color.lerp(pal.b, k);
+    ledA.lerp(tmp.copy(pal.a).multiplyScalar(2), k);
+    ledB.lerp(tmp.copy(pal.b).multiplyScalar(2), k);
+    scene.background.lerp(pal.bg, k);
+  }
+  floorMat.color.set(0xffffff);
+  paint(PALETTES[0], 1);
+
+  function burstAt(wx, wy, wz, color, n = 30, speed = 2.2) {
+    const c = new THREE.Color(color).multiplyScalar(2);
+    for (let i = 0; i < n; i++) {
+      const j = sparkNext++ % SPARKS;
+      sparkPos.set([wx, wy, wz], j * 3);
+      const a = Math.random() * Math.PI * 2;
+      const u = Math.random() * 2 - 1;
+      const sp = speed * (0.4 + Math.random() * 0.6);
+      sparkVel.set([Math.cos(a) * Math.sqrt(1 - u * u) * sp, u * sp, Math.sin(a) * Math.sqrt(1 - u * u) * sp], j * 3);
+      sparkCol.set([c.r, c.g, c.b], j * 3);
+      sparkLife[j] = 0.5 + Math.random() * 0.5;
     }
   }
 
@@ -480,7 +643,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   composer.addPass(new THREE.OutputPass());
 
   // ---- 大小、镜头 ----
-  //   「整张台」: 镜头斜着从上面看, 远近、往哪看按屏幕大小算好, 整张台正好放得下 (竖着的屏幕只用这个)
+  //   「整张台」: 镜头斜着从上面看, 远近、往哪看按屏幕大小算好, 整张台 (连两个角上的星球) 正好放得下 (竖着的屏幕只用这个)
   //   「跟着球」: 低一点、近一点, 宽度放得下, 镜头跟着最下面那个球上下走 (到头了就停)
   let width = 1;
   let height = 1;
@@ -490,7 +653,7 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
   let view = null; // { pitch, dist, lookZ, zTop, zBot }
   const camState = { z: 0, shake: 0 };
   const V = (x, y, z) => new THREE.Vector3(X(x), z * S, Z(y));
-  const EDGE = [...outline.map(([x, y]) => V(x, Math.min(y, 1060), 50)), V(12, 1060, 0), V(588, 1060, 0), V(70, 110, 160)];
+  const EDGE = [...outline.map(([x, y]) => V(x, Math.min(y, 1060), 50)), V(12, 1060, 0), V(588, 1060, 0), V(70, 110, 160), V(535, 95, 190)];
   const TOP = V(300, 0, 50);
   const BOTTOM = V(300, 1030, 0);
   const SIDES = [V(0, 500, 50), V(600, 500, 50)];
@@ -657,21 +820,64 @@ export function createScene(THREE, canvas, table, { quality = 'high' } = {}) {
     lamp('orbit', fl.orbit > 0 || blink(now, 900));
     lamp('spinner', fl.spinner > 0);
     lamp('lock', s.lockLit ? blink(now, 200) : s.locked > 0);
-    lamp('ready', s.missionReady && blink(now, 220));
+    lamp('ready', (s.missionReady || s.bossReady || s.finalReady) && blink(now, 220));
     s.targets.forEach((on, i) => lamp(`target${i}`, on || fl.target[i] > 0));
     table.drops.forEach((d, i) => lamp(`drop${i}`, !d.up));
     [2, 3, 4, 5].forEach((n, i) => lamp(`mult${i}`, s.mult >= n));
     lamp('kickback', s.kickback);
     lamp('shield', s.saveLeft > 0 && (s.saveLeft > 3 || blink(now, 150)));
-    const aim = s.mission ? AIM[MISSIONS[s.mission.i].event] : s.missionReady || s.lockLit ? 'aimHole' : s.multiball ? 'aimRamp' : null;
-    for (const id of ['aimRamp', 'aimOrbit', 'aimHole', 'aimDrops', 'aimTargets', 'aimBumpers']) lamp(id, aim === id && blink(now, 300));
+    const aimed = new Set([...game.aims()].flatMap((x) => AIM[x] ?? []));
+    for (const id of ['aimRamp', 'aimOrbit', 'aimHole', 'aimDrops', 'aimTargets', 'aimBumpers']) lamp(id, aimed.has(id) && blink(now, s.boss || s.final ? 160 : 300));
+    // 这一章的颜色
+    paint(s.final || s.finalReady ? PALETTES[4] : PALETTES[s.chapter], Math.min(1, dt * 1.5));
+    // 危机
+    const def = s.boss || s.bossReady ? CHAPTERS[s.chapter].boss : null;
+    if (def && bossView.dying <= 0) {
+      if (bossView.kind !== def.kind) {
+        for (const [k, m] of Object.entries(bossModels)) m.g.visible = k === def.kind;
+        bossView.kind = def.kind;
+        bossView.appear = 0;
+      }
+      bossView.appear = Math.min(1, bossView.appear + dt * 1.2);
+    } else if (bossView.dying > 0) bossView.dying = Math.max(0, bossView.dying - dt * 1.4);
+    else bossView.appear = Math.max(0, bossView.appear - dt * 2);
+    const bossK = bossView.dying > 0 ? bossView.dying : bossView.appear;
+    bossGroup.visible = bossK > 0.01 && bossView.kind !== null;
+    if (bossGroup.visible) {
+      const m = bossModels[bossView.kind];
+      const far = s.bossReady ? 1 : 0; // 还没开打: 远一点、高一点
+      bossGroup.position.set(BOSS_AT.x + Math.sin(now / 1400) * (far ? 0.3 : 0.75), BOSS_AT.y + far * 0.7 + Math.sin(now / 700) * 0.06, BOSS_AT.z - far * 1.4);
+      m.g.scale.setScalar((0.5 + 0.8 * bossK) * (1 + fl.boss * 0.5) * (far ? 0.75 : 1));
+      m.spin(dt, now);
+      for (const mat of m.mats) mat.emissiveIntensity = fl.boss > 0 ? 3 : 0.3;
+      const hp = s.boss?.hp ?? def?.hp ?? 0;
+      const max = s.boss?.max ?? def?.hp ?? 0;
+      pips.forEach((p, i) => {
+        p.visible = i < max && bossView.dying <= 0;
+        p.material = i < hp ? pipOn : pipOff;
+        p.position.set((i - (max - 1) / 2) * 0.15, -0.78, 0.2);
+      });
+    }
+    // 终章: 曙光星
+    const homeOn = Boolean(s.final || s.finalReady);
+    home.visible = homeOn || home.scale.x > 0.01;
+    home.scale.setScalar(Math.max(0.001, home.scale.x + ((homeOn ? 1 : 0) - home.scale.x) * Math.min(1, dt * 1.5)));
+    home.userData.globe.rotation.y += dt * 0.12;
     // 火花
     for (const e of game.events) {
       if (e.type === 'bumper') burst(e.x, e.y, [0xffb03d, 0x3fe0ff, 0xff5ec8][e.i], 16, 0.25);
       else if (e.type === 'sling') burst(e.x, e.y, 0xff5ec8, 10);
       else if (e.type === 'hole' || e.type === 'eject') burst(ho.x, ho.y, 0xffa040, 24, 0.1);
       else if (e.type === 'wormhole') burst(e.x, 72, 0xb07dff, 20, 0.1);
-      else if (['jackpot', 'multiball', 'hyperspace', 'rankUp'].includes(e.type)) camState.shake = 1;
+      else if (e.type === 'bossHit') burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffffff, 26, 1.6);
+      else if (e.type === 'bossDown') {
+        bossView.dying = 1;
+        camState.shake = 1.4;
+        burstAt(bossGroup.position.x, bossGroup.position.y, bossGroup.position.z, 0xffb040, 90, 3.2);
+      } else if (e.type === 'landing') {
+        camState.shake = 1.2;
+        burstAt(home.position.x, home.position.y, home.position.z + 1, 0xffe28a, 90, 3);
+      } else if (['jackpot', 'multiball', 'hyperspace', 'bossStart', 'finalStart', 'travel'].includes(e.type)) camState.shake = 1;
       else if (e.type === 'tilt' || e.type === 'bump') camState.shake = 0.6;
     }
     let live = false;

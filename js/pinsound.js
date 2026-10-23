@@ -1,4 +1,4 @@
-// 弹珠台的声音 (自己合成, 不用下载): 挡板、小行星、弹弓、坡道、黑洞、跃迁、多球……
+// 弹珠台的声音 (自己合成, 不用下载): 挡板、小行星、弹弓、坡道、黑洞、跃迁、多球、任务、危机、着陆……
 // play(事件) 照着 pinball.js 发出来的事件响; 声音开关跟学习游戏共用
 
 import { soundOn } from './views/match.js';
@@ -172,11 +172,62 @@ export function play(e) {
     case 'missionStep':
       tone(ctx, { f0: 1047, len: 0.08, type: 'triangle', vol: 0.07 });
       break;
-    case 'rankUp':
     case 'missionDone':
       // 小号那样的一段
       notes(ctx, [523, 659, 784, 1047], { gap: 0.13, len: 0.2, type: 'sawtooth', vol: 0.045 });
       notes(ctx, [784, 1047], { gap: 0.15, len: 0.5, type: 'square', vol: 0.04, at: 0.55 });
+      break;
+    case 'missionFail':
+      notes(ctx, [440, 370, 311], { gap: 0.12, len: 0.2, type: 'square', vol: 0.045 });
+      break;
+    case 'pickStart':
+    case 'pick':
+      tone(ctx, { f0: 1320, len: 0.05, type: 'square', vol: 0.04 });
+      break;
+    case 'combo':
+      notes(ctx, [784 + e.n * 60, 1175 + e.n * 90], { gap: 0.05, len: 0.1, type: 'square', vol: 0.05 });
+      break;
+    case 'mystery':
+      notes(ctx, [1568, 1319, 1760, 2093], { gap: 0.06, len: 0.1, type: 'sine', vol: 0.07 });
+      break;
+    case 'bossReady':
+    case 'finalReady':
+    case 'landingReady':
+      // 警报
+      for (let i = 0; i < 3; i++) tone(ctx, { f0: 520, f1: 880, at: i * 0.3, len: 0.25, type: 'sawtooth', vol: 0.04 });
+      break;
+    case 'bossStart':
+      tone(ctx, { f0: 55, f1: 40, len: 1.2, type: 'sawtooth', vol: 0.08 });
+      notes(ctx, [196, 233, 196, 311], { gap: 0.18, len: 0.22, type: 'square', vol: 0.05, at: 0.2 });
+      break;
+    case 'bossHit':
+      hiss(ctx, { len: 0.25, freq: 1200, f1: 200, q: 1, vol: 0.18 });
+      tone(ctx, { f0: 160, f1: 50, len: 0.3, type: 'square', vol: 0.08 });
+      break;
+    case 'bossDown':
+      hiss(ctx, { len: 1.4, freq: 2400, f1: 80, q: 0.6, vol: 0.22, type: 'lowpass' });
+      tone(ctx, { f0: 90, f1: 30, len: 1.2, type: 'sine', vol: 0.15 });
+      notes(ctx, [523, 659, 784, 1047, 1319], { gap: 0.1, len: 0.3, type: 'triangle', vol: 0.08, at: 0.9 });
+      break;
+    case 'travel':
+      tone(ctx, { f0: 80, f1: 2400, len: 1.6, type: 'sawtooth', vol: 0.05 });
+      hiss(ctx, { len: 1.6, freq: 200, f1: 7000, q: 1, vol: 0.1 });
+      break;
+    case 'finalStart':
+      notes(ctx, [392, 523, 659, 784, 1047], { gap: 0.14, len: 0.35, type: 'sawtooth', vol: 0.045 });
+      break;
+    case 'finalJackpot':
+      notes(ctx, [1047, 1568, 2093], { gap: 0.06, len: 0.2, type: 'square', vol: 0.05 });
+      break;
+    case 'landing':
+      hiss(ctx, { len: 2, freq: 3000, f1: 150, q: 0.7, vol: 0.14, type: 'lowpass' });
+      notes(ctx, [523, 659, 784, 1047, 784, 1047, 1319, 1568], { gap: 0.16, len: 0.4, type: 'triangle', vol: 0.09, at: 0.6 });
+      break;
+    case 'finalEnd':
+      notes(ctx, [659, 523, 392], { gap: 0.15, len: 0.25, vol: 0.07 });
+      break;
+    case 'medic':
+      notes(ctx, [880, 1175, 1568], { gap: 0.08, len: 0.18, type: 'sine', vol: 0.08 });
       break;
     case 'lock':
       tone(ctx, { f0: 200, f1: 80, len: 0.3, type: 'square', vol: 0.06 });

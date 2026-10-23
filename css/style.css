@@ -8022,3 +8022,212 @@ body.has-pet main {
 @keyframes pb-spin {
   to { transform: rotate(360deg); }
 }
+
+/* 星际远航: 选模式、故事 */
+.pb-story {
+  margin: 0 0 12px;
+  color: #c9cff0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  text-align: left;
+}
+
+.pb-story p {
+  margin: 0 0 6px;
+}
+
+.pb-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.pb-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 10px;
+  border: 1px solid #4b5577;
+  border-radius: 12px;
+  background: #232a4f;
+  color: #f6f7fb;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pb-mode strong {
+  font-size: 1.05rem;
+}
+
+.pb-mode span {
+  color: #c9cff0;
+  font-size: 0.84rem;
+}
+
+.pb-mode.primary {
+  border-color: #7b7bff;
+  background: linear-gradient(#3a3aa8, #2a2c78);
+  box-shadow: 0 0 18px rgb(123 123 255 / 35%);
+}
+
+.pb-how {
+  text-align: left;
+}
+
+.pb-how summary {
+  color: #9fb4ff;
+  cursor: pointer;
+}
+
+.pb-gain {
+  margin: 0 0 10px;
+  color: #d6dbef;
+  font-size: 0.9rem;
+}
+
+.pb-gain p {
+  margin: 4px 0;
+}
+
+.pb-gain .pb-new {
+  color: #7dffb0;
+  font-weight: 700;
+}
+
+/* 远航模式开局选队员 (台面下面中间, 不挡发射钮) */
+.pb-crew {
+  position: absolute;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(420px, calc(100% - 180px));
+  min-width: 250px;
+  transform: translateX(-50%);
+}
+
+.pb-crew[hidden] {
+  display: none;
+}
+
+.pb-crew-arrow {
+  flex: none;
+  width: 34px;
+  height: 54px;
+  border: 1px solid #4b5577;
+  border-radius: 10px;
+  background: rgb(20 24 60 / 85%);
+  color: #f6f7fb;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.pb-crew-card {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #4b5577;
+  border-radius: 14px;
+  background: rgb(14 17 44 / 88%);
+  color: #f6f7fb;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 45%);
+  backdrop-filter: blur(4px);
+}
+
+.pb-crew-card p {
+  margin: 6px 0 0;
+  color: #c9cff0;
+}
+
+.pb-crew-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pb-crew-top div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pb-crew-top .small {
+  color: #a8b1cf;
+}
+
+.pb-crew-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 25%), transparent 60%), #111633;
+  color: var(--c);
+  font: 900 1.15rem 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.pb-crew-xp {
+  height: 5px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 12%);
+}
+
+.pb-crew-xp span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #7b7bff, #7ff3ff);
+}
+
+.pb-crew-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pb-crew-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--c);
+  border-radius: 50%;
+  color: var(--c);
+  font: 800 0.72rem 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  opacity: 0.6;
+}
+
+.pb-crew-dot.on {
+  background: color-mix(in srgb, var(--c) 30%, transparent);
+  opacity: 1;
+}
+
+.pb-crew-dot.locked {
+  border-color: #4b5577;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.pb-crew-tip {
+  color: #8f99c4 !important;
+}
+
+@media (max-width: 420px) {
+  .pb-crew {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 84px);
+    width: calc(100% - 24px);
+  }
+
+  .pb-modes {
+    grid-template-columns: 1fr;
+  }
+}
