@@ -72,6 +72,18 @@ export function examTime(exam) {
   return new Date(y, m - 1, d).getTime();
 }
 
+// 最近的考试 (定了计划、写了考试日期的卡片集、文件夹): { days 还有几天 (今天考是 0), exam 'YYYY-MM-DD', title }; 没有是 null
+export function nearestExam(list, now = Date.now()) {
+  const today0 = startOfDay(now);
+  let best = null;
+  for (const x of list) {
+    if (!x?.plan?.on || !x.plan.exam) continue;
+    const days = Math.round((examTime(x.plan.exam) - today0) / DAY);
+    if (days >= 0 && (!best || days < best.days)) best = { days, exam: x.plan.exam, title: x.title ?? x.name ?? '' };
+  }
+  return best;
+}
+
 // 这个卡片集今天学几个新词:
 // { on, mode: 'fixed' 每天固定几个 | 'exam' 按考试算 | 'rest' 考前只复习 | 'passed' 考试过了 (按固定的),
 //   perDay 今天该学几个, learned 今天已经学了几个, today 今天还剩几个, left 还没背过的一共几个,

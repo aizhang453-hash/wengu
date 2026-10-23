@@ -7427,3 +7427,200 @@ body.has-pet main {
 .pet-list li + li {
   margin-top: 2px;
 }
+
+/* ---- 考前清单 ---- */
+.exam-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.exam-banner > div {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.exam-banner-icon {
+  font-size: 1.5rem;
+}
+
+.exam-list h3 {
+  margin: 16px 0 6px;
+  font-size: 1rem;
+}
+
+.exam-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exam-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.exam-item label {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.exam-item input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--good);
+}
+
+.exam-item input:checked + span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.exam-progress {
+  font-weight: 700;
+}
+
+.exam-progress.all {
+  color: var(--good);
+}
+
+/* ---- 统计: 一天里什么时候记得最牢 ---- */
+.tod-list {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tod-row {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr) 9em;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.tod-row.few {
+  color: var(--muted);
+}
+
+.tod-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.tod-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--new);
+}
+
+.tod-row.best .tod-bar span {
+  background: var(--good);
+}
+
+.tod-row.best .tod-name {
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .tod-row {
+    grid-template-columns: 6.5em minmax(0, 1fr) 7.5em;
+    gap: 6px;
+    font-size: 0.9rem;
+  }
+}
+
+/* ---- 错题集: 按题型 ---- */
+.mk-kinds {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.mk-kinds h2 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+}
+
+.mk-kind-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-kind-list li {
+  display: grid;
+  grid-template-columns: 7em minmax(60px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.mk-kind-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mk-kind-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.mk-kind-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bad);
+}
+
+@media (max-width: 600px) {
+  .mk-kind-list li {
+    grid-template-columns: 6em minmax(40px, 1fr) auto;
+  }
+
+  .mk-kind-list li > .muted {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.qi-tag.mk-kind {
+  border: 1px solid transparent;
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* 按题目猜的 */
+.qi-tag.mk-kind.guess {
+  border: 1px dashed var(--bad);
+  background: transparent;
+}
+
+.mk-kind-pick {
+  width: auto;
+  max-width: 12em;
+}

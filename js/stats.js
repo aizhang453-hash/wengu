@@ -130,3 +130,54 @@ export function suspendedCards(sets) {
   for (const [set, card, stat] of cardsOf(sets)) if (isSuspended(stat)) out.push({ set, card, at: stat.sus });
   return out.sort((a, b) => b.at - a.at);
 }
+
+// ---- 一天里什么时候记得最牢 ----
+// 看复习的时候 (不算第一次学、同一天又看的) 记住了几成, 按时间段分开算。
+// 卡片难不难、隔得久不久也有影响, 所以记录少的时间段不算, 差得不多的说「差不多」
+export const TIME_BLOCKS = [
+  { key: 'dawn', name: '清早', from: 5, to: 8 },
+  { key: 'morning', name: '上午', from: 8, to: 12 },
+  { key: 'noon', name: '中午', from: 12, to: 14 },
+  { key: 'afternoon', name: '下午', from: 14, to: 18 },
+  { key: 'evening', name: '傍晚', from: 18, to: 21 },
+  { key: 'night', name: '晚上', from: 21, to: 24 },
+  { key: 'late', name: '深夜', from: 0, to: 5 },
+];
+export const MIN_BLOCK = 40; // 一个时间段至少复习了几次才算
+export const MIN_TIME_TOTAL = 150; // 一共至少几次才看
+const BLOCK_OF_HOUR = Array.from({ length: 24 }, (_, hour) => TIME_BLOCKS.findIndex((b) => hour >= b.from && hour < b.to));
+
+// 最近 days 天每个时间段复习了几次、记住了几次: [{ ...时间段, n, ok }]
+export function timeOfDay(sets, log, now = Date.now(), days = 180) {
+  const from = daysLater(now, -(days - 1));
+  const out = TIME_BLOCKS.map((b) => ({ ...b, n: 0, ok: 0 }));
+  for (const [, card, stat] of cardsOf(sets)) {
+    if (!(stat?.at >= from) || !log?.[card.id]) continue; // 这么久没答过的, 记录里也没有最近的
+    const list = unpack(log[card.id]).map(decodeReview);
+    for (let i = 1; i < list.length; i++) {
+      const { at, rating } = list[i];
+      if (at < from || at > now || startOfDay(at) === startOfDay(list[i - 1].at)) continue;
+      const block = out[BLOCK_OF_HOUR[new Date(at).getHours()]];
+      block.n++;
+      if (rating !== AGAIN) block.ok++;
+    }
+  }
+  return out;
+}
+
+// 哪个时间段最好: { enough: false, total } 记录还不够 |
+//   { enough: true, best 记住得最多的, usual 最常学的, same 最常学的就是最好的, sure 最好的比最常学的确实高 (不是碰巧), diff }
+export function bestTime(blocks) {
+  const total = blocks.reduce((n, b) => n + b.n, 0);
+  const counted = blocks.filter((b) => b.n >= MIN_BLOCK);
+  if (total < MIN_TIME_TOTAL || counted.length < 2) return { enough: false, total };
+  const rate = (b) => b.ok / b.n;
+  const usual = counted.reduce((a, b) => (b.n > a.n ? b : a));
+  const best = counted.reduce((a, b) => (rate(b) > rate(a) || (rate(b) === rate(a) && b.n > a.n) ? b : a));
+  if (best === usual) return { enough: true, best, usual, same: true, sure: false, diff: 0 };
+  // 两个比例差得够不够多 (差得少、次数少可能只是碰巧): 差 3 个百分点以上, 而且 z ≥ 1.96
+  const diff = rate(best) - rate(usual);
+  const p = (best.ok + usual.ok) / (best.n + usual.n);
+  const se = Math.sqrt(p * (1 - p) * (1 / best.n + 1 / usual.n));
+  return { enough: true, best, usual, same: false, sure: diff >= 0.03 && se > 0 && diff / se >= 1.96, diff };
+}

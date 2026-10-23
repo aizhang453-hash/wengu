@@ -1,11 +1,11 @@
 // 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」;
-// 填空题写对的答案和当时写的; 为什么错。
+// 填空题写对的答案和当时写的; 为什么错; 题型 (不写就按题目猜)。
 
 import { h, fill, toast } from '../dom.js';
 import { newId } from '../store.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { cardImage } from '../cardview.js';
-import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, newMistake, mistakeProblem, tidyMistake } from '../mistakes.js';
+import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, MAX_KIND, KINDS, newMistake, mistakeProblem, tidyMistake, guessKind } from '../mistakes.js';
 
 export function renderMistakeEdit({ store, go }, id = null) {
   const existing = id ? store.getMistake(id) : null;
@@ -22,12 +22,24 @@ export function renderMistakeEdit({ store, go }, id = null) {
     ['choice', '选择题'],
     ['input', '填空题'],
   ].map(([type, label]) => h('button', { class: 'chip', type: 'button', onclick: () => ((draft.type = type), markDirty(), draw()) }, label));
-  const passageEl = h('textarea', { class: 'input mk-passage-input', rows: 5, placeholder: 'SAT 阅读写作题的那段文字、数学题给的条件……', 'aria-label': '文章', oninput: () => ((draft.passage = passageEl.value), markDirty()) });
-  const questionEl = h('textarea', { class: 'input', rows: 3, placeholder: '比如 Which choice completes the text with the most logical and precise word or phrase?', 'aria-label': '题目', oninput: () => ((draft.question = questionEl.value), markDirty()) });
+  const passageEl = h('textarea', { class: 'input mk-passage-input', rows: 5, placeholder: 'SAT 阅读写作题的那段文字、数学题给的条件……', 'aria-label': '文章', oninput: () => ((draft.passage = passageEl.value), markDirty(), drawKindHint()) });
+  const questionEl = h('textarea', { class: 'input', rows: 3, placeholder: '比如 Which choice completes the text with the most logical and precise word or phrase?', 'aria-label': '题目', oninput: () => ((draft.question = questionEl.value), markDirty(), drawKindHint()) });
   const noteEl = h('textarea', { class: 'input', rows: 3, placeholder: '比如「没看清问的是 NOT」「把 x 当成了 y」, 或者把解析抄下来', 'aria-label': '为什么错', oninput: () => ((draft.note = noteEl.value), markDirty()) });
   const answerEl = h('input', { class: 'input', placeholder: '比如 3/4 (3/4 和 0.75 都算对; 几个都对的用逗号隔开)', 'aria-label': '对的答案', autocomplete: 'off', oninput: () => ((draft.answer = answerEl.value), markDirty()) });
   const mineTextEl = h('input', { class: 'input', placeholder: '当时写的 (可以不写)', 'aria-label': '当时写的', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
   const answersEl = h('div', { class: 'mk-answers' });
+  // 题型: 自己写, 或者从列表里挑 (SAT 的几类、以前写过的); 空着就按题目猜, 下面写着猜的是什么
+  const kindList = h(
+    'datalist',
+    { id: 'mk-kinds' },
+    [...new Set([...Object.values(KINDS).flat(), ...store.allMistakes().map((m) => m.kind).filter(Boolean)])].map((k) => h('option', { value: k })),
+  );
+  const kindHint = h('span', { class: 'muted small' });
+  const kindEl = h('input', { class: 'input mk-kind-input', list: 'mk-kinds', maxlength: MAX_KIND, placeholder: '比如 词汇题、语法·标点、几何三角 (可以不写)', 'aria-label': '题型', autocomplete: 'off', oninput: () => ((draft.kind = kindEl.value), markDirty(), drawKindHint()) });
+  function drawKindHint() {
+    const guess = guessKind(draft);
+    kindHint.textContent = draft.kind.trim() ? '' : guess ? `不写的话, 按题目猜是「${guess}」` : '不写的话算「其他」';
+  }
 
   // ---- 图片: 点按钮选、直接粘贴截图、拖进来 ----
   const imagesEl = h('div', { class: 'mk-images-edit' });
@@ -76,6 +88,8 @@ export function renderMistakeEdit({ store, go }, id = null) {
     noteEl.value = draft.note;
     answerEl.value = draft.answer;
     mineTextEl.value = draft.mineText;
+    kindEl.value = draft.kind ?? '';
+    drawKindHint();
   }
 
   function draw() {
@@ -87,7 +101,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
     }
     if (draft.options.length < MIN_OPTIONS) draft.options = ['', '', '', ''];
     const rows = draft.options.map((text, i) => {
-      const input = h('input', { class: 'qe-opt-input', value: text, placeholder: `选项 ${LETTERS[i]}`, 'aria-label': `选项 ${LETTERS[i]}`, autocomplete: 'off', oninput: () => ((draft.options[i] = input.value), markDirty()) });
+      const input = h('input', { class: 'qe-opt-input', value: text, placeholder: `选项 ${LETTERS[i]}`, 'aria-label': `选项 ${LETTERS[i]}`, autocomplete: 'off', oninput: () => ((draft.options[i] = input.value), markDirty(), drawKindHint()) });
       const right = draft.correct === i;
       const mine = draft.mine === i;
       return h(
@@ -228,6 +242,10 @@ export function renderMistakeEdit({ store, go }, id = null) {
       answersEl,
       h('label', { class: 'ask-label' }, '为什么错 / 解析'),
       noteEl,
+      h('label', { class: 'ask-label' }, '题型'),
+      kindEl,
+      kindList,
+      kindHint,
       problemEl,
       h('div', { class: 'row end' }, h('a', { class: 'btn', href: '#/mistakes' }, '取消'), existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存, 再记一道'), saveBtn()),
     ),

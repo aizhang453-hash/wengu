@@ -4,7 +4,7 @@ import { h, fill, toast } from '../dom.js';
 import { stripMarks } from '../rich.js';
 import { DAY, dayKey, startOfDay, LEECH } from '../srs.js';
 import { FOLDER_PREFIX } from '../store.js';
-import { forecast, cardStates, knowledge, reviewsByDay, retentionStats, todayStats, leeches, suspendedCards, MATURE } from '../stats.js';
+import { forecast, cardStates, knowledge, reviewsByDay, retentionStats, todayStats, leeches, suspendedCards, timeOfDay, bestTime, MATURE, MIN_BLOCK, MIN_TIME_TOTAL } from '../stats.js';
 import { editCardDialog } from './cardedit.js';
 import { openRetentionDialog, openCapDialog, percent, dateText } from './plan.js';
 
@@ -54,6 +54,7 @@ export function renderStats({ store, go }, id = null) {
             forecastSection(sets, now),
             calendarSection(sets, log, now),
             retentionSection(store, sets, log, now, redraw),
+            timeSection(sets, log, now),
             cardsSection(sets, now),
             leechSection(store, sets, redraw, review),
             suspendedSection(store, sets, redraw),
@@ -329,5 +330,44 @@ function suspendedSection(store, sets, redraw) {
         '全部恢复',
       ),
     ),
+  );
+}
+
+// 一天里什么时候记得最牢: 每个时间段复习时记住了几成 (最近半年), 最好的比最常学的确实高才建议换时间
+export function timeAdvice(r) {
+  const pct = (b) => `${Math.round((b.ok / b.n) * 100)}%`;
+  const range = (b) => `${b.from}–${b.to} 点`;
+  if (!r.enough) return `复习记录还不够看出来 (最近半年复习了 ${r.total} 次; 至少要 ${MIN_TIME_TOTAL} 次, 两个时间段各 ${MIN_BLOCK} 次以上)。再学一阵就有了。`;
+  if (r.same) return `你最常在${r.usual.name} (${range(r.usual)}) 学, 这时候复习记住了 ${pct(r.usual)}, 正好是记得最牢的时候, 保持!`;
+  if (r.sure) return `${r.best.name} (${range(r.best)}) 复习时记住了 ${pct(r.best)}, 比你最常学的${r.usual.name} (${pct(r.usual)}) 高。新词、难记卡这些要动脑子的, 可以放到${r.best.name}学。`;
+  return `各个时间段差不多: 最好的${r.best.name} ${pct(r.best)}, 最常学的${r.usual.name} ${pct(r.usual)}, 差得不多, 可能只是碰巧。什么时候学都行, 重要的是每天都学。`;
+}
+
+function timeSection(sets, log, now) {
+  const blocks = timeOfDay(sets, log, now);
+  if (!blocks.some((b) => b.n)) return null;
+  const r = bestTime(blocks);
+  return section(
+    '一天里什么时候记得最牢',
+    h('p', {}, timeAdvice(r)),
+    h(
+      'ul',
+      { class: 'tod-list' },
+      blocks
+        .filter((b) => b.n)
+        .map((b) => {
+          const enough = b.n >= MIN_BLOCK;
+          const pct = Math.round((b.ok / b.n) * 100);
+          const best = r.enough && r.best === b;
+          return h(
+            'li',
+            { class: `tod-row${enough ? '' : ' few'}${best ? ' best' : ''}` },
+            h('span', { class: 'tod-name' }, b.name, h('span', { class: 'muted small' }, ` ${b.from}–${b.to} 点`)),
+            h('span', { class: 'tod-bar', 'aria-hidden': 'true' }, h('span', { style: `width: ${enough ? pct : 0}%` })),
+            h('span', { class: 'small' }, enough ? `${pct}% · ${num(b.n)} 次` : `${num(b.n)} 次 (太少, 不算)`),
+          );
+        }),
+    ),
+    h('p', { class: 'muted small' }, '按复习的时候记住了几成算的 (第一次学的、同一天又看的不算)。卡片难不难、隔得久不久也有影响, 记录越多越准。'),
   );
 }

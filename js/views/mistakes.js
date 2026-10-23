@@ -1,9 +1,9 @@
-// 错题集: 记下的错题, 今天该重做几道、一道道列出来 (可以筛、可以搜), 记新的、改、删
+// 错题集: 记下的错题, 今天该重做几道、按题型数一数 (哪类错得最多, 能单练一类)、一道道列出来 (可以筛、可以搜), 记新的、改、删
 
 import { h, toast } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { DAY } from '../srs.js';
-import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel } from '../mistakes.js';
+import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel, kindOf, kindStats } from '../mistakes.js';
 
 const FILTER_KEY = 'wengu:mistakes-filter';
 
@@ -28,6 +28,7 @@ export function renderMistakes({ store }) {
     // 用默认的
   }
   let query = '';
+  let kind = ''; // 只看这类 (空: 全部)
 
   const listEl = h('ul', { class: 'mk-list' });
   const filters = [
@@ -54,6 +55,16 @@ export function renderMistakes({ store }) {
     ),
   );
   const search = h('input', { class: 'input mk-search', type: 'search', placeholder: '在错题里找……', 'aria-label': '在错题里找', oninput: () => ((query = search.value), drawList()) });
+  const kinds = kindStats(all);
+  const kindPick =
+    kinds.length > 1
+      ? h(
+          'select',
+          { class: 'input mk-kind-pick', 'aria-label': '只看哪类题', onchange: (e) => ((kind = e.target.value), drawList()) },
+          h('option', { value: '' }, '所有题型'),
+          kinds.map((k) => h('option', { value: k.kind }, `${k.kind} (${k.total})`)),
+        )
+      : null;
 
   function drawList() {
     const now = Date.now();
@@ -67,6 +78,7 @@ export function renderMistakes({ store }) {
       if (filter === 'due' && mistakeStatus(m, now) !== 'due') return false;
       if (filter === 'learning' && m.review?.mastered) return false;
       if (filter === 'mastered' && !m.review?.mastered) return false;
+      if (kind && kindOf(m) !== kind) return false;
       return matchesSearch(m, query);
     });
     listEl.replaceChildren(
@@ -81,6 +93,7 @@ export function renderMistakes({ store }) {
                 'div',
                 { class: 'mk-item-head' },
                 h('span', { class: `mk-status ${st}` }, statusText(m, now)),
+                h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '按题目猜的题型, 在「改」里可以换' }, kindOf(m)),
                 h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
                 m.passage ? h('span', { class: 'qi-tag' }, '📄 有文章') : null,
                 m.images.length ? h('span', { class: 'qi-tag' }, `🖼 ${m.images.length} 张图`) : null,
@@ -145,8 +158,41 @@ export function renderMistakes({ store }) {
       h('div', { class: 'page-head' }, h('h1', {}, '📕 错题集'), h('a', { class: 'btn primary', href: '#/mistakes/new' }, '＋ 记一道错题')),
       h('p', { class: 'muted' }, '做错的题 (比如 SAT) 打字记下来: 题目、选项、对的答案、当时选的、为什么错。过几天重做, 做对了隔得越来越久, 连对 3 次算掌握。'),
       hero,
-      all.length ? h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), search) : null,
+      kindSection(kinds, all.length),
+      all.length ? h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), kindPick, search) : null,
       listEl,
     ),
   };
+}
+
+// 按题型: 每类几道、还有几道没掌握、重做时对了几成, 能单练一类; 错得最多的写在上面
+function kindSection(kinds, total) {
+  if (total < 3 || !kinds.length) return null;
+  const top = kinds[0];
+  const pct = (k) => (k.right + k.wrong ? `重做对了 ${Math.round((k.right / (k.right + k.wrong)) * 100)}%` : '还没重做过');
+  return h(
+    'section',
+    { class: 'mk-kinds' },
+    h('h2', {}, '按题型'),
+    h(
+      'p',
+      { class: 'muted small' },
+      kinds.length > 1 ? `错得最多的是「${top.kind}」(${top.total} 道, 占 ${Math.round((top.total / total) * 100)}%)。这类可以专门练一练, 再看看「为什么错」里是不是老犯同一个毛病。` : `都是「${top.kind}」。`,
+      ' 没写题型的按题目猜 (SAT 的问法都是固定的), 在「改」里可以换。',
+    ),
+    h(
+      'ul',
+      { class: 'mk-kind-list' },
+      kinds.map((k) =>
+        h(
+          'li',
+          {},
+          h('span', { class: 'mk-kind-name' }, k.kind),
+          h('span', { class: 'mk-kind-bar', 'aria-hidden': 'true' }, h('span', { style: `width: ${Math.round((k.total / top.total) * 100)}%` })),
+          h('span', { class: 'muted small' }, `${k.total} 道 · 没掌握 ${k.left} · ${pct(k)}`),
+          k.left ? h('a', { class: 'btn small', href: `#/mistakes/review/kind:${encodeURIComponent(k.kind)}` }, '练这类') : h('span', { class: 'muted small' }, '✓ 都掌握了'),
+        ),
+      ),
+    ),
+  );
 }

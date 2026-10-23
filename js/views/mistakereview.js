@@ -3,11 +3,12 @@
 //   #/mistakes/review       今天该重做的
 //   #/mistakes/review/all   还没掌握的全做一遍
 //   #/mistakes/review/<id>  只做这一道
+//   #/mistakes/review/kind:<题型>  这类还没掌握的全做一遍
 
 import { h, fill, dialogOpen, openDialog } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { shuffle } from '../questions.js';
-import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel } from '../mistakes.js';
+import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel, kindOf } from '../mistakes.js';
 import { sound } from './match.js';
 
 export function renderMistakeReview({ store }, which = null) {
@@ -15,6 +16,7 @@ export function renderMistakeReview({ store }, which = null) {
   let list;
   if (!which) list = dueMistakes(all);
   else if (which === 'all') list = shuffle(all.filter((m) => !m.review?.mastered));
+  else if (which.startsWith('kind:')) list = shuffle(all.filter((m) => !m.review?.mastered && kindOf(m) === which.slice(5)));
   else list = all.filter((m) => m.id === which);
 
   const root = h('section', { class: 'mk-review' });
@@ -24,7 +26,7 @@ export function renderMistakeReview({ store }, which = null) {
         'div',
         { class: 'summary' },
         h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '✓'),
-        h('h1', {}, which === 'all' ? '没有还没掌握的错题' : which ? '找不到这道错题' : '今天没有要重做的错题'),
+        h('h1', {}, which === 'all' ? '没有还没掌握的错题' : which?.startsWith('kind:') ? `「${which.slice(5)}」的都掌握了` : which ? '找不到这道错题' : '今天没有要重做的错题'),
         h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: '#/mistakes' }, '回错题集')),
       ),
     );

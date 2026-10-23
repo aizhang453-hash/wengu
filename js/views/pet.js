@@ -9,12 +9,13 @@
 import { h, fill, openDialog, askText, switchRow, dialogOpen } from '../dom.js';
 import { todayAll } from './plan.js';
 import { editCardDialog } from './cardedit.js';
-import { reviewedToday, examTime, plannedSets, newToday, isNew } from '../plan.js';
-import { dueMistakes } from '../mistakes.js';
+import { openExamList } from './examlist.js';
+import { reviewedToday, plannedSets, newToday, isNew, nearestExam } from '../plan.js';
+import { dueMistakes, kindStats, OTHER_KIND } from '../mistakes.js';
 import { streak, dueTomorrow, dayKey, startOfDay, daysLater, DAY, LEECH, isSuspended } from '../srs.js';
 import { historyOf, AGAIN } from '../revlog.js';
 import { stripMarks } from '../rich.js';
-import { MATURE } from '../stats.js';
+import { MATURE, timeOfDay, bestTime } from '../stats.js';
 import {
   STAGES,
   OUTFITS,
@@ -139,16 +140,6 @@ export function turtleSvg({ stage = 2, mood = 'normal', wear = '', progress = 0,
 
 // ---- 温温现在的情况 ----
 
-function examDaysOf(store, now) {
-  const today0 = startOfDay(now);
-  let best = null;
-  for (const x of [...store.data.sets, ...store.data.folders]) {
-    if (!x.plan?.on || !x.plan.exam) continue;
-    const d = Math.round((examTime(x.plan.exam) - today0) / DAY);
-    if (d >= 0 && (best === null || d < best)) best = d;
-  }
-  return best;
-}
 
 // 难记卡几张 (只数)
 function countLeeches(sets) {
@@ -183,7 +174,7 @@ export function situation(store, now = Date.now()) {
     idleDays: idleDays(data.activity, now) ?? 0,
     mistakes: dueMistakes(data.mistakes, now).length,
     leeches: countLeeches(sets),
-    examDays: examDaysOf(store, now),
+    examDays: nearestExam([...data.sets, ...data.folders], now)?.days ?? null,
     tomorrow: dueTomorrow(sets, now) + q.held,
     xp,
     stage: g.stage,
@@ -191,6 +182,14 @@ export function situation(store, now = Date.now()) {
   };
   c.mood = moodOf(c);
   return c;
+}
+
+// 一天里什么时候记得最牢: 要翻最近半年的复习记录, 一天算一次就够了 (习惯不会一会儿就变)
+let timeCache = null;
+function timeInfo(store, sets, now) {
+  const day = dayKey(now);
+  if (timeCache?.day !== day || timeCache.store !== store) timeCache = { day, store, value: bestTime(timeOfDay(sets, store.data.revlog, now)) };
+  return timeCache.value;
 }
 
 const dayTime = (key) => {
@@ -302,6 +301,10 @@ export function insight(store, now = Date.now()) {
     } else answersPrev += v;
   }
   const mastered = data.mistakes.filter((m) => m.review?.mastered).length;
+  // 错得最多的题型 (错题有 5 道以上, 这类占三成以上才说)
+  const kinds = kindStats(data.mistakes);
+  const top = kinds[0];
+  const topKind = data.mistakes.length >= 5 && top && top.kind !== OTHER_KIND && top.total >= 3 && top.total / data.mistakes.length >= 0.3 ? { ...top, share: top.total / data.mistakes.length } : null;
   return {
     at: now,
     perCard,
@@ -309,8 +312,10 @@ export function insight(store, now = Date.now()) {
     pace,
     rest,
     neglect,
+    topKind,
+    bestTime: timeInfo(store, sets, now),
     leech: worst ? { term: shortText(worst.card.term) || shortText(worst.card.def) || '这张卡片', lapses: worst.lapses, setId: worst.set.id, cardId: worst.card.id } : null,
-    week: { days7, answers7, answersPrev, fresh7, studied, mature, mastered, mistakesLeft: data.mistakes.length - mastered },
+    week: { days7, answers7, answersPrev, fresh7, studied, mature, mastered, mistakesLeft: data.mistakes.length - mastered, topKind },
   };
 }
 
@@ -357,12 +362,12 @@ export function setupPet({ store }) {
   function full() {
     if (!deep || Date.now() - deep.at > 10 * 60e3) deep = insight(store);
     const minutes = deep.perCard && c.due ? Math.max(1, Math.round(((c.reviews + c.fresh * 3) * deep.perCard) / 60000)) : null;
-    return { ...c, minutes, pace: deep.pace, rest: deep.rest, retention: deep.retention, leech: deep.leech, neglect: deep.neglect };
+    return { ...c, minutes, pace: deep.pace, rest: deep.rest, retention: deep.retention, leech: deep.leech, neglect: deep.neglect, topKind: deep.topKind, bestTime: deep.bestTime };
   }
 
   function myReport() {
     full();
-    return report({ ...deep.week, retention: deep.retention, streak: c.streak, examDays: c.examDays });
+    return report({ ...deep.week, retention: deep.retention, bestTime: deep.bestTime, streak: c.streak, examDays: c.examDays });
   }
 
   function setPrefs(patch) {
@@ -458,6 +463,11 @@ export function setupPet({ store }) {
       savePref({ cleared: dayKey() });
       if (!first) found.push({ kind: 'cleared', tomorrow: c.tomorrow });
     }
+    // 考试前一天、考试那天: 提醒看考前清单 (这台设备上一天一次)
+    if (c.examDays !== null && c.examDays <= 1 && prefs.examList !== dayKey()) {
+      savePref({ examList: dayKey() });
+      found.push({ kind: 'examlist', days: c.examDays });
+    }
     if (base) {
       if (c.leeches > base.leeches) found.push({ kind: 'leech', n: c.leeches - base.leeches });
       const ate = c.xp - base.xp;
@@ -465,7 +475,7 @@ export function setupPet({ store }) {
     }
     base = { xp: c.xp, leeches: c.leeches };
     // 重要的先说: 烟花 > 长大 > 解锁 > 背完了 > 难记卡
-    const order = ['hello', 'milestone', 'stage', 'unlock', 'cleared', 'leech'];
+    const order = ['hello', 'examlist', 'milestone', 'stage', 'unlock', 'cleared', 'leech'];
     events.push(...found);
     events.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   }
@@ -511,7 +521,7 @@ export function setupPet({ store }) {
       ? null
       : a.href
         ? h('a', { class: 'btn small primary', href: a.href, onclick: () => hideBubble(false) }, a.label)
-        : h('button', { class: 'btn small primary', type: 'button', onclick: () => (a.edit ? editCard(a.edit) : openPanel()) }, a.label);
+        : h('button', { class: 'btn small primary', type: 'button', onclick: () => (a.edit ? editCard(a.edit) : a.list ? (hideBubble(false), openExamList(store)) : openPanel()) }, a.label);
     const chip = (label, onclick) => h('button', { class: 'pet-chip', type: 'button', onclick }, label);
     fill(
       bubble,
@@ -770,7 +780,7 @@ export function setupPet({ store }) {
       h('p', { class: 'muted small' }, '怎么喂: 答一题、重做一道错题、玩一局游戏, 都是喂它一口; 今天的复习背完, 它就吃饱了。几天不学它会饿、会想你, 但不会生病, 也不会离开。连续打卡到 3、7、14、30、50、100…… 天放烟花。'),
       h('h3', {}, '这 7 天学得怎么样'),
       (() => {
-        const r = report({ ...deepNow.week, retention: deepNow.retention, streak: now.streak, examDays: now.examDays });
+        const r = report({ ...deepNow.week, retention: deepNow.retention, bestTime: deepNow.bestTime, streak: now.streak, examDays: now.examDays });
         return [h('p', {}, r.text), h('ul', { class: 'pet-list' }, r.list.map((x) => h('li', {}, x)))];
       })(),
       h('h3', {}, '装扮'),

@@ -159,16 +159,22 @@ export function eventLine(e) {
   if (e.kind === 'cleared') return { text: `今天的都背完了, 吃得好饱!${e.tomorrow ? ` 明天有 ${e.tomorrow} 张。` : ''}` };
   if (e.kind === 'leech') return { text: `又有${e.n > 1 ? ` ${e.n} ` : ''}张卡片忘了 8 次以上, 成了难记卡。别灰心! 换个记法: 加个例句、图片, 或者编个谐音, 就好记了。`, action: { label: '看看难记卡', href: '#/stats' } };
   if (e.kind === 'fed') return { text: `刚才吃了 ${e.n} 口, 好香!` };
+  if (e.kind === 'examlist') {
+    return e.days
+      ? { text: '明天就考试了! 我给你列了一份考前清单: 今天要过一遍的、要带的东西、今晚早点睡。一样一样打勾吧。', action: { label: '看考前清单', list: true } }
+      : { text: '今天考试! 出门前对一下清单, 东西带齐了吗? 加油, 你一定行!', action: { label: '看清单', list: true } };
+  }
   return null;
 }
 
-// 点它说的有用的话, 要紧的在前: [{ id, text, action?: { label, href } | { label, edit: { setId, cardId } } }]
+// 点它说的有用的话, 要紧的在前: [{ id, text, action?: { label, href } | { label, edit: { setId, cardId } } | { label, list: true 考前清单 } }]
 // c: { sets 有几个卡片集, hour, today 今天学了几次, due, reviews, fresh, held, streak, idleDays, mistakes 该重做几道,
 //      leeches 难记卡几张, examDays 离考试几天 (没有是 null), tomorrow }
 //   下面这些是细算的 (views/pet.js 的 insight), 没算就不说:
 //      minutes 今天的大概要几分钟, pace { id, href, title, learned7, need7, perDay } 计划跟不上了,
 //      rest { href, title, left } 到了考前只复习还有新词没学, retention { n, ok, target } 最近 7 天复习时记住的,
-//      leech { term, lapses, setId, cardId } 忘得最多的那张, neglect { href, title, fresh, days } 很久没碰的卡片集
+//      leech { term, lapses, setId, cardId } 忘得最多的那张, neglect { href, title, fresh, days } 很久没碰的卡片集,
+//      topKind { kind, total, left, share } 错得最多的题型, bestTime 一天里什么时候记得最牢 (stats.js 的 bestTime)
 export function tips(c) {
   const out = [];
   const go = (label, href) => ({ label, href });
@@ -180,6 +186,9 @@ export function tips(c) {
   if (c.hour >= 23 || c.hour < 5) add('late', '很晚了, 早点睡吧。睡着的时候, 白天背的会记得更牢; 熬夜硬背反而记不住。');
   if (c.idleDays >= 2 && !c.today) add('back', `${c.idleDays} 天没来了, 好想你! 不用一下补完, 先背今天的${c.held ? ', 积压的我每天给你排一点' : ''}。`, go('去背', '#/review'));
   else if (!c.today && c.streak > 0 && c.hour >= 19) add('streak', `今天还没学! 再不背, 连续 ${c.streak} 天就断了。`, go('去背', '#/review'));
+  // 考试前一天、考试那天: 先说考前清单
+  if (c.examDays === 0) add('exam', '今天考试, 加油! 你准备了这么久, 一定行! 出门前对一下清单, 东西带齐了吗?', { label: '看清单', list: true });
+  else if (c.examDays === 1) add('exam', '明天就考试了! 今天别学新的, 照着考前清单一样一样过一遍, 东西准备好, 早点睡。', { label: '看考前清单', list: true });
   if (c.due) {
     const parts = [c.reviews ? `复习 ${c.reviews} 张` : '', c.fresh ? `新词 ${c.fresh} 个` : ''].filter(Boolean).join('、');
     add('due', `今天还有 ${c.due} 张要背 (${parts})${c.minutes ? `, 照你平时的速度大概 ${c.minutes} 分钟` : ''}。背完我就吃饱了!`, go('去背', '#/review'));
@@ -190,8 +199,8 @@ export function tips(c) {
     add('pace', `最近 7 天「${p.title}」学了 ${p.learned7} 个新词, 按计划该学 ${p.need7} 个左右。少学的会分到以后几天, 现在每天要学 ${p.perDay} 个了, 越拖越多。今天多学几个吧!`, go('去学', '#/review'));
   }
   if (c.rest) add('rest', `「${c.rest.title}」还有 ${c.rest.left} 个新词没学, 已经到了考前只复习的日子, 新词不排了。想学完的话, 在计划里把「最后几天只复习」改少一点。`, go('看计划', c.rest.href));
-  if (c.examDays !== null && c.examDays >= 0 && c.examDays <= 7) {
-    add('exam', c.examDays === 0 ? '今天考试, 加油! 你准备了这么久, 一定行! 先深呼吸, 会做的先做。' : `离考试只有 ${c.examDays} 天了! 别学太多新的了, 多重做错题集、多过几遍难记卡, 每天早点睡。`, c.examDays ? go('重做错题', '#/mistakes/review/all') : null);
+  if (c.examDays !== null && c.examDays >= 2 && c.examDays <= 7) {
+    add('exam', `离考试只有 ${c.examDays} 天了! 别学太多新的了, 多重做错题集、多过几遍难记卡, 每天早点睡。考试前一天我会给你一份考前清单。`, go('重做错题', '#/mistakes/review/all'));
   }
   if (c.retention && c.retention.n >= 30) {
     const pct = Math.round((c.retention.ok / c.retention.n) * 100);
@@ -203,6 +212,15 @@ export function tips(c) {
     const more = c.leeches > 1 ? ` (一共 ${c.leeches} 张难记卡)` : '';
     add('leech', `「${c.leech.term}」已经忘了 ${c.leech.lapses} 次了${more}。光多背几遍不管用, 换个记法: 加个例句、图片, 拆开词根, 或者编个谐音。`, { label: '改这张', edit: { setId: c.leech.setId, cardId: c.leech.cardId } });
   } else if (c.leeches) add('leech', `有 ${c.leeches} 张老是忘的难记卡。换个记法更好记: 加个例句、图片, 或者编个谐音。`, go('看看', '#/stats'));
+  if (c.topKind) {
+    const k = c.topKind;
+    add('kind', `错题里「${k.kind}」最多: ${k.total} 道 (占 ${Math.round(k.share * 100)}%)${k.left ? `, 还有 ${k.left} 道没掌握` : ''}。这类可以专门练一练, 再看看「为什么错」里是不是老犯同一个毛病。`, k.left ? go('练这类', `#/mistakes/review/kind:${encodeURIComponent(k.kind)}`) : go('看看', '#/mistakes'));
+  }
+  if (c.bestTime?.sure) {
+    const { best, usual } = c.bestTime;
+    const pct = (b) => Math.round((b.ok / b.n) * 100);
+    add('time', `看你的复习记录: ${best.name} (${best.from}–${best.to} 点) 复习时记住了 ${pct(best)}%, 你最常学的${usual.name}是 ${pct(usual)}%。新词、难记卡这些要动脑子的, 可以放到${best.name}学。`, go('看统计', '#/stats'));
+  }
   if (c.neglect) {
     const n = c.neglect;
     add('neglect', `「${n.title}」还有 ${n.fresh} 个新词没学, ${n.days ? `已经 ${n.days} 天没碰了` : '还没开始'}。定个每天背几个的计划, 每天自动给你排上。`, go('去定计划', n.href));
@@ -214,7 +232,8 @@ export function tips(c) {
 }
 
 // 「我学得怎么样」(r: { days7 这 7 天学了几天, answers7 答了几题, answersPrev 上一个 7 天, fresh7 学了几个新词,
-//   retention { n, ok, target }, mature 记牢了几张, studied 背过几张, streak, mastered 错题掌握了几道, mistakesLeft 还在重做几道, examDays })
+//   retention { n, ok, target }, mature 记牢了几张, studied 背过几张, streak, mastered 错题掌握了几道, mistakesLeft 还在重做几道, examDays,
+//   bestTime 什么时候记得最牢, topKind 错得最多的题型)
 // 返回 { text 总的一句, list 一条一条 }
 export function report(r) {
   let text;
@@ -232,7 +251,9 @@ export function report(r) {
     list.push(`复习时记住了 ${pct}% (你定的是 ${target}%)${pct < target - 8 ? ', 有点低, 新词先少学一点' : pct >= target ? ', 很好' : ''}`);
   }
   if (r.studied) list.push(`记牢了 ${r.mature} 张 (隔 21 天以上才复习的), 一共背过 ${r.studied} 张`);
-  if (r.mastered || r.mistakesLeft) list.push(`错题集: 掌握了 ${r.mastered} 道, 还在重做 ${r.mistakesLeft} 道`);
+  if (r.mastered || r.mistakesLeft) list.push(`错题集: 掌握了 ${r.mastered} 道, 还在重做 ${r.mistakesLeft} 道${r.topKind ? `, 「${r.topKind.kind}」错得最多 (${r.topKind.total} 道)` : ''}`);
+  const bt = r.bestTime;
+  if (bt?.enough && (bt.sure || bt.same)) list.push(`${bt.best.name} (${bt.best.from}–${bt.best.to} 点) 记得最牢: 复习时记住了 ${Math.round((bt.best.ok / bt.best.n) * 100)}%`);
   if (r.streak) list.push(`已经连续打卡 ${r.streak} 天`);
   if (r.examDays !== null && r.examDays >= 0) list.push(r.examDays ? `离考试还有 ${r.examDays} 天` : '今天考试, 加油!');
   return { text, list };

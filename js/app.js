@@ -10,7 +10,7 @@
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
-//   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的)
+//   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的; #/review/practice:leech 直接练难记卡、:starred 星标的)
 //   #/stats               统计 (#/stats/<卡片集或 folder:文件夹>: 只看那里的)
 //   #/folder/<id>         文件夹 (#/set/folder:<id>/... 是把文件夹里的卡片集合起来学)
 //   #/set/<id>            一个卡片集
@@ -132,7 +132,7 @@ function parse(hash) {
     if (parts[2] === 'edit') return { page: 'mistake-edit', mistake: parts[1] };
   }
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
-  if (parts[0] === 'review') return { page: 'review', id: parts[1] ?? null };
+  if (parts[0] === 'review') return parts[1]?.startsWith('practice:') ? { page: 'review', id: null, practice: parts[1].slice(9) } : { page: 'review', id: parts[1] ?? null };
   if (parts[0] === 'stats') return { page: 'stats', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
@@ -205,7 +205,7 @@ function render() {
   else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake);
   else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
-  else if (route.page === 'review') view = renderReview(ctx, route.id);
+  else if (route.page === 'review') view = renderReview(ctx, route.id, { practice: route.practice });
   else if (route.page === 'stats') view = renderStats(ctx, route.id);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);

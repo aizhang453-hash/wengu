@@ -1,5 +1,6 @@
 // 首页: 所有卡片集, 还有备份
 
+import { examBanner } from './examlist.js';
 import { h, toast, download, today } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
 import { newFolder } from './folder.js';
@@ -365,6 +366,7 @@ export function renderHome({ store, go }) {
           : null,
       ),
       expiryNotice(),
+      examBanner(store),
       sets.length || store.data.mistakes.length ? todayPanel(store, sets, go) : null,
       list,
       backup,

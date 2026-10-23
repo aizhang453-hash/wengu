@@ -5,6 +5,7 @@
 //     mine      当时选错的是第几个 (-1 是没记)
 //     answer    填空题对的答案 (几个都对的用逗号隔开; 数字 3/4 和 0.75 算一样)    mineText  当时写的
 //     note      为什么错 / 解析
+//     kind      题型 (自己写的; 空着的按题目猜, 见 guessKind)
 //     review    { right, wrong, streak (连对几次), interval, s, d, due, at, mastered }  重做的记录, 用 FSRS 排 (srs.js)
 //     images    图片 (media.js 的 id): 题目截图、函数图像、几何图……
 //     createdAt, updatedAt (改了题目) }
@@ -19,12 +20,13 @@ export const MAX_OPTIONS = 6;
 export const MASTER_STREAK = 3;
 export const PREFIX = 'mistake:'; // 删除记录里的 id 前缀 (同步时用)
 export const MAX_IMAGES = 6;
+export const MAX_KIND = 20;
 
 const str = (v) => (typeof v === 'string' ? v : '');
 const index = (v, n) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) < n ? Number(v) : -1);
 
 export function newMistake(id, now = Date.now()) {
-  return { id, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', review: null, createdAt: now, updatedAt: now };
+  return { id, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', kind: '', review: null, createdAt: now, updatedAt: now };
 }
 
 function cleanReview(r) {
@@ -52,6 +54,7 @@ export function cleanMistake(raw) {
     answer: str(raw.answer),
     mineText: str(raw.mineText),
     note: str(raw.note),
+    kind: str(raw.kind).trim().slice(0, MAX_KIND),
     review: cleanReview(raw.review),
     createdAt: Number(raw.createdAt) || now,
     updatedAt: Number(raw.updatedAt) || now,
@@ -72,7 +75,7 @@ export function mistakeProblem(m) {
 
 // 保存前: 字的前后空白去掉, 最后面空着的选项不要 (中间的不动, 免得字母对不上)
 export function tidyMistake(m) {
-  const out = { ...m, passage: m.passage.trim(), question: m.question.trim(), answer: m.answer.trim(), mineText: m.mineText.trim(), note: m.note.trim() };
+  const out = { ...m, passage: m.passage.trim(), question: m.question.trim(), answer: m.answer.trim(), mineText: m.mineText.trim(), note: m.note.trim(), kind: String(m.kind ?? '').trim().slice(0, MAX_KIND) };
   if (m.type === 'choice') {
     const options = m.options.map((o) => o.trim());
     while (options.length > MIN_OPTIONS && !options.at(-1)) options.pop();
@@ -153,7 +156,7 @@ export function dueMistakes(list, now = Date.now()) {
 export function matchesSearch(m, query) {
   const words = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const text = [m.passage, m.question, ...m.options, m.answer, m.note].join('\n').toLowerCase();
+  const text = [m.passage, m.question, ...m.options, m.answer, m.note, kindOf(m)].join('\n').toLowerCase();
   return words.every((w) => text.includes(w));
 }
 
@@ -162,4 +165,60 @@ export function mergeMistake(a, b) {
   const content = (b.updatedAt ?? 0) > (a.updatedAt ?? 0) ? b : a;
   const review = (b.review?.at ?? 0) > (a.review?.at ?? 0) ? b.review : a.review ?? b.review;
   return { ...content, review, createdAt: Math.min(a.createdAt, b.createdAt), updatedAt: Math.max(a.updatedAt, b.updatedAt) };
+}
+
+// ---- 题型 ----
+// 自己写的 (kind) 为准; 没写的按题目猜: SAT 阅读写作每类题的问法是固定的, 数学看关键词。猜不出来的算「其他」
+export const KINDS = {
+  'SAT 阅读写作': ['词汇题', '目的和结构', '双篇对比', '主旨细节', '文本证据', '图表证据', '推理题', '语法·标点', '语法·词形', '过渡词', '笔记整合'],
+  'SAT 数学': ['代数', '高级数学', '数据分析', '几何三角'],
+};
+export const OTHER_KIND = '其他';
+
+// 选项只差标点、空格 (同样的词): 考的是标点断句
+function onlyPunctuation(options) {
+  const words = options.filter((o) => o.trim()).map((o) => o.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ''));
+  return words.length >= 2 && words.every((w) => w && w === words[0]);
+}
+
+const RW_RULES = [
+  [/most logical and precise word or phrase|most nearly mean/, '词汇题'],
+  [/conventions? of standard english/, (m) => (onlyPunctuation(m.options) ? '语法·标点' : '语法·词形')],
+  [/most logical transition/, '过渡词'],
+  [/information from the notes|the student wants to/, '笔记整合'],
+  [/text 1[\s\S]*text 2|based on the texts|author of text [12]/, '双篇对比'],
+  [/main purpose|overall structure|function of the (underlined|portion|sentence|first|second|third|last)/, '目的和结构'],
+  [/(data|information) (from|in) the (graph|table|chart|figure)|uses data from/, '图表证据'],
+  [/quotation|most directly (support|weaken|undermine|challenge)|most strongly support|which finding/, '文本证据'],
+  [/most logically completes the text/, '推理题'],
+  [/main idea|according to the text|based on the text/, '主旨细节'],
+];
+const MATH_RULES = [
+  [/triangle|circle|radius|diameter|angle|degrees?\b|\b(sin|cos|tan)\b|\barea\b|volume|perimeter|polygon|rectangle|\bcubes?\b|cylinder|\bcones?\b|sphere|\barcs?\b|chord|三角形|圆|角度|面积|体积|周长|几何/, '几何三角'],
+  [/\bmean\b|\bmedian\b|standard deviation|probability|percent|%|\bratios?\b|proportion|survey|\bsample|scatterplot|margin of error|平均|概率|百分|比例|中位数|统计/, '数据分析'],
+  [/quadratic|x\^2|x²|exponential|polynomial|parabola|vertex|f\(x\)|g\(x\)|\bfunction|二次|指数|函数/, '高级数学'],
+  [/linear|slope|system of|equations?\b|inequalit|一次|方程|不等式|斜率|[a-z]\s*[=<>≤≥]\s*-?\d|\d\s*[a-z]\s*[+-]/, '代数'],
+];
+
+export function guessKind(m) {
+  const text = `${m.question}\n${m.passage}`.toLowerCase();
+  for (const [re, kind] of [...RW_RULES, ...MATH_RULES]) if (re.test(text)) return typeof kind === 'function' ? kind(m) : kind;
+  return '';
+}
+
+export const kindOf = (m) => m.kind || guessKind(m) || OTHER_KIND;
+
+// 每种题型几道: [{ kind, total, left 还没掌握, right, wrong 重做对了几次、错了几次 }], 多的在前
+export function kindStats(list) {
+  const map = new Map();
+  for (const m of list) {
+    const kind = kindOf(m);
+    const x = map.get(kind) ?? { kind, total: 0, left: 0, right: 0, wrong: 0 };
+    x.total++;
+    if (!m.review?.mastered) x.left++;
+    x.right += m.review?.right ?? 0;
+    x.wrong += m.review?.wrong ?? 0;
+    map.set(kind, x);
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total || b.left - a.left || a.kind.localeCompare(b.kind));
 }

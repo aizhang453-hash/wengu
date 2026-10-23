@@ -21,7 +21,7 @@ const MORE = 10; // 「再学几个新词」一次几个
 const AHEAD = 20; // 「提前复习」默认几张
 const AGAIN_GAP = 4; // 不会 / 忘了的, 隔几张再出来 (跟 Anki 一样一直出, 直到点会 / 记得)
 
-export function renderReview({ store }, setId = null) {
+export function renderReview({ store }, setId = null, { practice: startWith = null } = {}) {
   // 卡片集这些每次开始、做完时都从 store 现拿: 别的标签页存了、同步回来了, 数据会整个换掉
   let scope;
   let sets;
@@ -498,6 +498,8 @@ export function renderReview({ store }, setId = null) {
   const optBtn = h('button', { class: 'btn small', onclick: () => openOptimizeDialog({ store, onChanged: settingsChanged }) });
   const customBtn = h('button', { class: 'btn small', title: '再学几个新词、提前复习、今天忘了的再过一遍、难记卡……', onclick: openCustom }, '自定义学习');
   settingsChanged();
+  // 从考前清单来的: 直接练难记卡 / 星标的
+  if (PRACTICE.has(startWith) && startWith !== 'forgot') start(startWith);
 
   const options = h(
     'div',
