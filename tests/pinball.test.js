@@ -2,7 +2,7 @@
 // 章节任务、危机、终章着陆、连击、补给舱、护盾、倾斜、几个球), 队员的本事和经验, 成绩和养成进度怎么存、怎么合
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Pinball, W, H, WARP_MAX, CHAPTERS, FINAL, CREW, perks, crewLevel, xpFor, LEVEL_XP } from '../js/pinball.js';
+import { Pinball, W, H, WARP_MAX, CHAPTERS, FINAL, CREW, perks, crewLevel, xpFor, LEVEL_XP, GRAVITY } from '../js/pinball.js';
 import { cleanArcade, mergeArcade, addScore, bestOf, progressOf } from '../js/arcade.js';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
@@ -72,9 +72,60 @@ test('挡板: 一按把球打上去很快; 按住能托住球; 不按就从回�
     assert.ok(Math.hypot(hold.ball.vx, hold.ball.vy) < 5 && hold.ball.y > 850 && hold.ball.y < 900, `${side} 托住了 (${hold.ball.x}, ${hold.ball.y})`);
     const roll = playing();
     Object.assign(roll.ball, start);
-    run(roll, 1.8);
+    run(roll, 3);
     assert.ok(types(roll).includes('drain') && !types(roll).includes('outlane'), `${side} 滚过挡板从中间掉下去`);
   }
+});
+
+test('物理: 台面 6.5°, 滚着的球加速度是 5/7 g; 打出去先滑后滚; 挡板 30–50 毫秒打到头, 撞上球自己也慢下来; 橡皮撞得狠弹得少; 擦着墙会转', () => {
+  assert.ok(Math.abs(GRAVITY - 905) < 5, `沿着台面的重力 ${GRAVITY}`);
+  // 空地上从静止滚下去 0.2 秒
+  const r = playing();
+  Object.assign(r.ball, { x: 300, y: 600, vx: 0, vy: 0, rx: 0, ry: 0 });
+  run(r, 0.2);
+  const a = r.ball.vy / 0.2;
+  assert.ok(Math.abs(a - (5 / 7) * GRAVITY) < 40, `滚的加速度 ${a}`);
+  // 打出去不转 (滑): 越来越接近滚
+  const s1 = playing();
+  Object.assign(s1.ball, { x: 300, y: 690, vx: 0, vy: -1500, rx: 0, ry: 0 });
+  const slip0 = Math.abs(s1.ball.vy - s1.ball.ry);
+  run(s1, 0.05);
+  const slip1 = Math.abs(s1.ball.vy - s1.ball.ry);
+  assert.ok(slip1 < slip0 - 100 && s1.ball.ry < -50, `滑的越来越少 (${slip0} → ${slip1}), 开始转 (${s1.ball.ry})`);
+  // 挡板: 空打多久到头
+  const f0 = playing();
+  Object.assign(f0.ball, { x: 300, y: 300 });
+  const fl = f0.table.flippers[0];
+  f0.input.left = true;
+  let ms = 0;
+  for (; ms < 200 && fl.angle !== fl.up; ms++) f0.update(1 / 1000);
+  assert.ok(ms >= 30 && ms <= 50, `挡板 ${ms} 毫秒打到头`);
+  // 挡板上压着一个球再打: 球分走了力, 比空打慢
+  const load = playing();
+  Object.assign(load.ball, { x: 245, y: 860, vx: 0, vy: 0 });
+  run(load, 0.4);
+  const lf = load.table.flippers[0];
+  load.input.left = true;
+  let loaded = 0;
+  for (; loaded < 200 && lf.angle !== lf.up; loaded++) load.update(1 / 1000);
+  assert.ok(loaded > ms + 3, `压着球 ${loaded} 毫秒, 空打 ${ms} 毫秒`);
+  // 橡皮柱: 慢慢撞弹回来的比例比狠狠撞的大
+  const bounce = (speed) => {
+    const g = playing();
+    const post = g.table.posts.reduce((a, b) => (b.x > a.x ? b : a)); // 对接坡道口右边那根, 周围空
+    Object.assign(g.ball, { x: post.x + post.r + 14, y: post.y, vx: -speed, vy: 0, rx: -speed, ry: 0 });
+    let out = 0;
+    run(g, 0.06, (x) => (out = Math.max(out, x.ball.vx)));
+    return out / speed;
+  };
+  const soft = bounce(300);
+  const hard = bounce(2500);
+  assert.ok(soft > hard + 0.1, `轻的弹回 ${soft.toFixed(2)}, 狠的 ${hard.toFixed(2)}`);
+  // 斜着擦过墙: 球绕竖轴转起来
+  const w = playing();
+  Object.assign(w.ball, { x: 34, y: 650, vx: -600, vy: 900, rx: -600, ry: 900, wz: 0 });
+  run(w, 0.05);
+  assert.ok(Math.abs(w.ball.wz) > 5, `转起来了 (${w.ball.wz})`);
 });
 
 test('乱打很久: 球一直在台面里面 (穿不过墙), 不会卡住不动, 坡道、黑洞、靶子都打得到', () => {

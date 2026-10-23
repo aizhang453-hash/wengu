@@ -1,8 +1,13 @@
 // 弹珠台「星际远航」: 台面、物理、规则 (3D 画面在 pinball3d.js, 页面在 views/pinball.js)。不碰网页, 能在测试里跑。
-//   台面 600 × 1000 (单位随便叫「点」), x 往右、y 往下 (台面是斜的, 球受重力往下滚), z 是离台面多高 (坡道上)
-//   物理: 每 1/600 秒走一步 (球一步最多走 7 点, 比球的半径小, 穿不过墙); 墙是线段, 碰到了推出来、
-//         法向速度按弹性反过来、切向按摩擦减一点; 挡板是转动的胶囊, 碰撞时算上挡板那一点的速度; 几个球之间也会撞
-//   坡道: 球从入口冲上去就离开台面, 沿着坡道的路线走 (上坡减速、下坡加速), 冲不上去就滚回来; 下来落进回球道
+//   台面 600 × 1000 「点」, x 往右、y 往下, z 是离台面多高 (坡道上)。球直径 22 点 = 真球 27 毫米, 所以 1 点 ≈ 1.23 毫米
+//   物理 (照着 Visual Pinball 的做法, 自己写的):
+//     - 台面斜 6.5° (真机的坡度), 重力按真的算。球是滚的: 滚着的时候往下的加速度只有滑的时候的 5/7
+//     - 球有转: 被打出去先是滑, 台面的摩擦让它转起来变成滚; 撞墙、撞橡皮的时候摩擦让它绕竖轴转, 转着的球再撞东西方向会偏
+//     - 碰撞按冲量算: 弹性跟材料有关 (金属、橡皮、塑料), 撞得越狠弹得越少 (橡皮尤其)
+//     - 挡板有重量: 按下是线圈推着加速 (越到后面越快, 什么时候碰到球打出去不一样), 球撞上来挡板也会被撞慢、弹一下;
+//       按住的时候是小一点的保持力, 松开是弹簧拉回去
+//     - 每 1/1000 秒走一步 (球一步最多走 4 点, 挡板尖一步最多走 6 点, 都比球的半径小, 穿不过去)
+//   坡道: 球从入口冲上去就离开台面, 沿着坡道的路线滚 (上坡减速、下坡加速), 冲不上去就滚回来; 下来落进回球道
 //
 // 故事: 殖民方舟「远航号」载着十万名在冬眠舱里睡着的人, 去找一颗能住的星球。你是新来的舰长。
 //   四个星系是四章 (CHAPTERS), 每章三个限时任务, 都做完了来一场危机 (大敌人, 有血条, 两个球一起打);
@@ -22,13 +27,27 @@ export const W = 600;
 export const H = 1000;
 export const BALL_R = 11;
 export const BALLS = 3;
-const STEP = 1 / 600;
-const MAX_STEPS = 24; // 一帧最多走几步 (卡了一下的话宁可慢一点, 别一下子算太多)
-const GRAVITY = 1250; // 沿着台面往下
-const G_UP = 9800; // 坡道往上 (真的重力)
+const STEP = 1 / 1000;
+const MAX_STEPS = 40; // 一帧最多走几步 (卡了一下的话宁可慢一点, 别一下子算太多)
+const MM = 27 / 22; // 1 点几毫米
+const G = 9810 / MM; // 真的重力, 点 / 秒²
+const SLOPE = (6.5 * Math.PI) / 180;
+export const GRAVITY = G * Math.sin(SLOPE); // 沿着台面往下 (约 905)
+const G_N = G * Math.cos(SLOPE); // 压着台面的那一份 (摩擦用)
+const MU_TABLE = 0.06; // 球在台面上滑的摩擦
+const ROLL_RES = 0.002; // 滚动阻力
+const BALL_I = 0.4; // 实心球的转动惯量 = 0.4 × 质量 × 半径² (质量算 1)
 const MAX_SPEED = 4200;
-const FLIP_UP = 26; // 挡板往上打, 弧度 / 秒
-const FLIP_DOWN = 15;
+// 挡板: 转动惯量 (相当于挡板尖上有一个球那么重)、线圈的力矩、按住时的保持力矩、弹簧拉回的力矩, 撞到头弹回来多少
+const FLIP = { inertia: 85 * 85, coil: 9.5e6, hold: 2.2e6, ret: 3.2e6, max: 75, bounceUp: 0.12, bounceRest: 0.15, eos: 0.04 };
+// 材料: 弹性 e、撞得越狠弹得越少 fall (每 1000 点/秒的冲击)、摩擦 mu;
+// damp: 橡皮贴着滚的时候会变形吃掉一点 (每秒吃掉几成), 托在挡板上的球才停得下来
+const METAL = { e: 0.4, fall: 0.1, mu: 0.15 };
+const RUBBER = { e: 0.8, fall: 0.45, mu: 0.5, damp: 2 };
+const PLASTIC = { e: 0.45, fall: 0.15, mu: 0.2 };
+const FLIPPER_RUBBER = { e: 0.82, fall: 0.5, mu: 0.55, damp: 5 };
+const BUMPER = { e: 0.6, fall: 0.3, mu: 0.3 };
+const RAMP_DRAG = 0.2; // 坡道 (塑料、铁丝) 上的摩擦
 const SAVE_TIME = 10;
 const PULL_TIME = 0.9; // 弹簧拉满要几秒
 export const LANE_X = 540; // 发射通道在这右边
@@ -132,7 +151,7 @@ export function perks(crew) {
 }
 
 // ---- 台面 ----
-const seg = (ax, ay, bx, by, o = {}) => ({ ax, ay, bx, by, e: 0.45, mu: 0.08, r: 0, ...o });
+const seg = (ax, ay, bx, by, o = {}) => ({ ax, ay, bx, by, ...METAL, r: 0, ...o });
 const polyline = (pts, o) => pts.slice(1).map((p, i) => seg(pts[i][0], pts[i][1], p[0], p[1], o));
 export function arcPoints(cx, cy, r, a0, a1, n) {
   return Array.from({ length: n + 1 }, (_, i) => {
@@ -248,9 +267,9 @@ export function buildTable() {
     ...rails.guides.flatMap((p) => polyline(p)),
     ...rails.bulges.flatMap((p) => polyline(p)),
     ...rails.dividers.map(([[ax, ay], [bx, by]]) => seg(ax, ay, bx, by, { r: 4, e: 0.3 })),
-    ...rails.ramp.map(([[ax, ay], [bx, by]]) => seg(ax, ay, bx, by, { r: 3, e: 0.35 })),
+    ...rails.ramp.map(([[ax, ay], [bx, by]]) => seg(ax, ay, bx, by, { r: 3, ...PLASTIC })),
     // 对接坡道口后面的尖顶: 门是平的, 从上面掉下来的球会停在上面, 加个尖顶让它滚下去
-    ...polyline(DOCK_ROOF, { r: 3, e: 0.35 }),
+    ...polyline(DOCK_ROOF, { r: 3, ...PLASTIC }),
   ];
   // 单向门: 只挡从「挡的那一边」(n 指的那边) 过来的球。发射通道口 (从上面掉下来的拨到台面上); 左边回旋道 (往上能过, 从上面下来的拨到台面上)
   const gates = [
@@ -266,7 +285,7 @@ export function buildTable() {
     ]),
   ];
   // 弹弓: 三角形, 朝里的那条边会把球弹出去 (下边跟导轨之间要留够一个球过去的空)
-  const sling = (a, b, c, i) => [seg(a[0], a[1], b[0], b[1]), seg(b[0], b[1], c[0], c[1]), seg(a[0], a[1], c[0], c[1], { kick: 1000, sling: i, e: 0.6 })];
+  const sling = (a, b, c, i) => [seg(a[0], a[1], b[0], b[1], PLASTIC), seg(b[0], b[1], c[0], c[1], PLASTIC), seg(a[0], a[1], c[0], c[1], { ...RUBBER, kick: 1000, sling: i })];
   const slingShapes = [
     [[95, 730], [95, 808], [148, 842]],
     [[mx(95), 730], [mx(95), 808], [mx(148), 842]],
@@ -278,14 +297,14 @@ export function buildTable() {
     { x: 280, y: 314, r: 28 },
   ];
   // 左边五个星座靶 (掉落靶, 贴着墙, 朝右)
-  const drops = [440, 472, 504, 536, 568].map((y) => ({ ...seg(34, y, 34, y + 26, { e: 0.35 }), up: true }));
+  const drops = [440, 472, 504, 536, 568].map((y) => ({ ...seg(34, y, 34, y + 26, { e: 0.35, fall: 0.2, mu: 0.2 }), up: true }));
   // 右边三个任务靶 (斜着摆, 朝左下的挡板; 斜的, 球不会停在上面)
   const tdir = norm(0.868, 0.496);
-  const targets = [[400, 455], [425, 485], [450, 515]].map(([x, y]) => seg(x - tdir.x * 12, y - tdir.y * 12, x + tdir.x * 12, y + tdir.y * 12, { r: 4, e: 0.4 }));
+  const targets = [[400, 455], [425, 485], [450, 515]].map(([x, y]) => seg(x - tdir.x * 12, y - tdir.y * 12, x + tdir.x * 12, y + tdir.y * 12, { r: 4, e: 0.45, fall: 0.3, mu: 0.3 }));
   const flippers = [
     { side: 'left', px: 185, py: 905, len: 85, r0: 13, r1: 7, rest: 0.52, up: -0.48 },
     { side: 'right', px: mx(185), py: 905, len: 85, r0: 13, r1: 7, rest: Math.PI - 0.52, up: Math.PI + 0.48 },
-  ].map((f) => ({ ...f, angle: f.rest, omega: 0 }));
+  ].map((f) => ({ ...f, angle: f.rest, omega: 0, inertia: FLIP.inertia }));
   return {
     rails,
     walls,
@@ -308,7 +327,7 @@ export function buildTable() {
     ramps: [
       { name: 'warp', door: [WARP.a2, WARP.b2], in: WARP.in, path: sampleCurve(WARP_POINTS), exit: { vx: 0, vy: 520 } },
       { name: 'dock', door: [DOCK.a2, DOCK.b2], in: DOCK.in, path: sampleCurve(DOCK_POINTS), exit: { vx: 0, vy: 520 } },
-    ].map((r) => ({ ...r, doorSeg: { ax: r.door[0][0], ay: r.door[0][1], bx: r.door[1][0], by: r.door[1][1], r: 0, e: 0.3, mu: 0.1 } })),
+    ].map((r) => ({ ...r, doorSeg: { ax: r.door[0][0], ay: r.door[0][1], bx: r.door[1][0], by: r.door[1][1], r: 0, ...PLASTIC } })),
     plunger: { x: 560, y: 975, top: 975 },
   };
 }
@@ -322,50 +341,88 @@ function closest(px, py, s) {
   return [s.ax + dx * t, s.ay + dy * t, t];
 }
 
-// 球碰到一个点附近 (cx, cy, 加上半径 rad): 推出来, 反弹。vx0, vy0: 碰到的那一点自己在动的速度 (挡板)。
-// 返回撞上去的速度 (法向), 没碰到返回 -1
-function resolve(b, cx, cy, rad, { e = 0.45, mu = 0.08, kick = 0, vx0 = 0, vy0 = 0, fallback = null }) {
+// 撞得多狠 → 弹性 (撞得很轻, 就是在上面滚着: 不弹, 免得一直抖)
+const elasticity = (m, vn) => (vn < 40 ? 0 : m.e / (1 + (m.fall ?? 0) * (vn / 1000)));
+
+// 球碰到一个点附近 (cx, cy, 加上半径 rad): 推出来, 按冲量反弹, 带摩擦 (球会转)。
+// mat: 材料 { e, fall, mu }; kick: 弹出去至少这么快 (弹弓、小行星); body: 碰到的是会转的东西 (挡板 { omega, px, py, inertia }),
+// 冲量也反过来作用在它上面。返回撞上去的法向速度, 没碰到返回 -1
+function resolve(b, cx, cy, rad, mat, { kick = 0, fallback = null, body = null } = {}) {
   let dx = b.x - cx;
   let dy = b.y - cy;
   const reach = b.r + rad;
   const d2 = dx * dx + dy * dy;
   if (d2 >= reach * reach) return -1;
-  let d = Math.sqrt(d2);
-  if (d < 1e-6) {
-    ({ x: dx, y: dy } = fallback ?? { x: 0, y: -1 });
-    d = 0;
-  } else {
+  const d = Math.sqrt(d2);
+  if (d < 1e-6) ({ x: dx, y: dy } = fallback ?? { x: 0, y: -1 });
+  else {
     dx /= d;
     dy /= d;
   }
   b.x = cx + dx * reach;
   b.y = cy + dy * reach;
-  const rvx = b.vx - vx0;
-  const rvy = b.vy - vy0;
+  // 碰到的那一点 (在对面的表面上) 自己的速度: ω × r
+  let rx = 0;
+  let ry = 0;
+  let vfx = 0;
+  let vfy = 0;
+  if (body) {
+    rx = cx + dx * rad - body.px;
+    ry = cy + dy * rad - body.py;
+    vfx = -body.omega * ry;
+    vfy = body.omega * rx;
+  }
+  const rvx = b.vx - vfx;
+  const rvy = b.vy - vfy;
   const vn = rvx * dx + rvy * dy;
   if (vn >= 0) return 0;
   const tx = -dy;
   const ty = dx;
-  let vt = rvx * tx + rvy * ty;
-  // 撞得很轻 (就是在上面滚): 不弹, 免得一直抖
-  let out = -vn < 40 ? 0 : -vn * e;
-  if (kick && -vn > 60) out = Math.max(out, kick);
-  // 摩擦: 跟撞得多重成正比 (滚的时候几乎不减速)
-  const dvt = Math.min(Math.abs(vt), mu * (out - vn));
-  vt -= Math.sign(vt) * dvt;
-  b.vx = vx0 + dx * out + tx * vt;
-  b.vy = vy0 + dy * out + ty * vt;
+  const rn = rx * dy - ry * dx; // r × n
+  const rt = rx * ty - ry * tx; // r × t
+  // 法向冲量 (对面有转动惯量的话, 它也分走一点)
+  let jn = (-(1 + elasticity(mat, -vn)) * vn) / (1 + (body ? (rn * rn) / body.inertia : 0));
+  if (kick && -vn > 60) jn = Math.max(jn, kick - vn);
+  // 摩擦: 碰到的那一点在切向滑多快 (球绕竖轴转着, 表面也在动), 摩擦冲量最多 mu × 法向冲量
+  const slip = rvx * tx + rvy * ty - b.wz * b.r;
+  const kt = 1 + 1 / BALL_I + (body ? (rt * rt) / body.inertia : 0);
+  const lim = mat.mu * jn;
+  const jt = Math.max(-lim, Math.min(lim, -slip / kt));
+  b.vx += dx * jn + tx * jt;
+  b.vy += dy * jn + ty * jt;
+  b.wz -= jt / (BALL_I * b.r);
+  if (body) body.omega -= (jn * rn + jt * rt) / body.inertia;
+  if (mat.damp) {
+    // 贴着橡皮滚: 沿着表面的速度吃掉一点 (滚的速度一起, 不然又变成在台面上滑)
+    const k = Math.min(1, mat.damp * STEP);
+    const along = (b.vx - vfx) * tx + (b.vy - vfy) * ty;
+    b.vx -= tx * along * k;
+    b.vy -= ty * along * k;
+    b.rx -= tx * along * k;
+    b.ry -= ty * along * k;
+  }
   return -vn;
 }
 
 function hitSegment(b, s) {
-  const [cx, cy] = closest(b.x, b.y, s);
+  // 先看离线段的方框远不远 (远的不用算)
+  const pad = b.r + s.r + 1;
+  if (b.x < Math.min(s.ax, s.bx) - pad || b.x > Math.max(s.ax, s.bx) + pad || b.y < Math.min(s.ay, s.by) - pad || b.y > Math.max(s.ay, s.by) + pad) return -1;
+  const [cx, cy, at] = closest(b.x, b.y, s);
   if (s.n) {
     // 单向门: 球心在挡的那一边才挡
     if ((b.x - cx) * s.n.x + (b.y - cy) * s.n.y < 0) return -1;
     if ((b.x - s.ax) * s.n.x + (b.y - s.ay) * s.n.y < 0) return -1;
   }
-  return resolve(b, cx, cy, s.r, { e: s.e, mu: s.mu, kick: s.kick, fallback: s.n ?? norm(-(s.by - s.ay), s.bx - s.ax) });
+  const hit = resolve(b, cx, cy, s.r, s, { kick: s.kick, fallback: s.n ?? norm(-(s.by - s.ay), s.bx - s.ax) });
+  // 几乎不动、正好顶在一段墙的尖头上: 真球在尖上站不住, 往尖头外面推一点点, 让它滚下去
+  if (hit >= 0 && (at === 0 || at === 1) && Math.abs(b.vx) + Math.abs(b.vy) < 8) {
+    const k = at === 0 ? -1 : 1;
+    const l = Math.hypot(s.bx - s.ax, s.by - s.ay) || 1;
+    b.vx += ((k * (s.bx - s.ax)) / l) * 3;
+    b.vy += ((k * (s.by - s.ay)) / l) * 3;
+  }
+  return hit;
 }
 
 export function flipperTip(f) {
@@ -376,11 +433,54 @@ function hitFlipper(b, f) {
   const [tx, ty] = flipperTip(f);
   const [cx, cy, t] = closest(b.x, b.y, { ax: f.px, ay: f.py, bx: tx, by: ty });
   const rad = f.r0 + (f.r1 - f.r0) * t;
-  // 挡板那一点的速度: ω × r
-  const vx0 = -f.omega * (cy - f.py);
-  const vy0 = f.omega * (cx - f.px);
-  return resolve(b, cx, cy, rad, { e: 0.28, mu: 0.25, vx0, vy0, fallback: { x: 0, y: -1 } });
+  return resolve(b, cx, cy, rad, FLIPPER_RUBBER, { fallback: { x: 0, y: -1 }, body: f });
 }
+
+// 挡板转一步: 按住是线圈推, 快到头了 (真机上的「到头开关」) 换成小一点的保持力; 松开是弹簧拉回;
+// 撞到两头的挡块弹回来一点 (很慢的就不弹了, 不然托着球的时候一直抖)
+function turnFlipper(f, held, h) {
+  const dir = Math.sign(f.up - f.rest);
+  const nearUp = (f.angle - f.up) * dir >= -FLIP.eos;
+  const torque = held ? (nearUp ? FLIP.hold : FLIP.coil) * dir : -FLIP.ret * dir;
+  f.omega = Math.max(-FLIP.max, Math.min(FLIP.max, f.omega + (torque / f.inertia) * h));
+  f.angle += f.omega * h;
+  const stop = (to, bounce) => {
+    f.angle = to;
+    f.omega = Math.abs(f.omega) > 3 ? -f.omega * bounce : 0;
+  };
+  if ((f.angle - f.up) * dir > 0) stop(f.up, FLIP.bounceUp);
+  else if ((f.angle - f.rest) * dir < 0) stop(f.rest, FLIP.bounceRest);
+}
+
+// 球在台面上: 滑着的时候 (球心的速度 v 跟「滚的速度」r 不一样) 摩擦把两个拉到一样 (v 慢一点, r 快一点, 实心球是 1 : 2.5);
+// 滚起来以后只有一点滚动阻力。绕竖轴的转慢慢停下来
+function roll(b, h) {
+  const sx = b.vx - b.rx;
+  const sy = b.vy - b.ry;
+  const slip = Math.hypot(sx, sy);
+  const f = MU_TABLE * G_N * h;
+  if (slip <= f * 3.5) {
+    // 这一步就能滚起来: 滚起来的速度 = v - 2/7 × 滑的那一份
+    b.vx = b.rx = b.vx - sx * (2 / 7);
+    b.vy = b.ry = b.vy - sy * (2 / 7);
+  } else {
+    b.vx -= (sx / slip) * f;
+    b.vy -= (sy / slip) * f;
+    b.rx += (sx / slip) * f * 2.5;
+    b.ry += (sy / slip) * f * 2.5;
+  }
+  const v = Math.hypot(b.vx, b.vy);
+  if (v > 1e-6) {
+    const k = Math.max(0, 1 - (ROLL_RES * G_N * h) / v);
+    b.vx *= k;
+    b.vy *= k;
+    b.rx *= k;
+    b.ry *= k;
+  }
+  b.wz *= 1 - 0.6 * h;
+}
+// 放到别的地方去 (坡道出口、虫洞): 当它是滚着的
+const rolling = (b) => Object.assign(b, { rx: b.vx, ry: b.vy });
 
 // 两个球撞: 一样重, 法向速度交换 (稍微损失一点)
 function hitBalls(a, b) {
@@ -420,6 +520,8 @@ function crossed(px, py, qx, qy, a, b) {
 
 // ---- 一局 ----
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
+// 一个球: 位置、速度、滚的速度 (rx, ry)、绕竖轴转多快 (wz)
+const newBall = (id, x, y, vx = 0, vy = 0) => ({ id, x, y, z: 0, vx, vy, rx: vx, ry: vy, wz: 0, r: BALL_R, ramp: null, held: null, slow: 0 });
 
 export class Pinball {
   // crew: { id, level } 远航模式的队员, null 是经典模式
@@ -552,7 +654,7 @@ export class Pinball {
   // 一个新球放进发射通道 (auto: 自己发射, 多球、锁球、护盾以后用)
   addBall({ auto = false } = {}) {
     const p = this.table.plunger;
-    const b = { id: this.nextId++, x: p.x, y: p.top - BALL_R, z: 0, vx: 0, vy: 0, r: BALL_R, ramp: null, held: null, slow: 0 };
+    const b = newBall(this.nextId++, p.x, p.top - BALL_R);
     this.balls.push(b);
     if (auto) {
       this.after(0.7, () => {
@@ -605,21 +707,15 @@ export class Pinball {
         } else if (s.status === 'play') s.lanes = side === 'left' ? [...s.lanes.slice(1), s.lanes[0]] : [s.lanes[2], ...s.lanes.slice(0, 2)];
       }
     }
-    for (const f of t.flippers) {
-      const held = input[f.side] && live;
-      const target = held ? f.up : f.rest;
-      const diff = target - f.angle;
-      const move = Math.sign(diff) * Math.min(Math.abs(diff), (held ? FLIP_UP : FLIP_DOWN) * h);
-      f.angle += move;
-      f.omega = move / h;
-    }
+    for (const f of t.flippers) turnFlipper(f, input[f.side] && live, h);
     if (input.nudge && !this.prevInput.nudge) this.nudge();
     // 弹簧: 按住拉, 松开发射 (发射通道底下的球)
     if (input.plunger) s.pull = Math.min(1, s.pull + h / PULL_TIME);
     else if (this.prevInput.plunger) {
       const b = this.balls.find((x) => x.x > LANE_X && x.y > t.plunger.top - 60 && !x.held);
       if (b && s.pull > 0.04) {
-        b.vy = -(1000 + 2600 * s.pull);
+        // 弹簧推出去 (速度跟拉了多少成正比; 刚推出去是滑的, 还没转)
+        b.vy = -(450 + 2450 * s.pull);
         b.vx = 0;
         if (s.status === 'ready') {
           s.status = 'play';
@@ -676,6 +772,7 @@ export class Pinball {
     const px = b.x;
     const py = b.y;
     b.vy += GRAVITY * h;
+    roll(b, h);
     // 黑洞潮汐: 黑洞附近的球被往里拉
     if (s.boss && this.chapter.boss.gravity && b.x < LANE_X) {
       const dx = t.hole.x - b.x;
@@ -692,8 +789,6 @@ export class Pinball {
       b.vx *= MAX_SPEED / speed;
       b.vy *= MAX_SPEED / speed;
     }
-    b.vx *= 1 - 0.08 * h;
-    b.vy *= 1 - 0.08 * h;
     b.x += b.vx * h;
     b.y += b.vy * h;
     b.z = 0;
@@ -722,7 +817,7 @@ export class Pinball {
       for (const w of t.walls) hitSegment(b, w);
       for (const ramp of t.ramps) hitSegment(b, ramp.doorSeg);
       for (const g of t.gates) hitSegment(b, g);
-      for (const p of t.posts) resolve(b, p.x, p.y, p.r, { e: 0.5 });
+      for (const p of t.posts) resolve(b, p.x, p.y, p.r, RUBBER);
       for (const w of t.slings) {
         const hit = hitSegment(b, w);
         if (w.sling !== undefined && hit > 60 && this.cooled(`sling${w.sling}`, 0.1)) {
@@ -734,7 +829,7 @@ export class Pinball {
         }
       }
       t.bumpers.forEach((p, i) => {
-        const hit = resolve(b, p.x, p.y, p.r, { e: 0.5, kick: s.tilt ? 0 : 900 });
+        const hit = resolve(b, p.x, p.y, p.r, BUMPER, { kick: s.tilt ? 0 : 900 });
         if (hit > 30 && this.cooled(`bumper${i}`, 0.08)) {
           this.flash.bumper[i] = 0.18;
           this.add(100 * this.tier);
@@ -754,15 +849,15 @@ export class Pinball {
     this.sensors(b, px, py);
   }
 
-  // 在坡道上: 沿路线走; 上坡减速 (真的重力) 下坡加速, 冲不上去就滚回来
+  // 在坡道上: 沿路线滚; 上坡减速、下坡加速 (滚着的球是重力沿路线那一份的 5/7), 冲不上去就滚回来
   rideRamp(b, h) {
     const t = this.table;
     const r = b.ramp;
     const ramp = t.ramps[r.k];
     const path = ramp.path;
     const p = rampAt(path, r.s);
-    r.v += (-G_UP * p.dz + GRAVITY * p.dy) * h;
-    r.v *= 1 - 0.25 * h;
+    r.v += (5 / 7) * (GRAVITY * p.dy - G_N * p.dz) * h;
+    r.v *= 1 - RAMP_DRAG * h;
     r.v = Math.min(r.v, 3000);
     r.s += r.v * h;
     if (r.s <= 0) {
@@ -771,6 +866,7 @@ export class Pinball {
       b.ramp = null;
       const d = ramp.door;
       Object.assign(b, { x: (d[0][0] + d[1][0]) / 2 - ramp.in.x * 4, y: (d[0][1] + d[1][1]) / 2 - ramp.in.y * 4, z: 0, vx: -ramp.in.x * back, vy: -ramp.in.y * back });
+      rolling(b);
       this.emit('rampFail', { k: r.k });
       return;
     }
@@ -779,6 +875,7 @@ export class Pinball {
       const end = rampAt(path, path.total);
       b.ramp = null;
       Object.assign(b, { x: end.x, y: end.y, z: 0, vx: ramp.exit.vx, vy: Math.max(ramp.exit.vy, r.v * 0.4) });
+      rolling(b);
       if (r.k === 1) this.dockDone();
       else this.rampDone();
       return;
@@ -1085,6 +1182,7 @@ export class Pinball {
   wormhole(b) {
     const w = this.table.wormholes[Math.floor(this.rand() * 3)];
     Object.assign(b, { x: w.x, y: w.y, vx: (this.rand() - 0.5) * 40, vy: 150 });
+    rolling(b);
     this.emit('wormhole', { x: w.x });
   }
 
@@ -1097,7 +1195,7 @@ export class Pinball {
     const ho = this.table.hole;
     for (let k = 0; k < 2; k++) {
       this.after(0.3 + k * 0.5, () => {
-        this.balls.push({ id: this.nextId++, x: ho.x, y: ho.y, z: 0, vx: (k ? 1 : -1) * 380, vy: 300, r: BALL_R, ramp: null, held: null, slow: 0 });
+        this.balls.push(newBall(this.nextId++, ho.x, ho.y, (k ? 1 : -1) * 380, 300));
         this.emit('eject');
       });
     }
