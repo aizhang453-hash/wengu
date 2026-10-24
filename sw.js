@@ -23,6 +23,7 @@ const FILES = [
   'js/csv.js',
   'js/custom.js',
   'js/diagram.js',
+  'js/dict.js',
   'js/dom.js',
   'js/exam.js',
   'js/examlist.js',

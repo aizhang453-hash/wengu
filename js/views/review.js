@@ -5,7 +5,7 @@
 import { h, fill, dialogOpen, icon, openDialog, toast } from '../dom.js';
 import { stopSpeaking, sayCard } from '../speech.js';
 import { playSound } from '../sound.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
+import { rich, cardImage, sayButton, dictButton } from '../cardview.js';
 import { stripMarks } from '../rich.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { dueTomorrow, leechAlert, LEECH } from '../srs.js';
@@ -145,7 +145,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
       h('span', { class: 'muted small' }, backSide === 'term' ? '词' : '解释'),
       backSide === 'def' ? cardImage(card.image, 'q-img') : null,
       h('div', { class: 'q-text small' }, rich(card[backSide])),
-      sayButton(card, backSide, set),
+      h('span', { class: 'answer-tools' }, sayButton(card, backSide, set), dictButton(card, set)),
     );
     const judge = h(
       'div',

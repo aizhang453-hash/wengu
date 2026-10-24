@@ -4,7 +4,7 @@ import { h, toast, fill, openDialog, switchRow, icon } from '../dom.js';
 import { stopSpeaking } from '../speech.js';
 import { TYPE_NAMES, otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
+import { rich, cardImage, sayButton, dictButton } from '../cardview.js';
 import { buildExam, gradeExam, countAnswered, DEFAULT_EXAM_OPTIONS } from '../exam.js';
 import { stripMarks } from '../rich.js';
 import { TEST_SCOPES, defaultTestScope, scopeCards } from '../scope.js';
@@ -677,6 +677,7 @@ export function renderExam({ store }, id) {
       h('span', { class: 'muted small' }, '正确答案'),
       h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '(空)', cardImage(image, 'q-img small')),
       sayButton(q.card, q.side, set),
+      dictButton(q.card, set),
     );
   }
 

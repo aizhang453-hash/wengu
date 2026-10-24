@@ -4,7 +4,7 @@ import { h, fill, toast, download, openDialog, switchRow, icon } from '../dom.js
 import { isSuspended, LEECH } from '../srs.js';
 import { formatCards } from '../parse.js';
 import { stripMarks } from '../rich.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
+import { rich, cardImage, sayButton, dictButton } from '../cardview.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { diagramSection } from './diagram.js';
 import { pinnedCards } from '../diagram.js';
@@ -113,6 +113,7 @@ export function renderSet({ store, go }, id) {
                 pinNumber.has(card.id) ? h('span', { class: 'pin-badge', title: '标注图上的点' }, `📍${pinNumber.get(card.id)}`) : null,
                 stat?.lapses >= LEECH ? h('span', { class: 'badge leech-badge', title: `复习时忘了 ${stat.lapses} 次` }, '难记卡') : null,
                 paused ? h('span', { class: 'badge paused-badge' }, '暂停了') : levelBadge(set.learn[card.id]),
+                dictButton(card, set),
                 editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: drawList })),
                 pause,
                 star,

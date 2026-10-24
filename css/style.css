@@ -724,7 +724,8 @@ select.input {
   gap: 8px;
 }
 
-.export-choice {
+.export-choice,
+.dict-choice {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -740,8 +741,44 @@ select.input {
 }
 
 .export-choice:hover,
-.export-choice:focus-visible {
+.export-choice:focus-visible,
+.dict-choice:hover,
+.dict-choice:focus-visible {
   border-color: var(--accent);
+}
+
+/* ---- 查词典 ---- */
+.dict-texts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.dict-texts .chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dict-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.dict-choice {
+  text-decoration: none;
+}
+
+.dict-choice[aria-disabled='true'] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.dict-note {
+  margin: 12px 0 0;
 }
 
 .sep-groups {
@@ -892,6 +929,7 @@ select.input {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent; /* 点一下是翻面, 不用手机自带的那层高亮 (点卡片上的按钮时会盖住整张卡) */
   touch-action: pan-y;
   border-radius: 18px;
   transition: transform 0.18s ease-in, opacity 0.18s ease-in;
@@ -2389,10 +2427,25 @@ kbd {
   background: var(--surface-2);
 }
 
-.flash-answer .icon-btn {
+.flash-answer .icon-btn,
+.flash-answer .answer-tools {
   position: absolute;
   top: 8px;
   right: 6px;
+}
+
+/* 朗读、查词典两个按钮竖着放在右上角 */
+.flash-answer .answer-tools {
+  display: flex;
+  flex-direction: column;
+}
+
+.flash-answer .answer-tools .icon-btn {
+  position: static;
+}
+
+.flash-answer:has(.answer-tools > .icon-btn + .icon-btn) {
+  min-height: 84px;
 }
 
 .flash-q .row.center {

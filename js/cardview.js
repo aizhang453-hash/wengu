@@ -1,9 +1,11 @@
-// 各页面显示卡片内容用: 带格式的字、图片、朗读按钮
+// 各页面显示卡片内容用: 带格式的字、图片、朗读按钮、查词典按钮
 
 import { h } from './dom.js';
 import { richNodes } from './rich.js';
 import { mediaURL } from './media.js';
 import { sayCard, canSay } from './speech.js';
+
+export { dictButton } from './dict.js';
 
 // 带格式的字 (加粗、斜体、下划线、高亮)
 export function rich(text, props = {}) {

@@ -8,7 +8,8 @@ import { diagramFigure } from './diagram.js';
 import { pinOf } from '../diagram.js';
 import { canSpeak, sayCard, stopSpeaking } from '../speech.js';
 import { stripMarks } from '../rich.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
+import { rich, cardImage, sayButton, dictButton } from '../cardview.js';
+import { openLookup } from '../dict.js';
 
 // 在这些框里打字时不接快捷键 (勾选框、单选框不算)
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
@@ -377,6 +378,7 @@ export function renderCards({ store }, id) {
         'span',
         { class: 'row' },
         sayButton(card, side, set, { title: '朗读 (S)' }),
+        dictButton(card, set, { title: '查词典 (D)' }),
         editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: () => draw({ speakIt: false }) })),
         h(
           'button',
@@ -473,6 +475,7 @@ export function renderCards({ store }, id) {
           ['Z', '撤销'],
           ['S', '朗读看到的这一面'],
           ['H', '显示 / 隐藏提示'],
+          ['D', '查词典 (要联网)'],
           ['F', '全屏'],
           ['P', '自动播放 (不跟踪进度时)'],
         ].map(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
@@ -558,6 +561,8 @@ export function renderCards({ store }, id) {
       sayCard(deck[index], showingSide(), set);
     } else if (key === 'h' || key === 'H') {
       toggleHint();
+    } else if (key === 'd' || key === 'D') {
+      openLookup(deck[index], set);
     } else if (key === 'p' || key === 'P') {
       togglePlay();
     }

@@ -4,7 +4,7 @@
 
 import { h, fill, toast, openDialog, dialogOpen, switchRow, icon } from '../dom.js';
 import { speak, canSpeak, canSay, sayCard, stopSpeaking, setLang } from '../speech.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
+import { rich, cardImage, sayButton, dictButton } from '../cardview.js';
 import { otherSide, refreshQuestion } from '../questions.js';
 import { editButton, editCardDialog } from './cardedit.js';
 import { grade } from '../grade.js';
@@ -417,7 +417,7 @@ export function renderLearn({ store }, id) {
         h('span', { class: 'muted small' }, answerName),
         imageWithAnswer(q) ? cardImage(q.card.image, 'q-img') : null,
         h('div', { class: 'q-text small' }, q.answer ? rich(q.answer) : '(空)'),
-        sayButton(q.card, q.side, set),
+        h('span', { class: 'answer-tools' }, sayButton(q.card, q.side, set), dictButton(q.card, set)),
       );
       const judge = h(
         'div',
@@ -509,6 +509,7 @@ export function renderLearn({ store }, id) {
       h('span', { class: 'muted small' }, '正确答案'),
       h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '(空)', imageWithAnswer(q) ? cardImage(q.card.image, 'q-img small') : null),
       sayButton(q.card, q.side, set),
+      dictButton(q.card, set),
     );
     if (close) {
       fb.className = 'feedback close';
