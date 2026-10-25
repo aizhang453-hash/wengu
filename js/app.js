@@ -6,7 +6,7 @@
 //   #/search/<字>         搜索
 //   #/games               学习游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
 //   #/arcade              游戏厅 (学累了玩的), #/arcade/pinball 弹珠台
-//   #/mistakes            错题集 (#/mistakes/new 记一道, #/mistakes/<id>/edit 改,
+//   #/mistakes            错题集 (#/mistakes/new 记一道, #/mistakes/import 拍照让 AI 记, #/mistakes/<id>/edit 改,
 //                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道)
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
@@ -60,6 +60,7 @@ import { renderQuizPlay } from './views/quizplay.js';
 import { renderMistakes } from './views/mistakes.js';
 import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
+import { renderMistakeImport } from './views/mistakeimport.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
@@ -132,6 +133,7 @@ function parse(hash) {
   if (parts[0] === 'mistakes') {
     if (!parts[1]) return { page: 'mistakes' };
     if (parts[1] === 'new') return { page: 'mistake-edit', mistake: null };
+    if (parts[1] === 'import') return { page: 'mistake-import' };
     if (parts[1] === 'review') return { page: 'mistake-review', which: parts[2] ?? null };
     if (parts[2] === 'edit') return { page: 'mistake-edit', mistake: parts[1] };
   }
@@ -210,6 +212,7 @@ function render() {
   else if (route.page === 'mistakes') view = renderMistakes(ctx);
   else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake);
   else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
+  else if (route.page === 'mistake-import') view = renderMistakeImport(ctx);
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id, { practice: route.practice });
   else if (route.page === 'stats') view = renderStats(ctx, route.id);

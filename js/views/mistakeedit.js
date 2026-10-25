@@ -1,5 +1,6 @@
 // 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」;
 // 填空题写对的答案和当时写的; 为什么错; 题型 (不写就按题目猜)。
+// 拍照让 AI 记的 (mistakeimport.js) 没写完的、想一道道看过的: 一道道打开, 补上存了再下一道 (queueMistakes)
 
 import { h, fill, toast } from '../dom.js';
 import { newId } from '../store.js';
@@ -7,15 +8,25 @@ import { putMedia, shrinkImage } from '../media.js';
 import { cardImage } from '../cardview.js';
 import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, MAX_KIND, KINDS, newMistake, mistakeProblem, tidyMistake, guessKind } from '../mistakes.js';
 
+// 导入的错题先放这里, 下次打开「记一道错题」(#/mistakes/new) 时一道道拿出来
+let queued = [];
+export function queueMistakes(list) {
+  queued = list.map((m) => structuredClone(m));
+}
+
 export function renderMistakeEdit({ store, go }, id = null) {
   const existing = id ? store.getMistake(id) : null;
   if (id && !existing) {
     return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '找不到这道错题'), h('a', { class: 'btn primary', href: '#/mistakes' }, '回错题集')) };
   }
-  let draft = existing ? structuredClone(existing) : newMistake(newId());
-  let dirty = false;
+  const queue = existing ? [] : queued;
+  queued = [];
+  const total = queue.length; // 导入的一共几道 (0: 不是导入的)
+  let draft = existing ? structuredClone(existing) : total ? queue.shift() : newMistake(newId());
+  let dirty = total > 0; // 导入的还没存
   const markDirty = () => {
     dirty = true;
+    if (total) drawNote();
   };
 
   const typeBtns = [
@@ -81,6 +92,20 @@ export function renderMistakeEdit({ store, go }, id = null) {
     );
   }
   const problemEl = h('p', { class: 'qe-problem', hidden: true });
+  const headEl = h('h1', {});
+  const importNote = h('p', { class: 'muted' });
+  const footEl = h('div', { class: 'row end' });
+  function drawHead() {
+    headEl.textContent = existing ? '改错题' : total > 1 ? `导入的错题 (${total - queue.length} / ${total})` : total ? '导入的错题' : '记一道错题';
+    if (!total) return;
+    drawNote();
+    fill(
+      footEl,
+      h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
+      h('button', { class: 'btn', onclick: () => next(false) }, '跳过这道'),
+      h('button', { class: 'btn primary', onclick: () => save(false) }, queue.length ? `保存, 下一道 (还有 ${queue.length} 道)` : '保存'),
+    );
+  }
 
   function fillInputs() {
     passageEl.value = draft.passage;
@@ -190,6 +215,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
       return;
     }
     dirty = false;
+    if (total) return next(true);
     if (!again) {
       toast(existing ? '改好了' : '记好了, 明天开始排进复习');
       return go('#/mistakes');
@@ -204,13 +230,43 @@ export function renderMistakeEdit({ store, go }, id = null) {
     (draft.passage ? questionEl : passageEl).focus();
   }
 
+  // 导入的: 写着还差什么 (改着改着就更新)
+  function drawNote() {
+    const problem = mistakeProblem(tidyMistake(draft));
+    fill(importNote, 'AI 认出来的, 看一遍: 不对的地方改一改, 有图 (函数图像、几何图) 的把照片也放进去。', problem ? h('strong', { class: 'qe-problem' }, ` 还差: ${problem}`) : null);
+  }
+
+  // 导入的: 下一道 (saved: 这道存了还是跳过了); 没有了回错题集
+  function next(saved) {
+    if (!queue.length) {
+      dirty = false;
+      toast(saved ? '记好了, 明天开始排进复习' : '跳过了');
+      return go('#/mistakes');
+    }
+    toast(saved ? '记好了, 下一道' : '跳过了, 下一道');
+    draft = queue.shift();
+    dirty = true;
+    fillInputs();
+    draw();
+    drawImages();
+    drawHead();
+    window.scrollTo(0, 0);
+  }
+
   fillInputs();
   draw();
   drawImages();
-
-  const saveBtn = () => h('button', { class: 'btn primary', onclick: () => save(false) }, '保存');
+  drawHead();
+  if (!total) {
+    fill(
+      footEl,
+      h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
+      existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存, 再记一道'),
+      h('button', { class: 'btn primary', onclick: () => save(false) }, '保存'),
+    );
+  }
   return {
-    title: existing ? '改错题' : '记一道错题',
+    title: existing ? '改错题' : total ? '导入的错题' : '记一道错题',
     el: h(
       'section',
       {
@@ -232,7 +288,8 @@ export function renderMistakeEdit({ store, go }, id = null) {
         },
       },
       h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
-      h('div', { class: 'page-head' }, h('h1', {}, existing ? '改错题' : '记一道错题'), h('div', { class: 'row' }, h('div', { class: 'chips', role: 'group', 'aria-label': '题型' }, typeBtns))),
+      h('div', { class: 'page-head' }, headEl, h('div', { class: 'row' }, h('div', { class: 'chips', role: 'group', 'aria-label': '题型' }, typeBtns))),
+      total ? importNote : existing ? null : h('p', { class: 'muted small' }, '题目长、不想打字? ', h('a', { href: '#/mistakes/import' }, '📷 拍照让 AI 记 →')),
       h('label', { class: 'ask-label' }, '文章 / 材料 (可以不写)'),
       passageEl,
       h('label', { class: 'ask-label' }, '题目'),
@@ -247,10 +304,10 @@ export function renderMistakeEdit({ store, go }, id = null) {
       kindList,
       kindHint,
       problemEl,
-      h('div', { class: 'row end' }, h('a', { class: 'btn', href: '#/mistakes' }, '取消'), existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存, 再记一道'), saveBtn()),
+      footEl,
     ),
-    focus: existing ? null : passageEl,
+    focus: existing || total ? null : passageEl,
     isDirty: () => dirty,
-    canLeave: () => !dirty || confirm('改的东西还没保存, 确定要走吗?'),
+    canLeave: () => !dirty || confirm(total ? `这道${queue.length ? `和后面 ${queue.length} 道` : ''}导入的错题还没存, 确定要走吗?` : '改的东西还没保存, 确定要走吗?'),
   };
 }

@@ -1,4 +1,5 @@
-// 错题集: 记下的错题, 今天该重做几道、按题型数一数 (哪类错得最多, 能单练一类)、一道道列出来 (可以筛、可以搜), 记新的、改、删
+// 错题集: 记下的错题, 今天该重做几道、按题型数一数 (哪类错得最多, 能单练一类)、一道道列出来 (可以筛、可以搜),
+// 记新的 (打字, 或者拍照让 AI 记)、改、删
 
 import { h, toast } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
@@ -155,8 +156,8 @@ export function renderMistakes({ store }) {
       'section',
       { class: 'mistakes-page' },
       h('a', { class: 'back', href: '#/' }, '← 主页'),
-      h('div', { class: 'page-head' }, h('h1', {}, '📕 错题集'), h('a', { class: 'btn primary', href: '#/mistakes/new' }, '＋ 记一道错题')),
-      h('p', { class: 'muted' }, '做错的题 (比如 SAT) 打字记下来: 题目、选项、对的答案、当时选的、为什么错。过几天重做, 做对了隔得越来越久, 连对 3 次算掌握。'),
+      h('div', { class: 'page-head' }, h('h1', {}, '📕 错题集'), h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mistakes/import' }, '📷 拍照让 AI 记'), h('a', { class: 'btn primary', href: '#/mistakes/new' }, '＋ 记一道错题'))),
+      h('p', { class: 'muted' }, '做错的题 (比如 SAT) 记下来: 题目、选项、对的答案、当时选的、为什么错 —— 自己打字, 或者拍照发给 AI, 把它回的贴进来。过几天重做, 做对了隔得越来越久, 连对 3 次算掌握。'),
       hero,
       kindSection(kinds, all.length),
       all.length ? h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), kindPick, search) : null,
