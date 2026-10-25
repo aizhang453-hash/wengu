@@ -7678,6 +7678,133 @@ body.has-pet main {
   max-width: 12em;
 }
 
+/* 拍照让 AI 记错题 */
+.mi-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 18px 0;
+  padding-left: 1.4em;
+}
+
+.mi-steps > li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.mi-steps > li > strong {
+  font-size: 1.05rem;
+}
+
+.mi-steps p {
+  margin: 4px 0 8px;
+}
+
+.mi-prompt-box {
+  margin-top: 8px;
+}
+
+.mi-prompt-box summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mi-prompt {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.mi-paste {
+  margin-bottom: 8px;
+}
+
+.mi-result h2 {
+  margin: 8px 0 10px;
+  font-size: 1.05rem;
+}
+
+.mi-result .row {
+  margin-top: 12px;
+}
+
+.mi-head {
+  cursor: pointer;
+}
+
+.mi-head input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.mi-item.off {
+  opacity: 0.55;
+}
+
+.mi-passage {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mi-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mi-opts li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.mi-opts .mk-letter {
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+}
+
+.mi-opts li.right {
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+
+.mi-opts li.mine {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.mi-mark {
+  flex: none;
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.mi-opts li.right .mi-mark {
+  color: var(--good);
+}
+
+.mi-opts li.mine .mi-mark {
+  color: var(--bad);
+}
+
 /* ==== 游戏厅 ==== */
 .arcade-list {
   display: grid;
