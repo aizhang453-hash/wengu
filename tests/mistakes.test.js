@@ -145,6 +145,26 @@ test('存: 记一道明天开始排, 改题目不动重做记录; 删了记下�
   assert.ok(store.data.deleted['mistake:m1'] > 0);
 });
 
+test('一下删好几道: 存一次, 都记下删除时间; 同步回来不会再出现', () => {
+  const store = new Store(memoryStorage());
+  for (const id of ['a', 'b', 'c', 'd']) store.putMistake({ ...sat(), id });
+  let saves = 0;
+  store.onChange = () => saves++;
+  assert.equal(store.deleteMistakes(['a', 'c', 'nope']), 2);
+  assert.equal(saves, 1);
+  assert.deepEqual(
+    store.allMistakes().map((m) => m.id).sort(),
+    ['b', 'd'],
+  );
+  assert.ok(store.data.deleted['mistake:a'] > 0 && store.data.deleted['mistake:c'] > 0);
+  // 别的设备还有这几道: 合起来以后还是删掉的
+  const other = cleanData({ mistakes: ['a', 'b', 'c', 'd'].map((id) => ({ ...sat(), id })) });
+  assert.deepEqual(
+    mergeData(store.data, other).mistakes.map((m) => m.id).sort(),
+    ['b', 'd'],
+  );
+});
+
 test('同步: 两台设备各记的都留; 同一道内容听最后改的, 重做记录听最后做的; 删了的不回来', () => {
   const a = cleanData({ mistakes: [{ ...sat(), id: 'shared', updatedAt: 100, review: { due: 5, at: 900, right: 2, wrong: 0, streak: 2 } }, { ...sat(), id: 'onlyA' }] });
   const b = cleanData({ mistakes: [{ ...sat(), id: 'shared', note: 'B 改过', updatedAt: 200, review: { due: 5, at: 500, right: 1, wrong: 0, streak: 1 } }, { ...sat(), id: 'onlyB', updatedAt: 50 }], deleted: { 'mistake:onlyB': Date.now() } });

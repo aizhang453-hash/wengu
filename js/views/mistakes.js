@@ -1,7 +1,7 @@
 // 错题集: 记下的错题, 今天该重做几道、按题型数一数 (哪类错得最多, 能单练一类)、一道道列出来 (可以筛、可以搜),
-// 记新的 (打字, 或者拍照让 AI 记)、改、删
+// 记新的 (打字, 或者拍照让 AI 记)、改、删; 「选择」勾好几道 (或全选一类) 一起删
 
-import { h, toast, menuButton } from '../dom.js';
+import { h, fill, toast, menuButton, icon } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { DAY } from '../srs.js';
 import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel, kindOf, kindStats } from '../mistakes.js';
@@ -19,9 +19,6 @@ export function statusText(m, now = Date.now()) {
 
 export function renderMistakes({ store }) {
   const all = store.allMistakes();
-  const due = dueMistakes(all);
-  const mastered = all.filter((m) => m.review?.mastered);
-  const learning = all.filter((m) => !m.review?.mastered);
   let filter = 'all';
   try {
     filter = localStorage.getItem(FILTER_KEY) || 'all';
@@ -30,6 +27,10 @@ export function renderMistakes({ store }) {
   }
   let query = '';
   let kind = ''; // 只看这类 (空: 全部)
+  let shown = []; // 现在列出来的
+  // 选择: 勾好几道一起删 (只算现在列出来的: 换了筛选、搜索, 看不见的就不选了)
+  let selecting = false;
+  const selected = new Set();
 
   const listEl = h('ul', { class: 'mk-list' });
   const filters = [
@@ -43,6 +44,7 @@ export function renderMistakes({ store }) {
       'button',
       {
         class: 'chip',
+        type: 'button',
         onclick: () => {
           filter = key;
           try {
@@ -56,16 +58,58 @@ export function renderMistakes({ store }) {
     ),
   );
   const search = h('input', { class: 'input mk-search', type: 'search', placeholder: '搜索错题', 'aria-label': '搜索错题', oninput: () => ((query = search.value), drawList()) });
-  const kinds = kindStats(all);
-  const kindPick =
-    kinds.length > 1
-      ? h(
-          'select',
-          { class: 'input mk-kind-pick', 'aria-label': '按题型筛选', onchange: (e) => ((kind = e.target.value), drawList()) },
-          h('option', { value: '' }, '全部题型'),
-          kinds.map((k) => h('option', { value: k.kind }, `${k.kind} (${k.total})`)),
-        )
-      : null;
+  const kindPick = h('select', { class: 'input mk-kind-pick', 'aria-label': '按题型筛选', onchange: (e) => ((kind = e.target.value), drawList()) });
+  const selectBtn = h('button', { class: 'btn small', type: 'button', onclick: () => setSelecting(!selecting) }, '选择');
+  const toolsEl = h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), h('div', { class: 'mk-tools-right' }, kindPick, search, selectBtn));
+
+  // 选择时上面的一条: 已选几道、全选、删除、完成
+  const pickedText = h('span', { class: 'mk-select-count' });
+  const allBtn = h('button', { class: 'btn small', type: 'button', onclick: toggleAll });
+  const deleteBtn = h('button', { class: 'btn small primary', type: 'button', onclick: deleteSelected }, icon('trash', 16), '删除');
+  const selectBar = h('div', { class: 'mk-select-bar', hidden: true }, pickedText, h('div', { class: 'row' }, allBtn, deleteBtn, h('button', { class: 'btn small quiet', type: 'button', onclick: () => setSelecting(false) }, '完成')));
+
+  const heroEl = h('div', { class: 'quiz-hero' });
+  const kindsEl = h('div');
+
+  function setSelecting(on) {
+    selecting = on;
+    selected.clear();
+    selectBtn.classList.toggle('on', on);
+    selectBtn.textContent = on ? '取消选择' : '选择';
+    drawList();
+  }
+
+  function toggleAll() {
+    const every = shown.length && shown.every((m) => selected.has(m.id));
+    for (const m of shown) every ? selected.delete(m.id) : selected.add(m.id);
+    drawList();
+  }
+
+  function drawSelectBar() {
+    selectBar.hidden = !selecting;
+    if (!selecting) return;
+    const every = shown.length && shown.every((m) => selected.has(m.id));
+    pickedText.textContent = selected.size ? `已选 ${selected.size} 道` : '点击题目进行选择';
+    allBtn.textContent = every ? '取消全选' : `全选（${shown.length}）`;
+    allBtn.disabled = !shown.length;
+    deleteBtn.disabled = !selected.size;
+  }
+
+  function remove(ids) {
+    const n = store.deleteMistakes(ids);
+    const gone = new Set(ids);
+    for (let i = all.length - 1; i >= 0; i--) if (gone.has(all[i].id)) all.splice(i, 1);
+    return n;
+  }
+
+  function deleteSelected() {
+    const ids = [...selected];
+    if (!ids.length || !confirm(`删除所选的 ${ids.length} 道错题？删除后无法恢复。`)) return;
+    const n = remove(ids);
+    toast(`已删除 ${n} 道`);
+    setSelecting(false);
+    drawTop();
+  }
 
   function drawList() {
     const now = Date.now();
@@ -75,81 +119,114 @@ export function renderMistakes({ store }) {
       c.textContent = `${label} ${count[key]}`;
       c.classList.toggle('on', key === filter);
     });
-    const shown = all.filter((m) => {
+    shown = all.filter((m) => {
       if (filter === 'due' && mistakeStatus(m, now) !== 'due') return false;
       if (filter === 'learning' && m.review?.mastered) return false;
       if (filter === 'mastered' && !m.review?.mastered) return false;
       if (kind && kindOf(m) !== kind) return false;
       return matchesSearch(m, query);
     });
-    listEl.replaceChildren(
-      ...(shown.length
-        ? shown.map((m) => {
-            const st = mistakeStatus(m, now);
-            const mine = mineLabel(m);
-            return h(
-              'li',
-              { class: 'mk-item' },
-              h(
-                'div',
-                { class: 'mk-item-head' },
-                h('span', { class: `mk-status ${st}` }, statusText(m, now)),
-                h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
-                h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
-                m.passage ? h('span', { class: 'qi-tag' }, '含材料') : null,
-                m.images.length ? h('span', { class: 'qi-tag' }, `${m.images.length} 张图`) : null,
-                m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次，答对 ${m.review.right} 次`) : null,
-              ),
-              m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
-              m.images.length ? h('div', { class: 'mk-thumbs' }, m.images.slice(0, 3).map((id) => cardImage(id, 'mk-thumb'))) : null,
-              h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '正确答案'), rich(answerLabel(m))),
-              mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '我的答案'), rich(mine)) : null,
-              m.note ? h('div', { class: 'mk-note' }, rich(m.note)) : null,
-              h(
-                'div',
-                { class: 'row mk-actions' },
-                h('a', { class: 'btn small', href: `#/mistakes/review/${encodeURIComponent(m.id)}` }, '重做'),
-                h('a', { class: 'btn small', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '编辑'),
-                h(
-                  'button',
-                  {
-                    class: 'btn small danger',
-                    onclick: () => {
-                      if (!confirm('删除这道错题？删除后无法恢复。')) return;
-                      store.deleteMistake(m.id);
-                      toast('已删除');
-                      all.splice(all.indexOf(m), 1);
-                      drawList();
-                    },
-                  },
-                  '删除',
-                ),
-              ),
-            );
-          })
-        : [h('li', { class: 'muted empty-note' }, query ? '没有找到相关错题。' : filter === 'due' ? '今日没有待重做的错题。' : filter === 'mastered' ? '暂无已掌握的错题。重做时连续答对 3 次即为掌握。' : '暂无错题。')]),
+    const visible = new Set(shown.map((m) => m.id));
+    for (const id of [...selected]) if (!visible.has(id)) selected.delete(id);
+    listEl.classList.toggle('selecting', selecting);
+    fill(
+      listEl,
+      shown.length
+        ? shown.map((m) => itemEl(m, now))
+        : h('li', { class: 'muted empty-note' }, query ? '没有找到相关错题。' : filter === 'due' ? '今日没有待重做的错题。' : filter === 'mastered' ? '暂无已掌握的错题。重做时连续答对 3 次即为掌握。' : '暂无错题。'),
+    );
+    drawSelectBar();
+  }
+
+  function itemEl(m, now) {
+    const st = mistakeStatus(m, now);
+    const mine = mineLabel(m);
+    const picked = selected.has(m.id);
+    const toggle = () => {
+      if (selected.has(m.id)) selected.delete(m.id);
+      else selected.add(m.id);
+      drawList();
+    };
+    return h(
+      'li',
+      {
+        class: `mk-item${picked ? ' picked' : ''}`,
+        // 选择时点整道题就是勾上 / 取消
+        onclick: selecting ? (e) => (e.target.closest('input') ? null : toggle()) : null,
+      },
+      h(
+        'div',
+        { class: 'mk-item-head' },
+        selecting ? h('input', { type: 'checkbox', class: 'mk-pick', checked: picked, 'aria-label': '选择这道错题', onchange: toggle }) : null,
+        h('span', { class: `mk-status ${st}` }, statusText(m, now)),
+        h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
+        h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
+        m.passage ? h('span', { class: 'qi-tag' }, '含材料') : null,
+        m.images.length ? h('span', { class: 'qi-tag' }, `${m.images.length} 张图`) : null,
+        m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次，答对 ${m.review.right} 次`) : null,
+      ),
+      m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
+      m.images.length ? h('div', { class: 'mk-thumbs' }, m.images.slice(0, 3).map((id) => cardImage(id, 'mk-thumb'))) : null,
+      h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '正确答案'), rich(answerLabel(m))),
+      mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '我的答案'), rich(mine)) : null,
+      m.note ? h('div', { class: 'mk-note' }, rich(m.note)) : null,
+      selecting
+        ? null
+        : h(
+            'div',
+            { class: 'row mk-actions' },
+            h('a', { class: 'btn small', href: `#/mistakes/review/${encodeURIComponent(m.id)}` }, '重做'),
+            h('a', { class: 'btn small', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '编辑'),
+            h(
+              'button',
+              {
+                class: 'btn small danger',
+                type: 'button',
+                onclick: () => {
+                  if (!confirm('删除这道错题？删除后无法恢复。')) return;
+                  remove([m.id]);
+                  toast('已删除');
+                  drawTop();
+                },
+              },
+              '删除',
+            ),
+          ),
     );
   }
 
-  const tomorrow = learning.filter((m) => mistakeStatus(m) === 'later' && m.review.due < new Date().setHours(0, 0, 0, 0) + 2 * DAY).length;
-  const hero = h(
-    'div',
-    { class: 'quiz-hero' },
-    h(
-      'div',
-      {},
-      h('strong', {}, due.length ? `今日待重做 ${due.length} 道` : all.length ? '今日没有待重做的错题' : '暂无错题'),
-      h('div', { class: 'muted small' }, all.length ? `共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明日 ${tomorrow} 道` : ''}` : '记录做错的题目，按间隔重做；连续答对 3 次即为掌握'),
-    ),
-    h(
-      'div',
-      { class: 'row' },
-      due.length ? h('a', { class: 'btn primary big-choice', href: '#/mistakes/review' }, `开始重做（${due.length}）`) : null,
-      learning.length > due.length ? h('a', { class: `btn${due.length ? '' : ' primary'}`, href: '#/mistakes/review/all' }, `重做全部未掌握（${learning.length}）`) : null,
-    ),
-  );
+  // 上面的: 今天该重做几道、题型分布、题型的下拉 (删了题以后跟着变)
+  function drawTop() {
+    const due = dueMistakes(all);
+    const mastered = all.filter((m) => m.review?.mastered);
+    const learning = all.filter((m) => !m.review?.mastered);
+    const tomorrow = learning.filter((m) => mistakeStatus(m) === 'later' && m.review.due < new Date().setHours(0, 0, 0, 0) + 2 * DAY).length;
+    fill(
+      heroEl,
+      h(
+        'div',
+        {},
+        h('strong', {}, due.length ? `今日待重做 ${due.length} 道` : all.length ? '今日没有待重做的错题' : '暂无错题'),
+        h('div', { class: 'muted small' }, all.length ? `共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明日 ${tomorrow} 道` : ''}` : '记录做错的题目，按间隔重做；连续答对 3 次即为掌握'),
+      ),
+      h(
+        'div',
+        { class: 'row' },
+        due.length ? h('a', { class: 'btn primary big-choice', href: '#/mistakes/review' }, `开始重做（${due.length}）`) : null,
+        learning.length > due.length ? h('a', { class: `btn${due.length ? '' : ' primary'}`, href: '#/mistakes/review/all' }, `重做全部未掌握（${learning.length}）`) : null,
+      ),
+    );
+    const kinds = kindStats(all);
+    fill(kindsEl, kindSection(kinds, all.length));
+    if (kind && !kinds.some((k) => k.kind === kind)) kind = ''; // 这类删光了
+    fill(kindPick, h('option', { value: '' }, '全部题型'), kinds.map((k) => h('option', { value: k.kind }, `${k.kind} (${k.total})`)));
+    kindPick.value = kind;
+    kindPick.hidden = kinds.length < 2;
+    toolsEl.hidden = !all.length;
+    drawList();
+  }
 
-  drawList();
+  drawTop();
   return {
     title: '错题集',
     el: h(
@@ -168,9 +245,10 @@ export function renderMistakes({ store }) {
           { label: '添加错题', text: '添加', cls: 'btn primary', iconName: 'plus' },
         ),
       ),
-      hero,
-      kindSection(kinds, all.length),
-      all.length ? h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), kindPick, search) : null,
+      heroEl,
+      kindsEl,
+      toolsEl,
+      selectBar,
       listEl,
     ),
   };
