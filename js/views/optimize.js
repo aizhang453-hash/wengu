@@ -65,15 +65,15 @@ export function openOptimizeDialog({ store, onChanged }) {
   const resultEl = h('div', { class: 'opt-result' });
   const bar = h('span', { class: 'meter-fill' });
   const meter = h('span', { class: 'meter', hidden: true }, bar);
-  const runBtn = h('button', { class: 'btn primary', disabled: have.items < MIN_ITEMS, onclick: () => run() }, own ? '用现在的记录再优化一次' : '开始优化');
+  const runBtn = h('button', { class: 'btn primary', disabled: have.items < MIN_ITEMS, onclick: () => run() }, own ? '重新优化' : '开始优化');
 
   const status = own
-    ? `现在用的: 按你的记录优化过的参数 (${dateText(own.at)}, 用了 ${num(own.items)} 次复习)`
-    : '现在用的: FSRS 的默认参数 (很多人的平均)';
+    ? `当前：个人参数（${dateText(own.at)}，基于 ${num(own.items)} 次复习）`
+    : '当前：FSRS 默认参数';
   let enough;
-  if (have.items < MIN_ITEMS) enough = `能用的记录还太少 (隔天以后的复习只有 ${have.items} 次), 多背几天再来。`;
-  else if (have.items < MIN_TRAIN) enough = '记录还不多, 只能估出「第一次背完能记几天」, 别的参数先用默认的。';
-  else if (have.items < 400) enough = '记录不太多, 算出来的可能不太稳; 攒到 1000 次左右会更准。';
+  if (have.items < MIN_ITEMS) enough = `可用记录不足（间隔一天以上的复习仅 ${have.items} 次），请积累更多记录后再试。`;
+  else if (have.items < MIN_TRAIN) enough = '记录较少，仅能优化初始记忆参数，其余参数沿用默认值。';
+  else if (have.items < 400) enough = '记录较少，结果可能不稳定；积累约 1000 次后更准确。';
   else enough = '';
 
   // 关了窗口: 后台还在算的停掉
@@ -81,7 +81,7 @@ export function openOptimizeDialog({ store, onChanged }) {
 
   async function run() {
     runBtn.disabled = true;
-    runBtn.textContent = '算着呢……';
+    runBtn.textContent = '正在计算……';
     meter.hidden = false;
     bar.style.width = '0%';
     fill(resultEl);
@@ -91,24 +91,24 @@ export function openOptimizeDialog({ store, onChanged }) {
     } catch (e) {
       if (e.name === 'AbortError') return;
       console.warn(e);
-      fill(resultEl, h('p', { class: 'qe-problem' }, '算的时候出错了, 换个浏览器试试?'));
+      fill(resultEl, h('p', { class: 'qe-problem' }, '计算出错，请尝试更换浏览器。'));
     } finally {
       meter.hidden = true;
       runBtn.disabled = false;
-      runBtn.textContent = '再算一次';
+      runBtn.textContent = '重新计算';
       runBtn.className = 'btn';
     }
   }
 
   function showResult(r) {
     if (r.status === 'default' || !r.after) {
-      fill(resultEl, h('p', {}, '记录还太少, 算不出来, 先用默认参数。'));
+      fill(resultEl, h('p', {}, '记录不足，无法计算，继续使用默认参数。'));
       return;
     }
     const rows = [
       ['默认参数', r.before],
-      own ? ['现在用的', r.current] : null,
-      ['按你的记录算的', r.after],
+      own ? ['当前参数', r.current] : null,
+      ['个人参数', r.after],
     ].filter(Boolean);
     const [s0, s2] = [r.w[0], r.w[2]];
     fill(
@@ -123,19 +123,19 @@ export function openOptimizeDialog({ store, onChanged }) {
           rows.map(([name, e]) => h('tr', {}, h('th', {}, name), h('td', {}, pct(e.rmse)), h('td', {}, e.logLoss.toFixed(4)))),
         ),
       ),
-      h('p', { class: 'muted small' }, `拿你的 ${num(r.after.n)} 次复习算的: 每次按之前的记录预测「这次还记得的把握」, 跟实际记没记得比。两个数都是越小越准。`),
+      h('p', { class: 'muted small' }, `基于 ${num(r.after.n)} 次复习，比较预测记忆率与实际结果；数值越小越准确。`),
       h(
         'ul',
         { class: 'opt-facts' },
-        h('li', {}, `第一次就会的: 过 ${days(s2)}还有 90% 记得 (默认 ${days(DEFAULT_W[2])})`),
-        h('li', {}, `第一次不会的: 过 ${days(s0)}还有 90% 记得 (默认 ${days(DEFAULT_W[0])})`),
+        h('li', {}, `首次即会：${days(s2)}后记忆率 90%（默认 ${days(DEFAULT_W[2])}）`),
+        h('li', {}, `首次不会：${days(s0)}后记忆率 90%（默认 ${days(DEFAULT_W[0])}）`),
       ),
-      r.status === 'initial' ? h('p', { class: 'muted small' }, '记录还不多, 只调了第一次以后能记几天, 别的参数还是默认的。') : null,
+      r.status === 'initial' ? h('p', { class: 'muted small' }, '记录较少，仅调整了初始记忆参数，其余沿用默认值。') : null,
       r.better
         ? h(
             'div',
             { class: 'row end' },
-            h('button', { class: 'btn', onclick: () => d.close() }, '先不用'),
+            h('button', { class: 'btn', onclick: () => d.close() }, '暂不使用'),
             h(
               'button',
               {
@@ -143,25 +143,25 @@ export function openOptimizeDialog({ store, onChanged }) {
                 onclick: () => {
                   const n = store.setParameters({ w: r.w, items: r.items, logLoss: [r.before.logLoss, r.after.logLoss], rmse: [r.before.rmse, r.after.rmse] });
                   d.close();
-                  toast(`换好了, 以后按你的参数排${n ? `; ${num(n)} 张卡片按新参数重算了记得多牢` : ''}`);
+                  toast(`已启用个人参数${n ? `，${num(n)} 张卡片已按新参数重新计算` : ''}`);
                   onChanged?.();
                 },
               },
-              '用这套参数',
+              '启用此参数',
             ),
           )
-        : h('p', { class: 'opt-same' }, own ? '现在用的参数已经挺合适了, 新算的不比它准, 不用换。' : '默认参数对你就挺合适, 新算的不比它准, 不用换。'),
+        : h('p', { class: 'opt-same' }, own ? '当前参数已较为准确，无需更换。' : '默认参数已较为准确，无需更换。'),
     );
   }
 
   const d = openDialog({
-    title: '按我的记录优化复习排法',
+    title: '复习参数优化',
     onClose: () => stop.abort(),
     body: [
-      h('p', { class: 'muted small' }, 'FSRS 有 21 个参数, 决定「隔多久再复习、多快会忘」。默认的是很多人的平均; 拿你自己的翻卡自评记录 (连从 Anki 搬来的) 算一套更合你的 (在你的浏览器里算)。'),
+      h('p', { class: 'muted small' }, 'FSRS 通过 21 个参数决定复习间隔。默认参数基于大量用户的平均值；优化将根据你的复习记录（含 Anki 导入）在本地计算个人参数。'),
       h('p', {}, status),
-      h('p', {}, `能用的记录: ${num(have.cards)} 张卡片, 一共 ${num(have.reviews)} 次复习 (隔天以后的 ${num(have.items)} 次)。`),
-      h('p', { class: 'muted small' }, '只用从第一次背起都记着的卡片 (在这一版以前背过的、只记了一部分的不算)。'),
+      h('p', {}, `可用记录：${num(have.cards)} 张卡片，共 ${num(have.reviews)} 次复习（间隔一天以上 ${num(have.items)} 次）。`),
+      h('p', { class: 'muted small' }, '仅使用记录完整的卡片。'),
       enough ? h('p', { class: 'muted small' }, enough) : null,
       meter,
       resultEl,
@@ -173,14 +173,14 @@ export function openOptimizeDialog({ store, onChanged }) {
             {
               class: 'btn',
               onclick: () => {
-                if (!confirm('换回 FSRS 的默认参数?')) return;
+                if (!confirm('恢复 FSRS 默认参数？')) return;
                 store.setParameters(null);
                 d.close();
-                toast('换回默认参数了');
+                toast('已恢复默认参数');
                 onChanged?.();
               },
             },
-            '换回默认参数',
+            '恢复默认参数',
           )
         : null,
       runBtn,

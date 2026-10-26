@@ -19,16 +19,16 @@ export function renderMistakeImport({ store, go }) {
   let added = false;
 
   // ---- ② AI 回的 ----
-  const pasteEl = h('textarea', { class: 'input mi-paste', rows: 6, placeholder: 'AI 回的整段直接粘贴进来 (前后多的话不要紧)', 'aria-label': 'AI 回的', oninput: () => read(pasteEl.value) });
+  const pasteEl = h('textarea', { class: 'input mi-paste', rows: 6, placeholder: '粘贴 AI 的完整回复', 'aria-label': 'AI 的回复', oninput: () => read(pasteEl.value) });
   const fileInput = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: () => fileInput.files[0] && loadFile(fileInput.files[0]) });
   async function loadFile(file) {
     fileInput.value = '';
     if (file.type.startsWith('image/')) return takeImages([file]);
-    if (file.size > MAX_FILE) return toast('这个文件太大了, 不像 AI 写的错题');
+    if (file.size > MAX_FILE) return toast('文件过大，无法识别');
     try {
       pasteEl.value = await file.text();
     } catch {
-      return toast('读不了这个文件');
+      return toast('无法读取该文件');
     }
     read(pasteEl.value);
   }
@@ -36,14 +36,14 @@ export function renderMistakeImport({ store, go }) {
   // 照片温故自己认不了字; 只认出一道的话就放进那道题里
   function takeImages(files) {
     if (items.length === 1) return addImages(items[0], files);
-    toast(items.length ? '要把照片放进错题里, 点那道题下面的「🖼 放照片」' : '温故自己认不了照片上的字: 照片发给 AI, 再把 AI 回的贴到这里');
+    toast(items.length ? '请在对应题目下点击「添加照片」' : '请先将照片发给 AI，再把回复粘贴到这里');
   }
 
   // ---- ③ 认出来的 ----
   const resultEl = h('div', { class: 'mi-result', 'aria-live': 'polite' });
   const listEl = h('ul', { class: 'mk-list' });
   const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => add(false) });
-  const eachBtn = h('button', { class: 'btn', type: 'button', onclick: () => add(true) }, '一道道看过再加');
+  const eachBtn = h('button', { class: 'btn', type: 'button', onclick: () => add(true) }, '逐题核对');
   const countEl = h('p', { class: 'muted small' });
 
   function read(text) {
@@ -57,16 +57,16 @@ export function renderMistakeImport({ store, go }) {
       });
     } catch (e) {
       if (!(e instanceof ImportError)) console.warn(e);
-      return fill(resultEl, h('p', { class: 'qe-problem' }, `⚠ ${e instanceof ImportError ? e.message : '读不出来'}`));
+      return fill(resultEl, h('p', { class: 'qe-problem' }, `${e instanceof ImportError ? e.message : '无法识别'}`));
     }
     fill(listEl, items.map(itemEl));
     fill(
       resultEl,
-      h('h2', {}, `认出 ${items.length} 道`),
+      h('h2', {}, `识别到 ${items.length} 道`),
       listEl,
       countEl,
       h('div', { class: 'row' }, addBtn, eachBtn),
-      h('p', { class: 'muted small' }, '「一道道看过再加」: 每道打开「记一道错题」看一遍, 能改、能放照片, 存了再下一道。'),
+      h('p', { class: 'muted small' }, '逐题核对：依次打开每道题，可修改并添加照片后保存。'),
     );
     drawCount();
   }
@@ -74,9 +74,9 @@ export function renderMistakeImport({ store, go }) {
   function drawCount() {
     const chosen = items.filter((x) => x.on);
     const unfinished = chosen.filter((x) => x.problem).length;
-    addBtn.textContent = `加进错题集 (${chosen.length} 道)`;
+    addBtn.textContent = `加入错题集（${chosen.length} 道）`;
     addBtn.disabled = eachBtn.disabled = !chosen.length;
-    countEl.textContent = unfinished ? `勾上的有 ${unfinished} 道没写完 (标着 ⚠), 加的时候一道道打开让你补上; 别的直接记好。` : '';
+    countEl.textContent = unfinished ? `已选中的题目中有 ${unfinished} 道信息不完整，加入时将逐题打开补充。` : '';
   }
 
   function itemEl(x, i) {
@@ -84,7 +84,7 @@ export function renderMistakeImport({ store, go }) {
     const box = h('input', {
       type: 'checkbox',
       checked: x.on,
-      'aria-label': `加第 ${i + 1} 道`,
+      'aria-label': `选择第 ${i + 1} 道`,
       onchange: () => {
         x.on = box.checked;
         li.classList.toggle('off', !x.on);
@@ -100,10 +100,10 @@ export function renderMistakeImport({ store, go }) {
         { class: 'mk-item-head mi-head' },
         box,
         h('strong', {}, `第 ${i + 1} 道`),
-        h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '按题目猜的题型, 以后在「改」里可以换' }, kindOf(m)),
+        h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
         h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
       ),
-      x.same ? h('p', { class: 'muted small' }, '错题集里已经有这道了, 所以没勾上 (要再记一遍就勾上)') : null,
+      x.same ? h('p', { class: 'muted small' }, '错题集中已有此题，默认不加入') : null,
       m.passage ? h('div', { class: 'mi-passage' }, rich(m.passage)) : null,
       m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
       m.type === 'choice'
@@ -115,23 +115,23 @@ export function renderMistakeImport({ store, go }) {
                 'li',
                 { class: k === m.correct ? 'right' : k === m.mine ? 'mine' : null },
                 h('span', { class: 'mk-letter' }, LETTERS[k]),
-                o ? rich(o) : h('span', { class: 'muted' }, '(空的)'),
-                k === m.correct ? h('span', { class: 'mi-mark' }, '✓ 对的') : k === m.mine ? h('span', { class: 'mi-mark' }, '✕ 我选的') : null,
+                o ? rich(o) : h('span', { class: 'muted' }, '（空）'),
+                k === m.correct ? h('span', { class: 'mi-mark' }, '正确答案') : k === m.mine ? h('span', { class: 'mi-mark' }, '我的答案') : null,
               ),
             ),
           )
         : [
-            m.answer ? h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '✓ 对的'), rich(m.answer)) : null,
-            m.mineText ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '✕ 我写的'), rich(m.mineText)) : null,
+            m.answer ? h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '正确答案'), rich(m.answer)) : null,
+            m.mineText ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '我的答案'), rich(m.mineText)) : null,
           ],
       m.note ? h('div', { class: 'mk-note' }, rich(m.note)) : null,
-      x.problem ? h('p', { class: 'qe-problem' }, `⚠ ${x.problem} —— 加的时候打开让你补上`) : null,
+      x.problem ? h('p', { class: 'qe-problem' }, `待补充：${x.problem}`) : null,
       h(
         'div',
         { class: 'mk-images-edit' },
         m.images.map((id) => cardImage(id, 'mk-thumb')),
-        m.images.length < MAX_IMAGES ? h('button', { class: 'tool-btn', type: 'button', onclick: () => imgInput.click() }, m.images.length ? '🖼 再放一张' : '🖼 放照片') : null,
-        m.images.length ? null : h('span', { class: 'muted small' }, '有函数图像、几何图的, 把照片也放进去'),
+        m.images.length < MAX_IMAGES ? h('button', { class: 'tool-btn', type: 'button', onclick: () => imgInput.click() }, m.images.length ? '继续添加' : '添加照片') : null,
+        m.images.length ? null : h('span', { class: 'muted small' }, '含图表的题目建议添加照片'),
         imgInput,
       ),
     );
@@ -143,14 +143,14 @@ export function renderMistakeImport({ store, go }) {
     const m = x.mistake;
     for (const file of [...(files ?? [])].filter((f) => f.type.startsWith('image/'))) {
       if (m.images.length >= MAX_IMAGES) {
-        toast(`一道题最多放 ${MAX_IMAGES} 张图片`);
+        toast(`每道题最多 ${MAX_IMAGES} 张图片`);
         break;
       }
       try {
         // 文章、图表要看得清字, 跟「记一道错题」一样大
         m.images.push(await putMedia(await shrinkImage(file, 1600)));
       } catch {
-        toast('图片存不进去, 可能浏览器空间满了');
+        toast('图片保存失败，存储空间可能已满');
         break;
       }
     }
@@ -170,23 +170,23 @@ export function renderMistakeImport({ store, go }) {
       try {
         store.transaction(() => ready.forEach((m) => store.putMistake(m)));
       } catch {
-        toast('存不下了: 浏览器给的空间满了');
+        toast('存储空间已满，无法保存');
         return;
       }
     }
     added = true;
     if (!later.length) {
-      toast(`记好了 ${ready.length} 道, 明天开始排进复习`);
+      toast(`已加入 ${ready.length} 道，明日开始安排重做`);
       return go('#/mistakes');
     }
     queueMistakes(later);
-    toast(ready.length ? `记好了 ${ready.length} 道; 还有 ${later.length} 道要补上` : `一共 ${later.length} 道, 一道道看`);
+    toast(ready.length ? `已加入 ${ready.length} 道，另有 ${later.length} 道待补充` : `共 ${later.length} 道，逐题核对`);
     go('#/mistakes/new');
   }
 
   const isText = (target) => target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement;
   return {
-    title: '拍照让 AI 记错题',
+    title: '拍照录入错题',
     el: h(
       'section',
       {
@@ -222,32 +222,32 @@ export function renderMistakeImport({ store, go }) {
         },
       },
       h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
-      h('h1', {}, '📷 拍照让 AI 记错题'),
-      h('p', { class: 'muted' }, '不用一个字一个字打: 题目拍照发给 AI, AI 照着温故认得的格式写出来, 贴到这里就记好了。一次可以好几道。'),
+      h('h1', {}, '拍照录入错题'),
+      h('p', { class: 'muted' }, '将题目照片发给 AI 识别，再把结果粘贴到这里，即可批量录入。'),
       h(
         'ol',
         { class: 'mi-steps' },
         h(
           'li',
           {},
-          h('strong', {}, '复制给 AI 的话'),
-          h('p', { class: 'muted small' }, '打开 Claude (或者别的能看图的 AI: ChatGPT、豆包、Kimi……), 粘贴这段话, 再把题目的照片 / 截图发过去。照片上看不出来的, 加一句「我选的是 C」「答案是 B」。'),
+          h('strong', {}, '复制提示词'),
+          h('p', { class: 'muted small' }, '在 Claude、ChatGPT 等支持图片的 AI 中粘贴提示词，并发送题目照片。如照片中看不出答案，请注明「我选的是 C」「答案是 B」。'),
           h('div', { class: 'row' }, ask.button),
           ask.details,
         ),
         h(
           'li',
           {},
-          h('strong', {}, '把 AI 回的贴进来'),
-          h('p', { class: 'muted small' }, 'AI 回的整段复制过来粘贴就行。AI 给的是文件 (.json、.txt) 的话, 点「选文件」或者拖进来。'),
+          h('strong', {}, '粘贴 AI 的回复'),
+          h('p', { class: 'muted small' }, '复制完整回复后粘贴；若 AI 返回文件（.json、.txt），可选择或拖入。'),
           pasteEl,
-          h('div', { class: 'file-pick-row' }, h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '选文件'), h('span', { class: 'muted small' }, '.json、.txt'), fileInput),
+          h('div', { class: 'file-pick-row' }, h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '选择文件'), h('span', { class: 'muted small' }, '.json、.txt'), fileInput),
         ),
-        h('li', {}, h('strong', {}, '看一遍, 加进错题集'), resultEl),
+        h('li', {}, h('strong', {}, '核对并加入'), resultEl),
       ),
     ),
     focus: null,
     isDirty: () => !added && items.length > 0,
-    canLeave: () => added || !items.length || confirm(`认出来的 ${items.length} 道还没加进错题集, 确定要走吗?`),
+    canLeave: () => added || !items.length || confirm(`识别到的 ${items.length} 道题尚未加入，确定离开吗？`),
   };
 }

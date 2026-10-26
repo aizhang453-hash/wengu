@@ -20,11 +20,11 @@ export function fileImportPanel({ onText, onCards, onSets }) {
   let cancelled = false;
   const input = h('input', { type: 'file', accept: ACCEPT, hidden: true, onchange: () => input.files[0] && load(input.files[0]) });
   const panel = h('div', { class: 'file-panel', hidden: true });
-  const pickBtn = h('button', { class: 'btn', type: 'button', onclick: () => input.click() }, '选文件');
+  const pickBtn = h('button', { class: 'btn', type: 'button', onclick: () => input.click() }, '选择文件');
   const el = h(
     'div',
     { class: 'file-pick' },
-    h('div', { class: 'file-pick-row' }, pickBtn, h('span', { class: 'muted small' }, 'Excel (.xlsx)、CSV、Anki 卡组 (.apkg)、.txt, AI 给的 .json 也行; 也可以直接拖进来')),
+    h('div', { class: 'file-pick-row' }, pickBtn, h('span', { class: 'muted small' }, '支持 Excel、CSV、Anki 卡组（.apkg）、.txt、.json，也可拖入')),
     input,
     panel,
   );
@@ -32,7 +32,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
   async function load(file) {
     input.value = '';
     pickBtn.disabled = true;
-    pickBtn.textContent = '读取中……';
+    pickBtn.textContent = '正在读取……';
     try {
       const data = await readCardFile(file);
       if (data.kind === 'text') {
@@ -43,11 +43,11 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       }
     } catch (e) {
       const known = e instanceof FileError || e instanceof AnkiError;
-      toast(known ? e.message : e instanceof SQLiteError ? '这个 Anki 卡组坏了, 读不了' : '读不了这个文件, 是不是坏了?');
+      toast(known ? e.message : e instanceof SQLiteError ? 'Anki 卡组已损坏，无法读取' : '无法读取该文件');
       if (!known) console.warn(e);
     } finally {
       pickBtn.disabled = false;
-      pickBtn.textContent = '选文件';
+      pickBtn.textContent = '选择文件';
     }
   }
 
@@ -59,20 +59,20 @@ export function fileImportPanel({ onText, onCards, onSets }) {
         ? h(
             'select',
             { class: 'input', 'aria-label': label, onchange: () => (resetColumns(), draw()) },
-            h('option', { value: '-1' }, `全部 ${sheets.length} 个${label}合在一起`),
+            h('option', { value: '-1' }, `合并全部 ${sheets.length} 个${label}`),
             sheets.map((s, i) => h('option', { value: String(i) }, `${s.name} (${s.rows.length})`)),
           )
         : null;
     if (sheetSelect) sheetSelect.value = '0';
     const headerBox = h('input', { type: 'checkbox', onchange: () => (resetColumns(false), draw()) });
     const randomBox = h('input', { type: 'checkbox' });
-    const termSel = h('select', { class: 'input', 'aria-label': '词那一列', onchange: () => draw() });
-    const defSel = h('select', { class: 'input', 'aria-label': '解释那一列', onchange: () => draw() });
-    const extraSel = h('select', { class: 'input', 'aria-label': '解释后面再接上', onchange: () => draw() });
+    const termSel = h('select', { class: 'input', 'aria-label': '词语列', onchange: () => draw() });
+    const defSel = h('select', { class: 'input', 'aria-label': '释义列', onchange: () => draw() });
+    const extraSel = h('select', { class: 'input', 'aria-label': '附加列', onchange: () => draw() });
     const previewEl = h('div', { class: 'preview' });
-    const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => finish('add') }, '加进来');
-    const directBtn = h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => finish('direct') }, '直接建成卡片集');
-    const eachBtn = sheets.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => finish('each') }, `每个${label}建一个卡片集`) : null;
+    const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => finish('add') }, '添加');
+    const directBtn = h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => finish('direct') }, '直接创建卡片集');
+    const eachBtn = sheets.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => finish('each') }, `每个${label}各建一个卡片集`) : null;
 
     const chosen = () => (sheetSelect && sheetSelect.value !== '-1' ? [sheets[Number(sheetSelect.value)]] : sheetSelect ? sheets : [sheets[0]]);
 
@@ -83,7 +83,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const labels = columnLabels(first, header, html);
       const width = chosen().reduce((w, s) => Math.max(w, s.columns.length, widthOf(s.rows)), labels.length);
       const options = (withNone) => [
-        withNone ? h('option', { value: '-1' }, '不要') : null,
+        withNone ? h('option', { value: '-1' }, '无') : null,
         Array.from({ length: Math.max(width, 2) }, (_, c) => h('option', { value: String(c) }, labels[c] ?? `第 ${c + 1} 列`)),
       ];
       fill(termSel, ...options(false));
@@ -102,30 +102,30 @@ export function fileImportPanel({ onText, onCards, onSets }) {
     function draw() {
       const cards = chosen().flatMap(cardsOf);
       addBtn.disabled = cards.length === 0;
-      addBtn.textContent = `加进来 (${cards.length} 张)`;
+      addBtn.textContent = `添加（${cards.length} 张）`;
       directBtn.hidden = cards.length <= BIG;
       if (!cards.length) {
-        fill(previewEl, h('p', { class: 'muted' }, '这样选没有卡片, 换一列试试。'));
+        fill(previewEl, h('p', { class: 'muted' }, '当前选择下没有卡片，请更换列。'));
         return;
       }
       const images = cards.filter((c) => c.image).length;
       const sounds = cards.filter((c) => c.termAudio || c.defAudio).length;
       const noDef = cards.filter((c) => !c.def).length;
       const suspended = cards.filter((c) => c.suspended).length;
-      const extras = [images ? `${images} 张带图片` : '', sounds ? `${sounds} 张带声音` : '', noDef ? `${noDef} 张没有解释` : '', suspended ? `${suspended} 张在 Anki 里暂停了, 这里也暂停` : ''].filter(Boolean);
+      const extras = [images ? `${images} 张含图片` : '', sounds ? `${sounds} 张含音频` : '', noDef ? `${noDef} 张缺少释义` : '', suspended ? `${suspended} 张在 Anki 中已暂停` : ''].filter(Boolean);
       // Anki 卡组: 带没带学习进度 (复习记录)
       const withReviews = cards.filter((c) => c.reviews);
       const reviewCount = withReviews.reduce((n, c) => n + c.reviews.length, 0);
       const historyNote = !data.history
         ? null
         : withReviews.length
-          ? h('p', { class: 'history-note' }, `📈 ${withReviews.length} 张带着 Anki 的复习记录 (一共 ${reviewCount} 次): 导入以后接着 Anki 的进度排复习 (用 FSRS 把记录从头算一遍), 很久没背的会排进今天的复习。`)
-          : h('p', { class: 'muted small' }, '这个卡组没带学习进度。想接着 Anki 的进度背: 在 Anki 里导出卡组时勾上「包含学习进度」。');
+          ? h('p', { class: 'history-note' }, `${withReviews.length} 张含 Anki 复习记录（共 ${reviewCount} 次），导入后将沿用原有进度安排复习。`)
+          : h('p', { class: 'muted small' }, '该卡组不含学习进度。如需保留进度，请在 Anki 导出时勾选「包含学习进度」。');
       fill(
         previewEl,
-        h('p', {}, `${cards.length} 张卡片${extras.length ? ` (${extras.join(', ')})` : ''}。前几张:`),
+        h('p', {}, `${cards.length} 张卡片${extras.length ? `（${extras.join('，')}）` : ''}。预览：`),
         historyNote,
-        cards.length > BIG ? h('p', { class: 'muted small' }, '卡片很多, 加进编辑页会很慢, 建议点「直接建成卡片集」(建好以后也能编辑)。') : null,
+        cards.length > BIG ? h('p', { class: 'muted small' }, '卡片较多，建议「直接创建卡片集」，之后仍可编辑。') : null,
         h(
           'table',
           { class: 'preview-table' },
@@ -143,7 +143,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       const BATCH = 40;
       for (let i = 0; i < names.length; i += BATCH) {
         if (cancelled) throw new DOMException('不导入了', 'AbortError');
-        progress(`存图片和声音 ${Math.min(i + BATCH, names.length)}/${names.length}……`);
+        progress(`正在保存图片和音频 ${Math.min(i + BATCH, names.length)}/${names.length}……`);
         const batch = names.slice(i, i + BATCH);
         const blobs = await Promise.all(
           batch.map(async (name) => {
@@ -197,7 +197,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
       } catch (e) {
         if (e.name === 'AbortError') return;
         console.warn(e);
-        toast('存不进去, 可能浏览器空间满了');
+        toast('保存失败，存储空间可能已满');
       } finally {
         busy = false;
         btn.textContent = label0;
@@ -208,22 +208,22 @@ export function fileImportPanel({ onText, onCards, onSets }) {
     resetColumns();
     fill(
       panel,
-      h('div', { class: 'file-head' }, h('strong', {}, `📄 ${fileName}`), h('button', { class: 'btn small', type: 'button', onclick: () => (panel.hidden = true) }, '不用这个文件')),
+      h('div', { class: 'file-head' }, h('strong', {}, fileName), h('button', { class: 'btn small', type: 'button', onclick: () => (panel.hidden = true) }, '取消')),
       h(
         'div',
         { class: 'file-options' },
         sheetSelect ? h('label', {}, label, sheetSelect) : null,
-        h('label', {}, '词', termSel),
-        h('label', {}, '解释', defSel),
-        h('label', {}, '解释后面再接上', extraSel),
-        fieldsNamed ? null : h('label', { class: 'check' }, headerBox, ' 第一行是标题, 不要'),
-        h('label', { class: 'check', title: '每天背新词时先背哪些; 不勾就按文件里的顺序。以后在卡片集里也能改' }, randomBox, ' 新词打乱顺序背'),
+        h('label', {}, '词语', termSel),
+        h('label', {}, '释义', defSel),
+        h('label', {}, '附加到释义', extraSel),
+        fieldsNamed ? null : h('label', { class: 'check' }, headerBox, ' 首行为标题'),
+        h('label', { class: 'check', title: '不勾选则按文件顺序学习新词，之后可在卡片集中修改' }, randomBox, ' 新词随机顺序'),
       ),
       previewEl,
       h('div', { class: 'row' }, addBtn, directBtn, eachBtn),
       // Anki 里大牌组下面分小牌组的
       eachBtn && sheets.some((s) => s.name.includes('::'))
-        ? h('p', { class: 'muted small' }, `「${eachBtn.textContent}」这样建: 大牌组变成文件夹, 小牌组变成里面的卡片集。文件夹里能合起来学, 也能给整个大牌组定每天背多少 (照顺序一个小牌组一个小牌组来)。`)
+        ? h('p', { class: 'muted small' }, `「${eachBtn.textContent}」：父牌组创建为文件夹，子牌组创建为其中的卡片集，可在文件夹中合并学习。`)
         : null,
     );
     panel.hidden = false;

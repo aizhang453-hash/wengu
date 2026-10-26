@@ -8,12 +8,12 @@ import { isSuspended, isBuried, retrievability, startOfDay, LEECH } from './srs.
 import { historyOf, AGAIN } from './revlog.js';
 
 export const CUSTOM = {
-  more: '再学几个新词',
-  nocap: '接着复习超过上限的',
+  more: '加学新词',
+  nocap: '继续复习（超出上限部分）',
   ahead: '提前复习',
-  forgot: '今天忘了的再过一遍',
-  leech: '难记卡练一下',
-  starred: '星标的练一下',
+  forgot: '重练今日遗忘',
+  leech: '练习难记卡片',
+  starred: '练习星标卡片',
 };
 
 // 练习: 不动复习的日子

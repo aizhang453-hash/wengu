@@ -1,7 +1,7 @@
 // 错题集: 记下的错题, 今天该重做几道、按题型数一数 (哪类错得最多, 能单练一类)、一道道列出来 (可以筛、可以搜),
 // 记新的 (打字, 或者拍照让 AI 记)、改、删
 
-import { h, toast } from '../dom.js';
+import { h, toast, menuButton } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { DAY } from '../srs.js';
 import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel, kindOf, kindStats } from '../mistakes.js';
@@ -11,10 +11,10 @@ const FILTER_KEY = 'wengu:mistakes-filter';
 // 下次哪天重做, 说成人话
 export function statusText(m, now = Date.now()) {
   const st = mistakeStatus(m, now);
-  if (st === 'mastered') return '✓ 已掌握';
-  if (st === 'due') return '今天该重做';
+  if (st === 'mastered') return '已掌握';
+  if (st === 'due') return '今日待重做';
   const days = Math.round((new Date(m.review.due).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / DAY);
-  return days <= 1 ? '明天重做' : `${days} 天后重做`;
+  return days <= 1 ? '明日重做' : `${days} 天后重做`;
 }
 
 export function renderMistakes({ store }) {
@@ -34,8 +34,8 @@ export function renderMistakes({ store }) {
   const listEl = h('ul', { class: 'mk-list' });
   const filters = [
     ['all', '全部'],
-    ['due', '该重做'],
-    ['learning', '还在练'],
+    ['due', '待重做'],
+    ['learning', '未掌握'],
     ['mastered', '已掌握'],
   ];
   const chips = filters.map(([key]) =>
@@ -55,14 +55,14 @@ export function renderMistakes({ store }) {
       },
     ),
   );
-  const search = h('input', { class: 'input mk-search', type: 'search', placeholder: '在错题里找……', 'aria-label': '在错题里找', oninput: () => ((query = search.value), drawList()) });
+  const search = h('input', { class: 'input mk-search', type: 'search', placeholder: '搜索错题', 'aria-label': '搜索错题', oninput: () => ((query = search.value), drawList()) });
   const kinds = kindStats(all);
   const kindPick =
     kinds.length > 1
       ? h(
           'select',
-          { class: 'input mk-kind-pick', 'aria-label': '只看哪类题', onchange: (e) => ((kind = e.target.value), drawList()) },
-          h('option', { value: '' }, '所有题型'),
+          { class: 'input mk-kind-pick', 'aria-label': '按题型筛选', onchange: (e) => ((kind = e.target.value), drawList()) },
+          h('option', { value: '' }, '全部题型'),
           kinds.map((k) => h('option', { value: k.kind }, `${k.kind} (${k.total})`)),
         )
       : null;
@@ -94,40 +94,40 @@ export function renderMistakes({ store }) {
                 'div',
                 { class: 'mk-item-head' },
                 h('span', { class: `mk-status ${st}` }, statusText(m, now)),
-                h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '按题目猜的题型, 在「改」里可以换' }, kindOf(m)),
+                h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
                 h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
-                m.passage ? h('span', { class: 'qi-tag' }, '📄 有文章') : null,
-                m.images.length ? h('span', { class: 'qi-tag' }, `🖼 ${m.images.length} 张图`) : null,
-                m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次, 对 ${m.review.right}`) : null,
+                m.passage ? h('span', { class: 'qi-tag' }, '含材料') : null,
+                m.images.length ? h('span', { class: 'qi-tag' }, `${m.images.length} 张图`) : null,
+                m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次，答对 ${m.review.right} 次`) : null,
               ),
               m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
               m.images.length ? h('div', { class: 'mk-thumbs' }, m.images.slice(0, 3).map((id) => cardImage(id, 'mk-thumb'))) : null,
-              h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '✓ 对的'), rich(answerLabel(m))),
-              mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '✕ 我选的'), rich(mine)) : null,
+              h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '正确答案'), rich(answerLabel(m))),
+              mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '我的答案'), rich(mine)) : null,
               m.note ? h('div', { class: 'mk-note' }, rich(m.note)) : null,
               h(
                 'div',
                 { class: 'row mk-actions' },
-                h('a', { class: 'btn small', href: `#/mistakes/review/${encodeURIComponent(m.id)}` }, '重做这道'),
-                h('a', { class: 'btn small', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '改'),
+                h('a', { class: 'btn small', href: `#/mistakes/review/${encodeURIComponent(m.id)}` }, '重做'),
+                h('a', { class: 'btn small', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '编辑'),
                 h(
                   'button',
                   {
                     class: 'btn small danger',
                     onclick: () => {
-                      if (!confirm('删掉这道错题? 删了就找不回来了。')) return;
+                      if (!confirm('删除这道错题？删除后无法恢复。')) return;
                       store.deleteMistake(m.id);
-                      toast('删掉了');
+                      toast('已删除');
                       all.splice(all.indexOf(m), 1);
                       drawList();
                     },
                   },
-                  '删',
+                  '删除',
                 ),
               ),
             );
           })
-        : [h('li', { class: 'muted empty-note' }, query ? '没找到。' : filter === 'due' ? '今天没有要重做的 ✓' : filter === 'mastered' ? '还没有掌握的。重做时连对 3 次就算掌握。' : '这里还没有错题。')]),
+        : [h('li', { class: 'muted empty-note' }, query ? '没有找到相关错题。' : filter === 'due' ? '今日没有待重做的错题。' : filter === 'mastered' ? '暂无已掌握的错题。重做时连续答对 3 次即为掌握。' : '暂无错题。')]),
     );
   }
 
@@ -138,14 +138,14 @@ export function renderMistakes({ store }) {
     h(
       'div',
       {},
-      h('strong', {}, due.length ? `今天该重做 ${due.length} 道` : all.length ? '今天没有要重做的 ✓' : '还没有错题'),
-      h('div', { class: 'muted small' }, all.length ? `一共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明天 ${tomorrow} 道` : ''}` : '做错的题记下来, 过几天重做; 连对 3 次算掌握'),
+      h('strong', {}, due.length ? `今日待重做 ${due.length} 道` : all.length ? '今日没有待重做的错题' : '暂无错题'),
+      h('div', { class: 'muted small' }, all.length ? `共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明日 ${tomorrow} 道` : ''}` : '记录做错的题目，按间隔重做；连续答对 3 次即为掌握'),
     ),
     h(
       'div',
       { class: 'row' },
-      due.length ? h('a', { class: 'btn primary big-choice', href: '#/mistakes/review' }, `开始重做 (${due.length})`) : null,
-      learning.length > due.length ? h('a', { class: `btn${due.length ? '' : ' primary'}`, href: '#/mistakes/review/all' }, `还没掌握的全做一遍 (${learning.length})`) : null,
+      due.length ? h('a', { class: 'btn primary big-choice', href: '#/mistakes/review' }, `开始重做（${due.length}）`) : null,
+      learning.length > due.length ? h('a', { class: `btn${due.length ? '' : ' primary'}`, href: '#/mistakes/review/all' }, `重做全部未掌握（${learning.length}）`) : null,
     ),
   );
 
@@ -155,9 +155,19 @@ export function renderMistakes({ store }) {
     el: h(
       'section',
       { class: 'mistakes-page' },
-      h('a', { class: 'back', href: '#/' }, '← 主页'),
-      h('div', { class: 'page-head' }, h('h1', {}, '📕 错题集'), h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/mistakes/import' }, '📷 拍照让 AI 记'), h('a', { class: 'btn primary', href: '#/mistakes/new' }, '＋ 记一道错题'))),
-      h('p', { class: 'muted' }, '做错的题 (比如 SAT) 记下来: 题目、选项、对的答案、当时选的、为什么错 —— 自己打字, 或者拍照发给 AI, 把它回的贴进来。过几天重做, 做对了隔得越来越久, 连对 3 次算掌握。'),
+      h('a', { class: 'back', href: '#/' }, '← 首页'),
+      h(
+        'div',
+        { class: 'page-head' },
+        h('h1', {}, '错题集'),
+        menuButton(
+          [
+            { label: '手动记录', icon: 'edit', href: '#/mistakes/new' },
+            { label: '拍照录入', icon: 'camera', href: '#/mistakes/import' },
+          ],
+          { label: '添加错题', text: '添加', cls: 'btn primary', iconName: 'plus' },
+        ),
+      ),
       hero,
       kindSection(kinds, all.length),
       all.length ? h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), kindPick, search) : null,
@@ -170,30 +180,48 @@ export function renderMistakes({ store }) {
 function kindSection(kinds, total) {
   if (total < 3 || !kinds.length) return null;
   const top = kinds[0];
-  const pct = (k) => (k.right + k.wrong ? `重做对了 ${Math.round((k.right / (k.right + k.wrong)) * 100)}%` : '还没重做过');
+  const pct = (k) => (k.right + k.wrong ? `正确率 ${Math.round((k.right / (k.right + k.wrong)) * 100)}%` : '尚未重做');
+  // 题型多的先列 5 类, 其余点「显示全部」
+  const SHOW = 5;
+  const list = h(
+    'ul',
+    { class: 'mk-kind-list' },
+    kinds.map((k, i) =>
+      h(
+        'li',
+        { hidden: i >= SHOW },
+        h('span', { class: 'mk-kind-name' }, k.kind),
+        h('span', { class: 'mk-kind-bar', 'aria-hidden': 'true' }, h('span', { style: `width: ${Math.round((k.total / top.total) * 100)}%` })),
+        h('span', { class: 'muted small' }, `${k.total} 道 · 未掌握 ${k.left} · ${pct(k)}`),
+        k.left ? h('a', { class: 'btn small', href: `#/mistakes/review/kind:${encodeURIComponent(k.kind)}` }, '专项练习') : h('span', { class: 'muted small' }, '已全部掌握'),
+      ),
+    ),
+  );
+  const more =
+    kinds.length > SHOW
+      ? h(
+          'button',
+          {
+            class: 'btn small quiet',
+            type: 'button',
+            onclick: () => {
+              list.querySelectorAll('li[hidden]').forEach((li) => (li.hidden = false));
+              more.remove();
+            },
+          },
+          `显示全部 ${kinds.length} 类`,
+        )
+      : null;
   return h(
     'section',
     { class: 'mk-kinds' },
-    h('h2', {}, '按题型'),
+    h('h2', {}, '题型分布'),
     h(
       'p',
       { class: 'muted small' },
-      kinds.length > 1 ? `错得最多的是「${top.kind}」(${top.total} 道, 占 ${Math.round((top.total / total) * 100)}%)。这类可以专门练一练, 再看看「为什么错」里是不是老犯同一个毛病。` : `都是「${top.kind}」。`,
-      ' 没写题型的按题目猜 (SAT 的问法都是固定的), 在「改」里可以换。',
+      kinds.length > 1 ? `错题最多的题型是「${top.kind}」，共 ${top.total} 道，占 ${Math.round((top.total / total) * 100)}%。` : `全部为「${top.kind}」。`,
     ),
-    h(
-      'ul',
-      { class: 'mk-kind-list' },
-      kinds.map((k) =>
-        h(
-          'li',
-          {},
-          h('span', { class: 'mk-kind-name' }, k.kind),
-          h('span', { class: 'mk-kind-bar', 'aria-hidden': 'true' }, h('span', { style: `width: ${Math.round((k.total / top.total) * 100)}%` })),
-          h('span', { class: 'muted small' }, `${k.total} 道 · 没掌握 ${k.left} · ${pct(k)}`),
-          k.left ? h('a', { class: 'btn small', href: `#/mistakes/review/kind:${encodeURIComponent(k.kind)}` }, '练这类') : h('span', { class: 'muted small' }, '✓ 都掌握了'),
-        ),
-      ),
-    ),
+    list,
+    more,
   );
 }

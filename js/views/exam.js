@@ -52,8 +52,8 @@ export function renderExam({ store }, id) {
       el: h(
         'section',
         { class: 'empty' },
-        h('h1', {}, set ? '这个卡片集还没有卡片' : '找不到这个卡片集'),
-        h('a', { class: 'btn primary', href: set ? `${base}/edit` : '#/' }, set ? '去加卡片' : '回首页'),
+        h('h1', {}, set ? '该卡片集暂无卡片' : '卡片集不存在'),
+        h('a', { class: 'btn primary', href: set ? `${base}/edit` : '#/' }, set ? '添加卡片' : '返回首页'),
       ),
     };
   }
@@ -81,7 +81,7 @@ export function renderExam({ store }, id) {
     });
     const refreshMax = () => {
       countInput.max = poolSize();
-      maxText.textContent = ` (最多 ${poolSize()})`;
+      maxText.textContent = `（最多 ${poolSize()}）`;
       countInput.value = String(Math.min(Number(countInput.value) || draft.count, poolSize()));
     };
     countInput.value = String(Math.min(draft.count, poolSize()));
@@ -89,19 +89,19 @@ export function renderExam({ store }, id) {
 
     const answerSelect = h(
       'select',
-      { class: 'input', 'aria-label': '回答', onchange: (e) => (draft.answerWith = e.target.value) },
+      { class: 'input', 'aria-label': '回答方式', onchange: (e) => (draft.answerWith = e.target.value) },
       [
-        ['term', '词'],
-        ['def', '解释'],
-        ['both', '两者都有'],
+        ['term', '词语'],
+        ['def', '释义'],
+        ['both', '两者'],
       ].map(([v, label]) => h('option', { value: v, selected: draft.answerWith === v }, label)),
     );
 
     const typeRows = [
-      ['tf', '判断对错'],
-      ['mc', '多项选择'],
+      ['tf', '判断题'],
+      ['mc', '选择题'],
       ['match', '配对'],
-      ['written', '书面问题 (打字)'],
+      ['written', '拼写题'],
     ].map(([t, label]) =>
       switchRow({
         label,
@@ -111,7 +111,7 @@ export function renderExam({ store }, id) {
           if (!Object.values(draft.types).some(Boolean)) {
             draft.types[t] = true;
             input.checked = true;
-            toast('至少开一种题型');
+            toast('请至少选择一种题型');
           }
         },
       }),
@@ -126,13 +126,13 @@ export function renderExam({ store }, id) {
     };
 
     dialog = openDialog({
-      title: '设置你的测试',
+      title: '测试设置',
       body: [
         h('p', { class: 'muted dialog-sub' }, set.title || '未命名卡片集'),
-        h('div', { class: 'ask-label' }, '从哪些出题'),
+        h('div', { class: 'ask-label' }, '出题范围'),
         h(
           'div',
-          { class: 'chips scope-chips', role: 'group', 'aria-label': '从哪些出题' },
+          { class: 'chips scope-chips', role: 'group', 'aria-label': '出题范围' },
           Object.entries(TEST_SCOPES).map(([k, name]) => {
             const b = h(
               'button',
@@ -140,7 +140,7 @@ export function renderExam({ store }, id) {
                 class: `chip${draft.scope === k ? ' on' : ''}`,
                 type: 'button',
                 disabled: !sizes[k],
-                title: { studied: '学过、背过的 (单词卡、学习、复习里)', today: '今天学的新词、今天复习的', starred: '点了 ★ 的', all: '整个卡片集' }[k],
+                title: { studied: '在单词卡、学习或复习中学过的卡片', today: '今日学习或复习的卡片', starred: '已加星标的卡片', all: '全部卡片' }[k],
                 onclick: () => {
                   draft.scope = k;
                   for (const c of b.parentElement.children) c.classList.toggle('on', c === b);
@@ -152,12 +152,12 @@ export function renderExam({ store }, id) {
             return b;
           }),
         ),
-        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '问题', maxText)), countInput),
-        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '回答')), answerSelect),
+        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '题数', maxText)), countInput),
+        h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '回答方式')), answerSelect),
         ...typeRows,
         switchRow({
           label: '智能判分',
-          desc: '书面问题里括号里的可以不写、打错一两个字母也算对',
+          desc: '拼写题中括号内容可省略，个别拼写错误视为正确',
           checked: draft.smart,
           onchange: (v) => (draft.smart = v),
         }),
@@ -241,7 +241,7 @@ export function renderExam({ store }, id) {
 
     const submit = () => {
       const left = exam.total - countAnswered(exam, answers);
-      if (left > 0 && !confirm(`还有 ${left} 题没答, 确定交卷?`)) return;
+      if (left > 0 && !confirm(`还有 ${left} 题未作答，确定交卷吗？`)) return;
       clearInterval(timer);
       inProgress = null;
       root.classList.remove('nav-open');
@@ -258,7 +258,7 @@ export function renderExam({ store }, id) {
         h(
           'div',
           { class: 'row exam-top-tools' },
-          h('button', { class: 'btn small', onclick: printExam }, '打印测试'),
+          h('button', { class: 'btn small', onclick: printExam }, '打印'),
           h(
             'button',
             {
@@ -266,7 +266,7 @@ export function renderExam({ store }, id) {
               title: '重新设置测试',
               'aria-label': '重新设置测试',
               onclick: () => {
-                if (countAnswered(exam, answers) && !confirm('重新设置会换一套卷子, 已经答的就没了。继续?')) return;
+                if (countAnswered(exam, answers) && !confirm('重新设置将生成新试卷，已作答内容将清除。继续吗？')) return;
                 openSetup();
               },
             },
@@ -318,11 +318,11 @@ export function renderExam({ store }, id) {
     };
     const d = openDialog({
       title: '打印测试',
-      body: [h('p', {}, '把这套卷子打出来, 拿笔做。要不要在最后附上答案?')],
+      body: [h('p', {}, '打印本套试卷，是否在末尾附上答案？')],
       footer: [
         h('span', { class: 'spacer' }),
-        h('button', { class: 'btn', onclick: () => go(false) }, '只打印题目'),
-        h('button', { class: 'btn primary', onclick: () => go(true) }, '题目 + 答案'),
+        h('button', { class: 'btn', onclick: () => go(false) }, '仅题目'),
+        h('button', { class: 'btn primary', onclick: () => go(true) }, '题目和答案'),
       ],
     });
   }
@@ -335,7 +335,7 @@ export function renderExam({ store }, id) {
         if (section.type === 'match') {
           for (const item of q.items) items.push([num(item.qid), `${LETTERS[q.options.indexOf(item.answer)]}. ${stripMarks(item.answer)}`]);
         } else if (section.type === 'tf') {
-          items.push([num(q.qid), q.isTrue ? '对' : `错 (应该是: ${stripMarks(q.answer)})`]);
+          items.push([num(q.qid), q.isTrue ? '正确' : `错误（应为：${stripMarks(q.answer)}）`]);
         } else if (section.type === 'mc') {
           items.push([num(q.qid), `${LETTERS[q.correctIndex]}. ${stripMarks(q.answer)}`]);
         } else {
@@ -359,7 +359,7 @@ export function renderExam({ store }, id) {
   function promptBlock(q, n) {
     const image = q.side === 'term' ? q.card.image : '';
     return [
-      h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, q.side === 'def' ? '词' : '解释'), h('span', { class: 'muted small q-of' }, `${n}/${total}`)),
+      h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, q.side === 'def' ? '词语' : '释义'), h('span', { class: 'muted small q-of' }, `${n}/${total}`)),
       h(
         'div',
         { class: 'exam-prompt' },
@@ -367,7 +367,7 @@ export function renderExam({ store }, id) {
         'div',
         { class: 'q-text small' },
         cardImage(image, 'q-img small'),
-        q.prompt.trim() ? rich(q.prompt) : image ? null : h('span', { class: 'muted' }, '(空)'),
+        q.prompt.trim() ? rich(q.prompt) : image ? null : h('span', { class: 'muted' }, '（空）'),
         ),
         sayButton(q.card, otherSide(q.side), set),
       ),
@@ -383,7 +383,7 @@ export function renderExam({ store }, id) {
           'select',
           {
             class: 'input',
-            'aria-label': `第 ${num(item.qid)} 题的答案`,
+            'aria-label': `第 ${num(item.qid)} 题答案`,
             onchange: (e) => setAnswer(item.qid, e.target.value === '' ? null : Number(e.target.value), { advance: true }),
           },
           h('option', { value: '' }, '—'),
@@ -393,7 +393,7 @@ export function renderExam({ store }, id) {
       return h(
         'div',
         { class: 'exam-q match-group' },
-        h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, `给每一题选对的${q.side === 'def' ? '解释' : '词'}`), h('span', { class: 'muted small q-of' }, `${num(q.items[0].qid)}–${num(q.items.at(-1).qid)}/${total}`)),
+        h('div', { class: 'q-head' }, h('span', { class: 'muted small' }, `为每题选择正确的${q.side === 'def' ? '释义' : '词语'}`), h('span', { class: 'muted small q-of' }, `${num(q.items[0].qid)}–${num(q.items.at(-1).qid)}/${total}`)),
         h(
           'div',
           { class: 'match-cols' },
@@ -401,19 +401,19 @@ export function renderExam({ store }, id) {
             'ol',
             { class: 'match-prompts' },
             q.items.map((item, i) =>
-              h('li', { dataset: { qn: String(num(item.qid)) } }, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'), selects[i]),
+              h('li', { dataset: { qn: String(num(item.qid)) } }, h('span', { class: 'qnum' }, String(num(item.qid))), h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '（空）'), selects[i]),
             ),
           ),
           h(
             'ol',
             { class: 'match-options' },
-            q.options.map((opt, i) => h('li', {}, h('span', { class: 'letter' }, LETTERS[i]), h('span', {}, opt ? rich(opt) : '(空)'))),
+            q.options.map((opt, i) => h('li', {}, h('span', { class: 'letter' }, LETTERS[i]), h('span', {}, opt ? rich(opt) : '（空）'))),
           ),
         ),
       );
     }
 
-    const answerName = q.side === 'def' ? '解释' : '词';
+    const answerName = q.side === 'def' ? '释义' : '词语';
     if (type === 'tf') {
       const buttons = [true, false].map((v) =>
         h(
@@ -431,14 +431,14 @@ export function renderExam({ store }, id) {
               setAnswer(q.qid, v, { advance: true });
             },
           },
-          v ? '✓ 对' : '✗ 错',
+          v ? '正确' : '错误',
         ),
       );
       return h(
         'div',
         { class: 'exam-q', dataset: { qn: String(num(q.qid)) } },
         promptBlock(q, num(q.qid)),
-        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, `${answerName}对吗?`), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)')),
+        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, `该${answerName}是否正确`), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '（空）')),
         h('div', { class: 'options-grid two' }, buttons),
       );
     }
@@ -460,7 +460,7 @@ export function renderExam({ store }, id) {
             },
           },
           h('span', { class: 'key' }, LETTERS[i]),
-          h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
+          h('span', { class: 'option-text' }, opt ? rich(opt) : '（空）'),
         ),
       );
       return h('div', { class: 'exam-q', dataset: { qn: String(num(q.qid)) } }, promptBlock(q, num(q.qid)), h('div', { class: 'options-grid' }, buttons));
@@ -472,11 +472,11 @@ export function renderExam({ store }, id) {
       h('input', {
         class: 'input',
         type: 'text',
-        placeholder: `写出${answerName}`,
+        placeholder: `输入${answerName}`,
         autocomplete: 'off',
         autocapitalize: 'off',
         spellcheck: 'false',
-        'aria-label': `第 ${num(q.qid)} 题: 写出${answerName}`,
+        'aria-label': `第 ${num(q.qid)} 题：输入${answerName}`,
         oninput: (e) => setAnswer(q.qid, e.target.value),
         onkeydown: (e) => {
           // 回车跳到下一题
@@ -508,14 +508,14 @@ export function renderExam({ store }, id) {
       const pct = Math.round((right / results.length) * 100);
       scoreBig.textContent = `${pct}%`;
       scoreBig.className = `big-score ${pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'bad'}`;
-      scoreLine.textContent = `对了 ${right} / ${results.length} 题 · 用时 ${clock(elapsed)} · ${pct === 100 ? '满分! 🎉' : pct >= 80 ? '很不错!' : pct >= 50 ? '继续加油' : '再学学, 下次会更好'}`;
+      scoreLine.textContent = `答对 ${right} / ${results.length} 题 · 用时 ${clock(elapsed)}`;
       const missed = [...new Map(results.filter((r) => !r.correct).map((r) => [r.card.id, r.card])).values()];
       fill(
         actions,
-        missed.length ? h('button', { class: 'btn primary', onclick: () => startExam(missed, missed.length) }, `只考错的 ${missed.length} 题`) : null,
-        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: () => startExam(cards) }, '再考一次 (换题)'),
-        h('button', { class: 'btn', onclick: openSetup }, '改设置'),
-        h('a', { class: 'btn', href: base }, '回到卡片集'),
+        missed.length ? h('button', { class: 'btn primary', onclick: () => startExam(missed, missed.length) }, `重测错题（${missed.length}）`) : null,
+        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: () => startExam(cards) }, '重新测试'),
+        h('button', { class: 'btn', onclick: openSetup }, '测试设置'),
+        h('a', { class: 'btn', href: base }, '返回卡片集'),
       );
     }
     drawScore();
@@ -538,7 +538,7 @@ export function renderExam({ store }, id) {
   }
 
   function mark(correct) {
-    return h('span', { class: `mark ${correct ? 'good' : 'bad'}`, 'aria-label': correct ? '对' : '错' }, correct ? '✓' : '✗');
+    return h('span', { class: `mark ${correct ? 'good' : 'bad'}`, 'aria-label': correct ? '正确' : '错误' }, correct ? '✓' : '✗');
   }
 
   // 改了卡片以后整块重画
@@ -563,14 +563,14 @@ export function renderExam({ store }, id) {
               { class: r.correct ? 'right' : 'wrong' },
               mark(r.correct),
               h('span', { class: 'qnum' }, String(num(item.qid))),
-              h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '(空)'),
+              h('span', { class: 'mp-text' }, item.prompt ? rich(item.prompt) : '（空）'),
               h(
                 'span',
                 { class: 'mr-answer' },
                 r.correct
                   ? rich(item.answer)
                   : [
-                      given === undefined || given === null ? h('span', { class: 'muted' }, '没答') : h('span', { class: 'strike' }, rich(q.options[given])),
+                      given === undefined || given === null ? h('span', { class: 'muted' }, '未作答') : h('span', { class: 'strike' }, rich(q.options[given])),
                       h('span', { class: 'arrow' }, ' → '),
                       h('strong', {}, rich(item.answer)),
                     ],
@@ -610,11 +610,11 @@ export function renderExam({ store }, id) {
 
     if (type === 'tf') {
       parts.push(
-        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, '题目给的'), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '(空)')),
+        h('div', { class: 'tf-shown' }, h('span', { class: 'muted small' }, '题目所给'), h('div', { class: 'q-text small' }, q.shown ? rich(q.shown) : '（空）')),
         h(
           'p',
           { class: 'review-line' },
-          `你选: ${given === undefined ? '没答' : given ? '对' : '错'} · 应该是: ${q.isTrue ? '对' : '错'}`,
+          `你的选择：${given === undefined ? '未作答' : given ? '正确' : '错误'} · 应为：${q.isTrue ? '正确' : '错误'}`,
         ),
       );
       if (!q.isTrue) parts.push(answerLine(q));
@@ -628,21 +628,21 @@ export function renderExam({ store }, id) {
               'div',
               { class: `option static${i === q.correctIndex ? ' right' : i === given ? ' wrong' : ''}` },
               h('span', { class: 'key' }, LETTERS[i]),
-              h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)'),
+              h('span', { class: 'option-text' }, opt ? rich(opt) : '（空）'),
             ),
           ),
         ),
       );
-      if (given === undefined) parts.push(h('p', { class: 'review-line muted' }, '没答'));
+      if (given === undefined) parts.push(h('p', { class: 'review-line muted' }, '未作答'));
     } else {
       const typed = typeof given === 'string' ? given.trim() : '';
       if (r.correct && !r.close) {
-        parts.push(h('p', { class: 'review-line' }, `你写的: ${typed}`));
+        parts.push(h('p', { class: 'review-line' }, `你的答案：${typed}`));
       } else if (r.close) {
-        parts.push(h('p', { class: 'review-line' }, `你写的: ${typed} (差一点, 算你对)`), answerLine(q));
+        parts.push(h('p', { class: 'review-line' }, `你的答案：${typed}（基本正确）`), answerLine(q));
       } else {
         parts.push(
-          h('p', { class: 'review-line' }, typed ? h('span', {}, '你写的: ', h('span', { class: 'strike' }, typed)) : h('span', { class: 'muted' }, '没答')),
+          h('p', { class: 'review-line' }, typed ? h('span', {}, '你的答案：', h('span', { class: 'strike' }, typed)) : h('span', { class: 'muted' }, '未作答')),
           answerLine(q),
         );
         if (typed) {
@@ -675,7 +675,7 @@ export function renderExam({ store }, id) {
       'div',
       { class: 'answer-line' },
       h('span', { class: 'muted small' }, '正确答案'),
-      h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '(空)', cardImage(image, 'q-img small')),
+      h('div', { class: 'answer-text' }, q.answer ? rich(q.answer) : '（空）', cardImage(image, 'q-img small')),
       sayButton(q.card, q.side, set),
       dictButton(q.card, set),
     );
@@ -689,7 +689,7 @@ export function renderExam({ store }, id) {
     title: `测试 · ${set.title}`,
     el: root,
     isDirty: () => Boolean(inProgress?.()),
-    canLeave: () => !inProgress?.() || confirm('卷子还没交, 确定要走吗?'),
+    canLeave: () => !inProgress?.() || confirm('试卷尚未提交，确定离开吗？'),
     cleanup: () => {
       clearInterval(timer);
       dialog?.close();

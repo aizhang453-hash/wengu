@@ -63,13 +63,13 @@ export function cleanMistake(raw) {
 
 // 写完整了没有: 好了返回 '', 不然说差什么
 export function mistakeProblem(m) {
-  if (!m.question.trim() && !m.images.length) return '题目还没写 (或者放一张题目的图片)';
-  if (m.type === 'input') return m.answer.trim() ? '' : '写上对的答案';
+  if (!m.question.trim() && !m.images.length) return '请填写题目或添加题目图片';
+  if (m.type === 'input') return m.answer.trim() ? '' : '请填写正确答案';
   const last = m.options.findLastIndex((o) => o.trim());
-  if (last + 1 < MIN_OPTIONS) return `至少写 ${MIN_OPTIONS} 个选项`;
+  if (last + 1 < MIN_OPTIONS) return `至少需要 ${MIN_OPTIONS} 个选项`;
   const empty = m.options.slice(0, last + 1).findIndex((o) => !o.trim());
-  if (empty >= 0) return `选项 ${LETTERS[empty]} 是空的`;
-  if (m.correct < 0 || m.correct > last) return '点一下哪个是对的';
+  if (empty >= 0) return `选项 ${LETTERS[empty]} 为空`;
+  if (m.correct < 0 || m.correct > last) return '请标出正确答案';
   return '';
 }
 

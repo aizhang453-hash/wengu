@@ -116,22 +116,22 @@ test('最近的考试: 定了计划、写了日期的; 考过了的不算; 文�
 test('考前清单: 前一天按自己的数据列要过的 (背完了的打上勾, 没有的不列), 加上要带的、今晚早点睡; 考试那天是出门前、考的时候', () => {
   const base = { days: 1, exam: '2027-03-06', title: 'SAT 单词', due: 12, mistakes: 20, mistakesLeft: 8, topKind: { kind: '语法·标点', left: 5 }, leeches: 3, starred: 0 };
   const eve = examChecklist(base);
-  assert.match(eve.intro, /明天 \(3月6日\) 就考试了 \(SAT 单词\)/);
-  assert.deepEqual(eve.groups.map((g) => g.name), ['今天过一遍', '准备好东西', '今晚']);
+  assert.match(eve.intro, /明日（3月6日）考试（SAT 单词）/);
+  assert.deepEqual(eve.groups.map((g) => g.name), ['今日复习', '物品准备', '今晚']);
   const study = eve.groups[0].items;
   assert.deepEqual(study.map((i) => i.id), ['due', 'mistakes', 'notes', 'leech']);
   assert.equal(study[0].href, '#/review');
-  assert.match(study[1].text, /8 道\); 「语法·标点」最多, 先做这类/);
+  assert.match(study[1].text, /8 道）；「语法·标点」最多，优先完成/);
   assert.equal(study[1].href, `#/mistakes/review/kind:${encodeURIComponent('语法·标点')}`);
   assert.equal(study[3].href, '#/review/practice:leech');
   assert.ok(eve.groups[1].items.some((i) => /准考证/.test(i.text)));
-  assert.ok(eve.groups[2].items.some((i) => /11 点前睡觉/.test(i.text)));
+  assert.ok(eve.groups[2].items.some((i) => /23 点前入睡/.test(i.text)));
   // 都背完了、没有错题、没有难记卡
   const done = examChecklist({ ...base, due: 0, mistakes: 0, mistakesLeft: 0, topKind: null, leeches: 0, starred: 4 });
   assert.deepEqual(done.groups[0].items.map((i) => [i.id, Boolean(i.done)]), [['due', true], ['starred', false]]);
   const day = examChecklist({ ...base, days: 0 });
-  assert.deepEqual(day.groups.map((g) => g.name), ['出门前', '考的时候']);
-  assert.match(day.intro, /今天考试 \(SAT 单词\)!/);
+  assert.deepEqual(day.groups.map((g) => g.name), ['出门前', '考试中']);
+  assert.match(day.intro, /今日考试（SAT 单词）/);
   const ids = [...eve.groups, ...day.groups].flatMap((g) => g.items.map((i) => i.id));
   assert.equal(new Set(eve.groups.flatMap((g) => g.items.map((i) => i.id))).size, eve.groups.flatMap((g) => g.items).length);
   assert.ok(ids.length > 10);

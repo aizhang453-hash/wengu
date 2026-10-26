@@ -15,7 +15,7 @@ test('给 AI 的话: 写着格式, 里面的例子自己读得出来', () => {
   assert.equal(example.wengu, FORMAT);
   assert.ok(example.cards.length >= 2);
   // 粘贴的是这段话本身: 不当成卡片
-  assert.match(parseCardImport(p).error, /给 AI 的那段话/);
+  assert.match(parseCardImport(p).error, /提示词/);
 });
 
 test('AI 照着格式回的: 前后有话也认, 标题也带上', () => {
@@ -93,8 +93,8 @@ test('不像 AI 写的: 返回 null, 照原来的分隔方式拆', () => {
 });
 
 test('像 AI 写的又读不出来: 说怎么办, 不拆成一堆怪卡片', () => {
-  assert.match(parseCardImport('```json\n{"cards": [{"term": "a", "def": }\n```').error, /格式有点问题/);
-  assert.match(parseCardImport('{"title": "空的", "description": "x"}').error, /没有卡片/);
+  assert.match(parseCardImport('```json\n{"cards": [{"term": "a", "def": }\n```').error, /格式无法识别/);
+  assert.match(parseCardImport('{"title": "空的", "description": "x"}').error, /未包含卡片/);
   assert.match(parseCardImport(JSON.stringify({ app: 'wengu', version: 1, sets: [] })).error, /备份/);
   // 错题和卡片放错了地方: 说该去哪
   assert.match(parseCardImport('{"wengu": "wengu-mistakes", "mistakes": [{"question": "Q", "answer": "1"}]}').error, /错题集/);

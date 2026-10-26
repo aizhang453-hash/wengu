@@ -9,15 +9,15 @@ export const DEFAULT_NEXT = 20;
 export const BIG_SET = 50; // 比这多的卡片集, 学习默认「接着学 20 个」, 测试默认「背过的」
 
 export const LEARN_SCOPES = {
-  next: '接着学',
-  today: '今天的新词',
-  starred: '星标的',
+  next: '继续学习',
+  today: '今日新词',
+  starred: '星标卡片',
   all: '全部',
 };
 export const TEST_SCOPES = {
-  studied: '背过的',
-  today: '今天背的',
-  starred: '星标的',
+  studied: '已学卡片',
+  today: '今日已学',
+  starred: '星标卡片',
   all: '全部',
 };
 

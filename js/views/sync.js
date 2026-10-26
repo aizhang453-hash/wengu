@@ -21,7 +21,7 @@ function guessOwner() {
 }
 
 function timeAgo(t) {
-  if (!t) return '还没同步过';
+  if (!t) return '尚未同步';
   const s = Math.round((Date.now() - t) / 1000);
   if (s < 60) return '刚刚';
   if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
@@ -31,7 +31,7 @@ function timeAgo(t) {
 
 // 去 GitHub 建密钥的链接 (名字、说明、一年有效、内容读写都填好了, GitHub 页面上还能改; 名字带上日期, 换密钥时不会跟旧的重名)
 function tokenUrl(repo, name = '温故同步') {
-  const q = new URLSearchParams({ name, description: `温故 (wengu) 多设备同步用, 只能改 ${repo} 这一个仓库`, expires_in: '366', contents: 'write' });
+  const q = new URLSearchParams({ name, description: `温故（wengu）多设备同步，仅限 ${repo} 仓库`, expires_in: '366', contents: 'write' });
   return `https://github.com/settings/personal-access-tokens/new?${q}`;
 }
 const TOKENS_URL = 'https://github.com/settings/personal-access-tokens';
@@ -50,7 +50,7 @@ const ymd = (t = Date.now()) => {
 async function connect(syncer, owner, repo, token, api, expiry = null) {
   const gh = new GitHubRepo({ owner, repo, token, api });
   const info = await gh.check();
-  if (info && info.private === false && !confirm(`仓库 ${owner}/${repo} 是公开的, 任何人都能看到你的卡片。确定用它?`)) return false;
+  if (info && info.private === false && !confirm(`仓库 ${owner}/${repo} 为公开仓库，任何人都能看到你的卡片。确定使用吗？`)) return false;
   saveConfig({ owner, repo, token, ...(api ? { api } : {}), lastSyncAt: 0, ...knownExpiry(expiry) });
   syncer.start();
   await syncer.sync();
@@ -59,26 +59,26 @@ async function connect(syncer, owner, repo, token, api, expiry = null) {
 
 // 连接、换密钥时填「密钥哪天过期」: 网页读不到这个日期, 只能自己填; 也可以勾「不会过期」
 function expiryField() {
-  const date = h('input', { class: 'input', type: 'date', min: ymd(), 'aria-label': '密钥哪天过期' });
+  const date = h('input', { class: 'input', type: 'date', min: ymd(), 'aria-label': '密钥到期日期' });
   const never = h('input', { type: 'checkbox', onchange: () => (date.disabled = never.checked) });
   const el = h(
     'div',
     { class: 'expiry-field' },
-    h('div', { class: 'row' }, date, h('label', { class: 'toggle' }, never, ' 不会过期 (选的是 No expiration)')),
+    h('div', { class: 'row' }, date, h('label', { class: 'toggle' }, never, ' 永不过期（No expiration）')),
     h(
       'p',
       { class: 'muted small' },
-      '就是建密钥时 Expiration 那里的日期。忘了的话, 在 ',
+      '即创建密钥时 Expiration 中的日期，可在 ',
       h('a', { href: TOKENS_URL, target: '_blank', rel: 'noopener' }, 'GitHub 的密钥列表'),
-      ' 里看 (Expires on ……)。网页自己读不到这个日期, 填了才能在快过期时提醒你。',
+      ' 中查看（Expires on）。填写后将在到期前提醒。',
     ),
   );
   // { expiry } 或者 { error: 要说的话 }
   const read = () => {
     if (never.checked) return { expiry: { expiresAt: null, expirySource: 'never' } };
     const t = expiryFromDate(date.value);
-    if (!t) return { error: '填一下密钥哪天过期 (不会过期就勾上「不会过期」)' };
-    if (t < Date.now()) return { error: '这一天已经过了, 看看是不是填错了' };
+    if (!t) return { error: '请填写密钥到期日期（或勾选「永不过期」）' };
+    if (t < Date.now()) return { error: '该日期已过，请检查' };
     return { expiry: { expiresAt: t, expirySource: 'user' } };
   };
   return { el, read };
@@ -92,7 +92,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
   const root = h('section', { class: 'sync-page' });
 
   if (!config) {
-    const repoInput = h('input', { class: 'input', value: `${guessOwner() || '你的用户名'}/wengu-data`, 'aria-label': '仓库', autocomplete: 'off', spellcheck: 'false' });
+    const repoInput = h('input', { class: 'input', value: `${guessOwner() || '用户名'}/wengu-data`, 'aria-label': '仓库', autocomplete: 'off', spellcheck: 'false' });
     const tokenInput = h('input', { class: 'input', type: 'password', placeholder: 'github_pat_……', 'aria-label': '密钥', autocomplete: 'off' });
     const expiryInput = expiryField();
     const msg = h('p', { class: 'sync-msg', 'aria-live': 'polite' });
@@ -103,21 +103,21 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
         onclick: async () => {
           const r = parseRepo(repoInput.value);
           const token = tokenInput.value.trim();
-          if (!r) return (msg.textContent = '仓库要写成「用户名/仓库名」, 比如 aizhang453-hash/wengu-data');
-          if (!token) return (msg.textContent = '把密钥粘贴进来');
+          if (!r) return (msg.textContent = '仓库格式应为「用户名/仓库名」');
+          if (!token) return (msg.textContent = '请粘贴密钥');
           const { expiry, error } = expiryInput.read();
           if (error) return (msg.textContent = error);
           btn.disabled = true;
-          msg.textContent = '连接中……';
+          msg.textContent = '正在连接……';
           try {
             if (await connect(syncer, r.owner, r.repo, token, apiBase(), expiry)) {
-              toast('连上了, 以后会自动同步');
+              toast('已连接，将自动同步');
               go('#/sync');
             } else {
               msg.textContent = '';
             }
           } catch (e) {
-            msg.textContent = e instanceof SyncError ? e.message : '连接出错了';
+            msg.textContent = e instanceof SyncError ? e.message : '连接失败';
           } finally {
             btn.disabled = false;
           }
@@ -126,33 +126,33 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
       '连接',
     );
     root.append(
-      h('a', { class: 'back', href: '#/' }, '← 首页'),
+      h('a', { class: 'back', href: '#/settings' }, '← 设置'),
       h('h1', {}, '多设备同步'),
-      h('p', {}, '卡片 (连图片、录音、学习进度) 存到你自己的 GitHub 私有仓库里。每台设备连一次, 之后打开、改动、回到页面时自动同步, 电脑和手机上都是同一份。'),
+      h('p', {}, '将卡片、图片、录音和学习进度保存到你的 GitHub 私有仓库。每台设备连接一次后，打开、修改或返回页面时会自动同步。'),
       h(
         'ol',
         { class: 'sync-steps' },
         h(
           'li',
           {},
-          h('strong', {}, '建一个私有仓库 '),
+          h('strong', {}, '创建私有仓库 '),
           h('a', { class: 'btn small', href: 'https://github.com/new?name=wengu-data&visibility=private', target: '_blank', rel: 'noopener' }, '去建仓库 ↗'),
-          h('p', { class: 'muted small' }, '名字填 wengu-data, 选 Private (私有), 勾上 Add a README file, 点 Create repository。'),
+          h('p', { class: 'muted small' }, '名称填写 wengu-data，选择 Private，勾选 Add a README file，点击 Create repository。'),
         ),
         h(
           'li',
           {},
-          h('strong', {}, '建一个只能改这个仓库的密钥 '),
-          h('a', { class: 'btn small', href: tokenUrl('wengu-data'), target: '_blank', rel: 'noopener' }, '去建密钥 ↗'),
+          h('strong', {}, '创建仅限该仓库的密钥 '),
+          h('a', { class: 'btn small', href: tokenUrl('wengu-data'), target: '_blank', rel: 'noopener' }, '创建密钥 ↗'),
           h(
             'p',
             { class: 'muted small' },
-            'Repository access 选 Only select repositories, 选 wengu-data; Permissions 里找到 Contents, 选 Read and write; Expiration (有效期) 记一下是哪天, 下面要填; 点 Generate token, 复制密钥 (github_pat_ 开头的一长串)。到期了再建一个填进来就行。',
+            'Repository access 选择 Only select repositories 并选中 wengu-data；在 Permissions 中将 Contents 设为 Read and write；记下 Expiration 日期；点击 Generate token 并复制密钥（以 github_pat_ 开头）。',
           ),
         ),
-        h('li', {}, h('strong', {}, '填在这里'), h('label', { class: 'ask-label' }, '仓库 (用户名/仓库名)'), repoInput, h('label', { class: 'ask-label' }, '密钥'), tokenInput, h('label', { class: 'ask-label' }, '密钥哪天过期'), expiryInput.el, h('div', { class: 'row' }, btn), msg),
+        h('li', {}, h('strong', {}, '填写信息'), h('label', { class: 'ask-label' }, '仓库（用户名/仓库名）'), repoInput, h('label', { class: 'ask-label' }, '密钥'), tokenInput, h('label', { class: 'ask-label' }, '密钥到期日期'), expiryInput.el, h('div', { class: 'row' }, btn), msg),
       ),
-      h('p', { class: 'muted small' }, '密钥只存在这台设备的浏览器里, 不会发给别人, 只用来读写你那个仓库。别的设备: 在这里点「在手机上连接」扫二维码, 不用再填。'),
+      h('p', { class: 'muted small' }, '密钥仅保存在本设备浏览器中，只用于读写该仓库。连接后，其他设备可通过「在手机上连接」扫码接入。'),
     );
     return { title: '多设备同步', el: root, focus: tokenInput };
   }
@@ -163,9 +163,9 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
   let lastStatus = null;
   const draw = () => {
     const st = syncer.state;
-    const label = { syncing: `同步中……${st.message ? ` ${st.message}` : ''}`, ok: '同步好了', error: `出错了: ${st.message}`, idle: '等着同步', off: '没开' }[st.status] ?? '';
+    const label = { syncing: `正在同步……${st.message ? ` ${st.message}` : ''}`, ok: '已同步', error: `同步出错：${st.message}`, idle: '等待同步', off: '未开启' }[st.status] ?? '';
     statusEl.className = `sync-status ${st.status}`;
-    fill(statusEl, h('strong', {}, label), h('div', { class: 'muted small' }, `上次同步: ${timeAgo(loadConfig()?.lastSyncAt)}`));
+    fill(statusEl, h('strong', {}, label), h('div', { class: 'muted small' }, `上次同步：${timeAgo(loadConfig()?.lastSyncAt)}`));
     // 只是「传到哪了」变了: 下面的不重画 (不然正在填的日期、点开的「换密钥」会被弄没)
     if (st.status === lastStatus && st.status === 'syncing') return;
     lastStatus = st.status;
@@ -188,8 +188,8 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
     const editor = h(
       'details',
       { class: 'expiry-edit', open: !info && c.expirySource !== 'never' },
-      h('summary', {}, info ? '日期不对?' : '填过期日期'),
-      h('p', { class: 'muted small' }, '在 GitHub 的密钥列表里能看到密钥哪天过期 (Expires on ……)。'),
+      h('summary', {}, info ? '修改到期日期' : '填写到期日期'),
+      h('p', { class: 'muted small' }, '可在 GitHub 密钥列表中查看到期日期（Expires on）。'),
       h(
         'div',
         { class: 'row' },
@@ -197,13 +197,13 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
           class: 'input',
           type: 'date',
           min: ymd(),
-          'aria-label': '密钥过期的日期',
+          'aria-label': '密钥到期日期',
           value: info ? ymd(info.at) : '',
           onchange: (e) => {
             const t = expiryFromDate(e.target.value);
             if (!t) return;
             saveConfig({ ...loadConfig(), expiresAt: t, expirySource: 'user' });
-            toast('记好了');
+            toast('已保存');
             refresh();
           },
         }),
@@ -214,25 +214,25 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
             type: 'button',
             onclick: () => {
               saveConfig({ ...loadConfig(), expiresAt: null, expirySource: 'never' });
-              toast('好的, 不再提醒');
+              toast('已设为不再提醒');
               refresh();
             },
           },
-          '我的密钥不会过期',
+          '密钥永不过期',
         ),
         h('a', { class: 'btn small', href: TOKENS_URL, target: '_blank', rel: 'noopener' }, 'GitHub 密钥列表 ↗'),
       ),
     );
     if (!info) {
-      const unknown = `不知道密钥哪天过期${c.expirySource === 'guess' ? ' (以前是从连上那天按一年猜的, 不一定对)' : ''}。网页自己读不到这个日期: 在 GitHub 的密钥列表里看一下, 填在下面, 快到了会提醒你。`;
-      fill(expiryEl, h('div', { class: 'muted small' }, c.expirySource === 'never' ? '密钥不会过期 (你说的)。' : unknown), editor);
+      const unknown = `未填写密钥到期日期${c.expirySource === 'guess' ? '（此前按连接日期估算为一年，可能不准确）' : ''}。请在 GitHub 密钥列表中查看并填写，到期前将提醒。`;
+      fill(expiryEl, h('div', { class: 'muted small' }, c.expirySource === 'never' ? '密钥设置为永不过期。' : unknown), editor);
       return;
     }
-    const line = info.expired ? `密钥 ${dateText(info.at)} 就过期了` : info.days === 0 ? `密钥今天 (${dateText(info.at)}) 过期` : `密钥 ${dateText(info.at)} 过期, 还有 ${info.days} 天`;
+    const line = info.expired ? `密钥已于 ${dateText(info.at)} 过期` : info.days === 0 ? `密钥今日（${dateText(info.at)}）到期` : `密钥将于 ${dateText(info.at)} 到期，剩余 ${info.days} 天`;
     fill(
       expiryEl,
       info.warn
-        ? h('div', { class: 'expiry-warn' }, h('strong', {}, info.expired ? '⚠ 密钥可能已经过期了' : info.days === 0 ? '⚠ 密钥今天就过期了' : `⚠ 密钥还有 ${info.days} 天就过期了`), h('div', { class: 'small' }, '照下面「换密钥」做一下, 两分钟就好, 卡片不会丢。'))
+        ? h('div', { class: 'expiry-warn' }, h('strong', {}, info.expired ? '密钥可能已过期' : info.days === 0 ? '密钥今日到期' : `密钥将在 ${info.days} 天后到期`), h('div', { class: 'small' }, '请按下方「更换密钥」操作，数据不会丢失。'))
         : null,
       h('div', { class: 'muted small' }, line),
       editor,
@@ -252,14 +252,14 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
     qrBox.hidden = !qrBox.hidden;
     fill(
       qrBox,
-      qrSvg(link, 220) ?? h('p', {}, '二维码生成不了'),
-      h('p', { class: 'small' }, '用手机相机扫一下, 打开后点「连接」。'),
-      h('p', { class: 'small warn' }, '⚠ 二维码里有你的密钥, 别给别人看、别截图发出去。'),
+      qrSvg(link, 220) ?? h('p', {}, '无法生成二维码'),
+      h('p', { class: 'small' }, '用手机相机扫描，打开后点击「连接」。'),
+      h('p', { class: 'small warn' }, '二维码包含密钥，请勿分享或截图外传。'),
     );
   };
 
   // ---- 换密钥: 一步步来 ----
-  const newToken = h('input', { class: 'input', type: 'password', placeholder: '新的密钥 github_pat_……', autocomplete: 'off', 'aria-label': '新的密钥' });
+  const newToken = h('input', { class: 'input', type: 'password', placeholder: '新密钥 github_pat_……', autocomplete: 'off', 'aria-label': '新密钥' });
   const newExpiry = expiryField();
   const renewMsg = h('p', { class: 'sync-msg', 'aria-live': 'polite' });
   const renewBtn = h(
@@ -268,53 +268,53 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
       class: 'btn primary',
       onclick: async () => {
         const token = newToken.value.trim();
-        if (!token) return (renewMsg.textContent = '把新的密钥粘贴进来');
+        if (!token) return (renewMsg.textContent = '请粘贴新密钥');
         const { expiry, error } = newExpiry.read();
         if (error) return (renewMsg.textContent = error);
         renewBtn.disabled = true;
-        renewMsg.textContent = '试一下新密钥……';
+        renewMsg.textContent = '正在验证新密钥……';
         try {
           if (await connect(syncer, config.owner, config.repo, token, config.api, expiry)) {
-            toast('换好了, 照常同步');
+            toast('密钥已更换');
             go('#/sync');
           } else renewMsg.textContent = '';
         } catch (e) {
-          renewMsg.textContent = e instanceof SyncError ? e.message : '出错了';
+          renewMsg.textContent = e instanceof SyncError ? e.message : '更换失败';
         } finally {
           renewBtn.disabled = false;
         }
       },
     },
-    '换',
+    '更换',
   );
   const renew = h(
     'details',
     { class: 'howto renew' },
-    h('summary', {}, '密钥过期了 / 换密钥'),
-    h('p', { class: 'small' }, '快过期的时候 (过期以后也行) 换一个新的, 卡片不会丢, 这段时间改的东西换好以后会一起同步上去。'),
+    h('summary', {}, '更换密钥'),
+    h('p', { class: 'small' }, '密钥到期前后均可更换，数据不会丢失，期间的修改会在更换后同步。'),
     h(
       'ol',
       { class: 'sync-steps' },
       h(
         'li',
         {},
-        h('strong', {}, '去 GitHub 建一个新密钥 '),
-        h('a', { class: 'btn small', href: tokenUrl(config.repo, `温故同步 ${ymd()}`), target: '_blank', rel: 'noopener' }, '去建新密钥 ↗'),
-        h('p', { class: 'muted small' }, `Repository access 选 Only select repositories, 选 ${config.repo}; Permissions 里找到 Contents, 选 Read and write; Expiration (有效期) 记一下是哪天; 点 Generate token, 复制密钥 (github_pat_ 开头的一长串)。`),
+        h('strong', {}, '在 GitHub 创建新密钥 '),
+        h('a', { class: 'btn small', href: tokenUrl(config.repo, `温故同步 ${ymd()}`), target: '_blank', rel: 'noopener' }, '创建新密钥 ↗'),
+        h('p', { class: 'muted small' }, `Repository access 选择 Only select repositories 并选中 ${config.repo}；在 Permissions 中将 Contents 设为 Read and write；记下 Expiration 日期；点击 Generate token 并复制密钥（以 github_pat_ 开头）。`),
       ),
-      h('li', {}, h('strong', {}, '粘贴到这里, 填上哪天过期'), newToken, newExpiry.el, h('div', { class: 'row' }, renewBtn), renewMsg),
+      h('li', {}, h('strong', {}, '粘贴新密钥并填写到期日期'), newToken, newExpiry.el, h('div', { class: 'row' }, renewBtn), renewMsg),
       h(
         'li',
         {},
-        h('strong', {}, '别的设备也换一下'),
-        h('p', { class: 'muted small' }, '换好以后, 在这台设备上点上面的「在手机上连接」, 用另一台扫一下二维码就换好了, 不用再粘贴。'),
+        h('strong', {}, '更新其他设备'),
+        h('p', { class: 'muted small' }, '在本设备点击「在手机上连接」，用其他设备扫码即可完成更新。'),
       ),
     ),
-    h('p', { class: 'muted small' }, '旧的密钥可以在 ', h('a', { href: TOKENS_URL, target: '_blank', rel: 'noopener' }, 'GitHub 的密钥列表'), ' 里删掉 (Delete)。'),
+    h('p', { class: 'muted small' }, '旧密钥可在 ', h('a', { href: TOKENS_URL, target: '_blank', rel: 'noopener' }, 'GitHub 密钥列表'), ' 中删除。'),
   );
 
   // ---- 清理旧历史 ----
-  const historyInfo = h('p', { class: 'small' }, '看一下仓库多大……');
+  const historyInfo = h('p', { class: 'small' }, '正在获取仓库大小……');
   const historyMsg = h('p', { class: 'sync-msg', 'aria-live': 'polite' });
   let versions = 0;
   const loadHistoryInfo = async () => {
@@ -323,9 +323,9 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
       const [info, count] = await Promise.all([repo.check(), repo.commitCount()]);
       versions = count;
       const mb = (info.size ?? 0) / 1024;
-      historyInfo.textContent = `仓库现在大约 ${mb < 1 ? '不到 1' : Math.round(mb)} MB, 存了 ${count.toLocaleString('zh-CN')} 个版本 (这个大小 GitHub 隔一阵子才更新)。`;
+      historyInfo.textContent = `仓库约 ${mb < 1 ? '< 1' : Math.round(mb)} MB，共 ${count.toLocaleString('zh-CN')} 个版本（GitHub 定期更新该数值）。`;
     } catch (e) {
-      historyInfo.textContent = e instanceof SyncError ? `看不了: ${e.message}` : '看不了仓库多大';
+      historyInfo.textContent = e instanceof SyncError ? `无法获取：${e.message}` : '无法获取仓库大小';
     }
   };
   const cleanBtn = h(
@@ -333,41 +333,41 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
     {
       class: 'btn',
       onclick: async () => {
-        if (!confirm(`只留现在这一个版本, 以前的${versions > 1 ? ` ${(versions - 1).toLocaleString('zh-CN')} 个` : ''}版本都清掉? 清了就退不回以前的版本了。现在的卡片、进度、图片录音都不动。`)) return;
+        if (!confirm(`仅保留当前版本，清除此前${versions > 1 ? ` ${(versions - 1).toLocaleString('zh-CN')} 个` : '的'}版本？清除后无法恢复旧版本，当前数据不受影响。`)) return;
         cleanBtn.disabled = true;
-        historyMsg.textContent = '先同步一次, 再清理……';
+        historyMsg.textContent = '正在同步并清理……';
         const r = await syncer.cleanHistory();
         cleanBtn.disabled = false;
         historyMsg.classList.toggle('ok', !r.error);
         historyMsg.textContent = r.error
-          ? `没清理: ${r.error}`
+          ? `未清理：${r.error}`
           : r.squashed
-            ? '清理好了: 只剩现在这一个版本。GitHub 一般要过几天才真正腾出地方, 那时上面的大小才会变小。'
-            : '只有一个版本, 不用清理。';
-        if (r.squashed) toast('旧历史清理好了');
+            ? '清理完成，仅保留当前版本。GitHub 通常需要数天才会释放空间。'
+            : '仅有一个版本，无需清理。';
+        if (r.squashed) toast('已清理历史版本');
         loadHistoryInfo();
       },
     },
-    '清理旧历史',
+    '清理历史版本',
   );
   const historyBox = h(
     'details',
     { class: 'howto history-clean', ontoggle: (e) => e.target.open && loadHistoryInfo() },
-    h('summary', {}, '清理仓库的旧历史'),
+    h('summary', {}, '清理历史版本'),
     h(
       'p',
       { class: 'small' },
-      '每同步一次, GitHub 就把仓库存成一个新版本, 以前的版本都留着 —— 连删掉的卡片集用过的图片录音也还在旧版本里。',
-      '旧版本不会同步到电脑、平板上, 不占设备的地方, 只占 GitHub 那边的。',
+      '每次同步都会在 GitHub 上保存一个新版本，旧版本（包括已删除内容的图片和录音）会一直保留。',
+      '旧版本不会下载到设备，只占用 GitHub 空间。',
     ),
     historyInfo,
     h(
       'ul',
       { class: 'small history-points' },
-      h('li', {}, h('strong', {}, '清理做什么: '), '先同步一次, 再只留现在这一个版本, 以前的全部清掉。'),
-      h('li', {}, h('strong', {}, '不动什么: '), '现在的卡片、进度、复习记录、图片录音都不动; 别的设备照常同步, 不用重新连。'),
-      h('li', {}, h('strong', {}, '要知道: '), '清了就退不回以前的版本了 (平时用不到; 万一哪天同步把东西弄乱了, 旧版本是最后的退路)。想保险, 清之前先在首页「导出备份」。'),
-      h('li', {}, h('strong', {}, '什么时候清: '), '不清也没关系, GitHub 私有仓库 1 GB 以内都没事; 删掉过大卡组、仓库到了几百 MB 再清就行。'),
+      h('li', {}, h('strong', {}, '操作：'), '同步后仅保留当前版本，清除全部旧版本。'),
+      h('li', {}, h('strong', {}, '不受影响：'), '当前的卡片、进度、复习记录、图片和录音；其他设备无需重新连接。'),
+      h('li', {}, h('strong', {}, '注意：'), '清理后无法恢复旧版本。建议先在「设置」中导出备份。'),
+      h('li', {}, h('strong', {}, '建议：'), '仓库在 1 GB 以内无需清理；达到数百 MB 时再清理即可。'),
     ),
     h('div', { class: 'row' }, cleanBtn),
     historyMsg,
@@ -377,9 +377,9 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
   const unsub = syncer.subscribe?.(draw);
 
   root.append(
-    h('a', { class: 'back', href: '#/' }, '← 首页'),
+    h('a', { class: 'back', href: '#/settings' }, '← 设置'),
     h('h1', {}, '多设备同步'),
-    h('p', {}, '连着 ', h('a', { href: `https://github.com/${config.owner}/${config.repo}`, target: '_blank', rel: 'noopener' }, `${config.owner}/${config.repo}`), '。打开、改动、回到页面时会自动同步。'),
+    h('p', {}, '连着 ', h('a', { href: `https://github.com/${config.owner}/${config.repo}`, target: '_blank', rel: 'noopener' }, `${config.owner}/${config.repo}`), '。打开、修改或返回页面时自动同步。'),
     statusEl,
     expiryEl,
     h(
@@ -392,7 +392,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
         {
           class: 'btn danger',
           onclick: () => {
-            if (!confirm('断开同步? 这台设备上的卡片还在, 只是不再同步。')) return;
+            if (!confirm('断开同步？本设备的数据会保留，但不再同步。')) return;
             saveConfig(null);
             syncer.start();
             go('#/sync');
@@ -419,7 +419,7 @@ function renderConnectLink({ go, syncer }, data) {
   // 网址里有密钥, 马上从地址栏和历史记录里换掉
   history.replaceState(null, '', '#/sync/connect');
   if (!r || !info?.t) {
-    return { title: '连接', el: h('section', { class: 'empty' }, h('h1', {}, '这个连接坏了'), h('a', { class: 'btn primary', href: '#/sync' }, '去同步设置')) };
+    return { title: '连接', el: h('section', { class: 'empty' }, h('h1', {}, '连接链接无效'), h('a', { class: 'btn primary', href: '#/sync' }, '同步设置')) };
   }
   const msg = h('p', { class: 'sync-msg' });
   const btn = h(
@@ -428,13 +428,13 @@ function renderConnectLink({ go, syncer }, data) {
       class: 'btn primary big-choice',
       onclick: async () => {
         btn.disabled = true;
-        msg.textContent = '连接中……';
+        msg.textContent = '正在连接……';
         try {
           await connect(syncer, r.owner, r.repo, info.t, info.a, { expiresAt: info.e, expirySource: info.s });
-          toast('连上了');
+          toast('已连接');
           go('#/');
         } catch (e) {
-          msg.textContent = e instanceof SyncError ? e.message : '连接出错了';
+          msg.textContent = e instanceof SyncError ? e.message : '连接失败';
           btn.disabled = false;
         }
       },
@@ -448,8 +448,8 @@ function renderConnectLink({ go, syncer }, data) {
       { class: 'summary sync-connect' },
       h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '☁️'),
       h('h1', {}, '连接多设备同步'),
-      h('p', {}, `这台设备会跟 ${r.owner}/${r.repo} 同步。这里原来有的卡片也会合并进去, 不会丢。`),
-      h('div', { class: 'row center' }, btn, h('a', { class: 'btn', href: '#/' }, '不要')),
+      h('p', {}, `本设备将与 ${r.owner}/${r.repo} 同步，现有数据会合并，不会丢失。`),
+      h('div', { class: 'row center' }, btn, h('a', { class: 'btn', href: '#/' }, '取消')),
       msg,
     ),
   };

@@ -5,7 +5,6 @@
 //   会了 / 星标 / 学习程度            听最后学过 (progressAt) 的那边
 //   每张卡片的答对答错和复习日子      一张一张比, 取最近答过 (at) 的
 //   游戏最好成绩                      取更好的
-//   题目集每次的成绩                  两边的合起来
 //   打卡                              同一天取多的
 //   删除                              一边删了就删, 除非另一边是删了以后又改过的
 //   文件夹                            听最后改过的那边 (每天的计划听后改的)
@@ -15,7 +14,6 @@
 //   小乌龟温温                        长大的进度取多的, 解锁的装扮合起来, 名字和装扮听后改的
 //   游戏厅的成绩                      两边的合起来, 留最高的 5 次
 
-import { mergeRuns } from './quiz.js';
 import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { mergeLogs, subtractLogs } from './revlog.js';
 import { cleanPet, mergePet } from './pet.js';
@@ -88,7 +86,6 @@ export function mergeSet(a, b, deleted = {}) {
     learn: progress.learn,
     stats: mergeStats(a.stats, b.stats),
     best: mergeBest(a.best, b.best),
-    runs: mergeRuns(a.runs, b.runs),
     plan: (b.plan?.at ?? 0) > (a.plan?.at ?? 0) ? b.plan : a.plan,
     createdAt: Math.min(a.createdAt ?? Infinity, b.createdAt ?? Infinity),
     updatedAt: Math.max(a.updatedAt ?? 0, b.updatedAt ?? 0),
