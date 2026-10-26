@@ -115,10 +115,10 @@ export function newToday(set, now = Date.now()) {
       perDay = Math.max(1, Math.ceil((left + learned) / (daysLeft - plan.rest)));
     }
   }
-  const today = plan.on && set.kind !== 'quiz' ? Math.max(0, Math.min(left, perDay - learned)) : 0;
+  const today = plan.on ? Math.max(0, Math.min(left, perDay - learned)) : 0;
   const after = left - today; // 今天学完还剩几个
   const finish = !left || !perDay ? 0 : today0 + (after ? Math.ceil(after / perDay) : 0) * DAY + DAY / 2;
-  return { on: plan.on && set.kind !== 'quiz', mode, perDay, learned, today, left, daysLeft, finish };
+  return { on: plan.on, mode, perDay, learned, today, left, daysLeft, finish };
 }
 
 // 今天复习了几张 (不算今天才学的新词), 所有卡片集一起算上限用

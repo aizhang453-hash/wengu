@@ -24,26 +24,25 @@ export function laterText(due, now = Date.now()) {
 
 export const percent = (r) => `${Math.round(r * 100)}%`;
 
-// 今天的: 「复习 34 张 + 新词 20 个」
+// 今天的: 「复习 34 · 新词 20」
 export function todayText(reviews, fresh) {
-  return [reviews ? `复习 ${num(reviews)} 张` : '', fresh ? `新词 ${num(fresh)} 个` : ''].filter(Boolean).join(' + ');
+  return [reviews ? `复习 ${num(reviews)}` : '', fresh ? `新词 ${num(fresh)}` : ''].filter(Boolean).join(' · ');
 }
 
-// 一句话说计划走到哪了 (info 是 newToday 算的)
+// 一句话说计划走到哪了 (info 是 newToday 算的): 「每日 15 个 · 今日 3/15 · 剩余 1,467 个 · 距考试 131 天」
 export function planLine(info, plan) {
-  if (!info.left) return info.learned ? `今天学了 ${info.learned} 个新词, 新词都背过了 🎉` : '新词都背过了 🎉 以后按复习的日子来';
+  if (!info.left) return info.learned ? `今日已学 ${info.learned} 个新词，新词已全部学完` : '新词已全部学完';
   const parts = [];
   if (info.mode === 'rest') {
-    parts.push(info.daysLeft === 0 ? '今天考试, 加油! 不学新词了' : `离考试还有 ${info.daysLeft} 天, 只复习, 不学新词了`);
-    if (info.learned) parts.push(`今天学了 ${info.learned} 个`);
-    parts.push(`还有 ${num(info.left)} 个没背过`);
+    parts.push(info.daysLeft === 0 ? '今日考试，暂停新词' : `距考试 ${info.daysLeft} 天，仅复习`);
+    parts.push(`剩余 ${num(info.left)} 个`);
     return parts.join(' · ');
   }
-  // 按考试算的: 写上考前几天只复习, 也说清楚每天按还剩几个、还剩几天重算 (少背了一天, 剩下的分到以后几天)
-  if (info.mode === 'exam') parts.push(`离考试 ${info.daysLeft} 天 (${dateText(examTime(plan.exam))})${plan.rest ? `, 最后 ${plan.rest} 天只复习` : ''}, 每天 ${info.perDay} 个 (每天按还剩的重算)`);
-  else parts.push(`每天 ${info.perDay} 个${info.mode === 'passed' ? ' (考试日期过了)' : ''}`);
-  parts.push(`今天 ${info.learned}/${info.learned + info.today}`);
-  parts.push(`还有 ${num(info.left)} 个没背过${info.finish ? `, 照这样 ${dateText(info.finish)} 学完` : ''}`);
+  parts.push(`每日 ${info.perDay} 个`);
+  parts.push(`今日 ${info.learned}/${info.learned + info.today}`);
+  parts.push(`剩余 ${num(info.left)} 个`);
+  if (info.mode === 'exam') parts.push(`距考试 ${info.daysLeft} 天`);
+  else if (info.finish) parts.push(`预计${dateText(info.finish)}学完`);
   return parts.join(' · ');
 }
 

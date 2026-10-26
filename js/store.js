@@ -1,6 +1,6 @@
 import { schedule, replay, dayKey, useParameters, isLapse, cleanRetention, startOfDay, daysLater, DAY, DEFAULT_RETENTION } from './srs.js';
 import { cleanDiagram } from './diagram.js';
-import { cleanQuestion, cleanRuns, newQuestion } from './quiz.js';
+import { quizToMistakes } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
@@ -100,9 +100,7 @@ export const COLLAPSED_KEY = 'wengu:home-collapsed'; // 首页收起了的文件
 //          first 第一次排进复习的时间 (算今天学了几个新词), n 从第一次起翻卡自评了几次 (看复习记录全不全),
 //          lapses 背过以后又忘了几次 (8 次以上是难记卡), sus 暂停的时间 (暂停了不排复习), bury 「明天再说」到哪天 0 点,
 //          rev 撤销的时间 (同步时比 at 新的听这边的), flag 暂停 / 明天再说改的时间 (同步时这两样单独听后改的)
-//   best: { match: 毫秒, blast / blocks / gems / quiz: 分, wordle: 最长连胜 }  游戏最好成绩
-//   kind: 'cards' 普通卡片集 | 'quiz' 题目集 (每张卡片是一道题, 卡片上多一个 q, 见 quiz.js)
-//   runs: [{ at, score, correct, total, timed }]  题目集最近几次的成绩
+//   best: { match: 毫秒, blast / blocks / gems: 分, wordle: 最长连胜 }  游戏最好成绩
 //   plan: 每天学几个新词 (plan.js), 没定过是 null
 //   createdAt, updatedAt (改了卡片), progressAt (学习进度变了, 同步时用) }
 export function makeSet(fields = {}) {
@@ -120,8 +118,6 @@ export function makeSet(fields = {}) {
     stats: {},
     best: {},
     diagram: null, // 标注图 (diagram.js)
-    kind: 'cards',
-    runs: [],
     plan: null,
     createdAt: now,
     updatedAt: now,
@@ -150,7 +146,6 @@ function cleanSet(raw) {
           termAudio: mediaId(c.termAudio),
           defAudio: mediaId(c.defAudio),
           ...(Number(c.edited) > 0 ? { edited: Number(c.edited) } : {}), // 这张最后改的时间 (同步时一张一张合)
-          ...(raw.kind === 'quiz' ? { q: cleanQuestion(c.q) ?? newQuestion() } : {}),
         }))
     : [];
   const ids = new Set(cards.map((c) => c.id));
@@ -195,9 +190,7 @@ function cleanSet(raw) {
     }),
     best,
     diagram: cleanDiagram(raw.diagram, ids),
-    kind: raw.kind === 'quiz' ? 'quiz' : 'cards',
-    runs: cleanRuns(raw.runs),
-    plan: raw.kind === 'quiz' ? null : cleanPlan(raw.plan),
+    plan: cleanPlan(raw.plan),
     createdAt: Number(raw.createdAt) || Date.now(),
     updatedAt: Number(raw.updatedAt) || Date.now(),
     progressAt: Number(raw.progressAt) || 0,
@@ -206,7 +199,7 @@ function cleanSet(raw) {
 
 function cleanBest(raw) {
   const best = {};
-  for (const key of ['match', 'blast', 'blocks', 'gems', 'wordle', 'quiz']) {
+  for (const key of ['match', 'blast', 'blocks', 'gems', 'wordle']) {
     const v = Number(raw?.[key]);
     if (Number.isFinite(v) && v > 0) best[key] = v;
   }
@@ -229,8 +222,13 @@ function cleanFolder(raw, setIds) {
 
 export function cleanData(raw) {
   const data = emptyData();
+  const quizSets = []; // 老的题目集: 下面变成错题
   if (raw && Array.isArray(raw.sets)) {
     for (const s of raw.sets) {
+      if (s?.kind === 'quiz') {
+        quizSets.push(s);
+        continue;
+      }
       const set = cleanSet(s);
       if (set) data.sets.push(set);
     }
@@ -252,14 +250,26 @@ export function cleanData(raw) {
   data.settings = cleanSettings(raw?.settings);
   data.pet = cleanPet(raw?.pet);
   data.arcade = cleanArcade(raw?.arcade);
+  const seen = new Set();
   if (raw && Array.isArray(raw.mistakes)) {
-    const seen = new Set();
     for (const m of raw.mistakes) {
       const clean = cleanMistake(m);
       if (!clean || seen.has(clean.id)) continue;
       seen.add(clean.id);
       data.mistakes.push(clean);
     }
+  }
+  // 题目集并进了错题集 (v1.43): 每道题变成错题, 题目集记成删掉了 (同步时别的设备也删掉, 不会又传回来)。
+  // 已经变过的 (id 一样)、变了以后又删掉的错题不再加
+  const now = Date.now();
+  for (const quiz of quizSets) {
+    if (typeof quiz.id !== 'string' || !quiz.id) continue;
+    for (const m of quizToMistakes(quiz, now)) {
+      if (seen.has(m.id) || data.deleted[MISTAKE_PREFIX + m.id]) continue;
+      seen.add(m.id);
+      data.mistakes.push(m);
+    }
+    data.deleted[quiz.id] = Math.max(data.deleted[quiz.id] ?? 0, now);
   }
   if (raw && Array.isArray(raw.folders)) {
     const ids = new Set(data.sets.map((s) => s.id));
@@ -867,7 +877,7 @@ export class Store {
       return folder.plan;
     }
     const set = this.data.sets.find((s) => s.id === setId);
-    if (!set || set.kind === 'quiz') return null;
+    if (!set) return null;
     set.plan = cleanPlan({ ...set.plan, ...changes, at: now });
     this.save();
     return set.plan;
@@ -970,18 +980,6 @@ export class Store {
     const better = game === 'match' ? old === undefined || value < old : old === undefined || value > old;
     if (better) set.best[game] = value;
     this.touchActivity();
-    this.save();
-    return better;
-  }
-
-  // 题目集答完一次: 记成绩 (留最近几次), 答了几题算进今天的打卡。限时的破纪录返回 true
-  recordRun(setId, run, now = Date.now()) {
-    const set = this.data.sets.find((s) => s.id === setId);
-    if (!set) return false;
-    set.runs = cleanRuns([{ ...run, at: now }, ...(set.runs ?? [])]);
-    const better = Boolean(run.timed) && run.score > 0 && !(set.best.quiz >= run.score);
-    if (better) set.best.quiz = run.score;
-    for (let i = 0; i < run.total; i++) this.touchActivity(now);
     this.save();
     return better;
   }

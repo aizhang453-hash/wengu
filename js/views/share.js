@@ -3,7 +3,8 @@
 import { h, fill, toast, openDialog } from '../dom.js';
 import { encodeShare, decodeShare, shareUrl } from '../share.js';
 import { qrSvg } from '../qr.js';
-import { makeCard } from '../store.js';
+import { makeCard, newId } from '../store.js';
+import { quizToMistakes } from '../quiz.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { rich } from '../cardview.js';
 import { normalizeLang } from '../speech.js';
@@ -53,13 +54,14 @@ export async function openShareDialog(set) {
 
 // 打开分享链接: 先看看是什么, 再决定要不要导入
 export function renderShareImport({ store, go }, code) {
-  const root = h('section', { class: 'share-page' }, h('p', { class: 'muted' }, '读取中……'));
+  const root = h('section', { class: 'share-page' }, h('p', { class: 'muted' }, '正在读取……'));
   decodeShare(code ?? '').then((data) => {
     if (!data || !data.cards.length) {
-      fill(root, h('div', { class: 'empty' }, h('h1', {}, '这条分享链接坏了'), h('p', { class: 'muted' }, '可能复制的时候少了一截。'), h('a', { class: 'btn primary', href: '#/' }, '回首页')));
+      fill(root, h('div', { class: 'empty' }, h('h1', {}, '链接无效'), h('p', { class: 'muted' }, '链接可能不完整，请重新复制。'), h('a', { class: 'btn primary', href: '#/' }, '返回首页')));
       return;
     }
     const withImages = data.cards.filter((c) => c.imageUrl).length;
+    // 老的题目集的分享链接: 题目集并进了错题集, 导入成错题
     const quiz = data.kind === 'quiz';
     const unit = quiz ? '道题' : '张卡片';
     const btn = h(
@@ -68,7 +70,7 @@ export function renderShareImport({ store, go }, code) {
         class: 'btn primary',
         onclick: async () => {
           btn.disabled = true;
-          btn.textContent = withImages ? '导入中 (拿图片)……' : '导入中……';
+          btn.textContent = '正在导入……';
           const cards = [];
           let imageFailed = 0;
           for (const c of data.cards) {
@@ -84,31 +86,39 @@ export function renderShareImport({ store, go }, code) {
             }
             cards.push(makeCard(c.term, c.def, { image, ...(c.q ? { q: c.q } : {}) }));
           }
+          const note = imageFailed ? `，${imageFailed} 张图片无法获取` : '';
           try {
-            const set = store.putSet({ title: data.title || (quiz ? '分享的题目集' : '分享的卡片集'), description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), kind: data.kind, cards });
-            toast(imageFailed ? `导入好了 (${imageFailed} 张图片拿不到)` : '导入好了');
+            if (quiz) {
+              const list = quizToMistakes({ id: newId(), title: data.title, cards });
+              store.transaction(() => list.forEach((m) => store.putMistake(m)));
+              toast(`已导入 ${list.length} 道题${note}`);
+              return go('#/mistakes');
+            }
+            const set = store.putSet({ title: data.title || '分享的卡片集', description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), cards });
+            toast(`导入完成${note}`);
             go(`#/set/${encodeURIComponent(set.id)}`);
           } catch {
-            toast('存不下了: 浏览器的空间满了');
+            toast('存储空间已满，无法导入');
             btn.disabled = false;
           }
         },
       },
-      quiz ? `导入到我的题目集 (${data.cards.length} 道)` : `导入到我的卡片集 (${data.cards.length} 张)`,
+      quiz ? `导入到错题集（${data.cards.length} 道）` : `导入（${data.cards.length} 张）`,
     );
-    fill(root, 
-      h('h1', {}, data.title || (quiz ? '分享的题目集' : '分享的卡片集')),
+    fill(
+      root,
+      h('h1', {}, data.title || (quiz ? '分享的题目' : '分享的卡片集')),
       data.description ? h('p', { class: 'description' }, data.description) : null,
-      h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '从 Quizlet 读到的卡片集' : quiz ? '别人分享给你的题目集' : '别人分享给你的卡片集'}, ${data.cards.length} ${unit}${withImages ? `, ${withImages} ${quiz ? '道' : '张'}带图片` : ''}。导入以后就是你自己的, 可以随便改。`),
-      h('div', { class: 'row' }, btn, h('a', { class: 'btn', href: '#/' }, '不要')),
-      h('h2', {}, quiz ? '前面几道' : '前面几张'),
+      h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '来自 Quizlet' : '他人分享'} · ${data.cards.length} ${unit}${withImages ? ` · ${withImages} 张图片` : ''}`),
+      h('div', { class: 'row' }, btn, h('a', { class: 'btn', href: '#/' }, '取消')),
+      h('h2', {}, '预览'),
       h(
         'ul',
         { class: 'card-list' },
         data.cards.slice(0, 10).map((c) => h('li', { class: 'card-row' }, h('div', { class: 'card-side term' }, rich(c.term, { class: 'text' })), h('div', { class: 'card-side def' }, rich(c.def, { class: 'text' })))),
       ),
-      data.cards.length > 10 ? h('p', { class: 'muted small' }, `还有 ${data.cards.length - 10} ${quiz ? '道' : '张'}……`) : null,
+      data.cards.length > 10 ? h('p', { class: 'muted small' }, `另有 ${data.cards.length - 10} ${quiz ? '道' : '张'}`) : null,
     );
   });
-  return { title: '导入分享的卡片集', el: root };
+  return { title: '导入分享', el: root };
 }

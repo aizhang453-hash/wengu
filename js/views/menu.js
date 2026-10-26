@@ -1,13 +1,34 @@
-// 左边的菜单: 顶上的 ☰ 点开, 所有地方都在这里 ——
-// 主页、今天的复习 (几张)、统计、错题集 (今天该做几道); 学习游戏、新建、导入、题目集; 你的文件夹; 游戏厅; 多设备同步、小乌龟温温
+// 左边的菜单 (顶上的 ☰ 点开): 今日、错题集、统计; 更多 (学习游戏、游戏厅、文件夹、温温); 设置。
+// 顶上的「新建」: 新建卡片集、导入卡片、记录错题、拍照录入错题、新建文件夹, 都在这一个菜单里
 
-import { h, icon } from '../dom.js';
+import { h, icon, menuButton } from '../dom.js';
 import { todayAll } from './plan.js';
 import { dueMistakes } from '../mistakes.js';
 import { loadConfig } from '../sync.js';
 import { newFolder } from './folder.js';
 
+// 顶上的「新建」换成点开的菜单 (没开 JavaScript 时还是个去 #/new 的链接)
+function setupNewMenu({ store, go }) {
+  const old = document.getElementById('new-btn');
+  if (!old) return;
+  old.replaceWith(
+    menuButton(
+      [
+        { label: '新建卡片集', icon: 'plus', href: '#/new' },
+        { label: '导入卡片', icon: 'import', href: '#/import' },
+        null,
+        { label: '记录错题', icon: 'edit', href: '#/mistakes/new' },
+        { label: '拍照录入错题', icon: 'camera', href: '#/mistakes/import' },
+        null,
+        { label: '新建文件夹', icon: 'folder', onclick: () => newFolder(store, (f) => go(`#/folder/${encodeURIComponent(f.id)}`)) },
+      ],
+      { label: '新建', text: '新建', cls: 'btn primary small new-btn', iconName: 'plus' },
+    ),
+  );
+}
+
 export function setupMenu({ store, go, syncer, pet = null }) {
+  setupNewMenu({ store, go });
   const btn = document.getElementById('menu-btn');
   if (!btn) return;
   let drawer = null;
@@ -32,29 +53,25 @@ export function setupMenu({ store, go, syncer, pet = null }) {
     const mistakes = dueMistakes(store.data.mistakes).length;
 
     // 一行: 图标、字、右边的数; match: 现在在不在这一页
-    const item = (href, ic, text, { badge = 0, sub = null, match = (x) => x === href } = {}) => {
+    const item = (href, ic, text, { badge = 0, note = '', match = (x) => x === href } = {}) => {
       const on = match(hash);
       return h(
         'a',
         { class: `menu-item${on ? ' on' : ''}`, href, 'aria-current': on ? 'page' : null, onclick: close },
-        icon(ic, 22),
-        h('span', { class: 'menu-text' }, text, sub ? h('span', { class: 'menu-sub' }, sub) : null),
-        badge ? h('span', { class: 'menu-badge', 'aria-label': `${badge} 个` }, badge > 999 ? '999+' : String(badge)) : null,
+        icon(ic, 20),
+        h('span', { class: 'menu-text' }, text),
+        note ? h('span', { class: 'menu-note' }, note) : null,
+        badge ? h('span', { class: 'menu-badge', 'aria-label': `${badge} 项` }, badge > 999 ? '999+' : String(badge)) : null,
       );
     };
+    const action = (ic, text, onclick) => h('button', { class: 'menu-item', type: 'button', onclick: () => (close(), onclick()) }, icon(ic, 20), h('span', { class: 'menu-text' }, text));
     const starts = (prefix) => (x) => x === prefix || x.startsWith(`${prefix}/`);
     const sep = () => h('div', { class: 'menu-sep', role: 'separator' });
     const title = (text) => h('div', { class: 'menu-title' }, text);
 
     const folders = store.allFolders();
-    const folderItems = folders.map((f) =>
-      item(`#/folder/${encodeURIComponent(f.id)}`, 'folder', f.name || '未命名文件夹', {
-        sub: `${f.setIds.length} 个卡片集`,
-        match: (x) => x === `#/folder/${encodeURIComponent(f.id)}` || x.startsWith(`#/set/folder%3A${encodeURIComponent(f.id)}`),
-      }),
-    );
     const config = loadConfig();
-    const syncText = !config ? '设置多设备同步' : syncer?.state.status === 'error' ? '同步出错了' : '多设备同步';
+    const syncError = Boolean(config) && syncer?.state.status === 'error';
 
     const d = h(
       'dialog',
@@ -65,55 +82,31 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         h(
           'div',
           { class: 'drawer-head' },
-          h('button', { class: 'icon-btn menu-btn', type: 'button', 'aria-label': '关上菜单', onclick: close }, icon('menu', 24)),
+          h('button', { class: 'icon-btn menu-btn', type: 'button', 'aria-label': '关闭菜单', onclick: close }, icon('menu', 24)),
           h('a', { class: 'logo', href: '#/', onclick: close }, h('span', { class: 'seal', 'aria-hidden': 'true' }, '温'), h('span', {}, '温故')),
         ),
-        item('#/', 'home', '主页', { match: (x) => x === '#/' || x === '#' }),
-        item('#/review', 'cards', '今天的复习', { badge: due, match: starts('#/review') }),
-        item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
+        item('#/', 'home', '今日', { badge: due, match: (x) => x === '#/' || x === '#' || starts('#/review')(x) }),
         item('#/mistakes', 'book', '错题集', { badge: mistakes, match: starts('#/mistakes') }),
-        sep(),
-        title('学习、新建'),
-        item('#/games', 'game', '学习游戏', { sub: '拿卡片集玩', match: starts('#/games') }),
-        item('#/new', 'plus', '新建卡片集'),
-        item('#/import', 'import', '导入'),
-        item('#/new-quiz', 'quiz', '新建题目集', { sub: '选择题、判断题, 限时答' }),
-        sep(),
-        title('你的文件夹'),
-        folderItems,
-        h(
-          'button',
-          {
-            class: 'menu-item',
-            type: 'button',
-            onclick: () => {
-              close();
-              newFolder(store, (f) => go(`#/folder/${encodeURIComponent(f.id)}`));
-            },
-          },
-          icon('plus', 22),
-          h('span', { class: 'menu-text' }, '新文件夹'),
-        ),
-        sep(),
-        title('休息一下'),
-        item('#/arcade', 'arcade', '游戏厅', { sub: '弹珠台', match: starts('#/arcade') }),
-        sep(),
-        item('#/sync', 'cloud', syncText, { match: starts('#/sync') }),
-        pet
-          ? h(
-              'button',
-              {
-                class: 'menu-item',
-                type: 'button',
-                onclick: () => {
-                  close();
-                  pet.openPanel();
-                },
-              },
-              icon('turtle', 22),
-              h('span', { class: 'menu-text' }, `小乌龟${pet.name()}`, h('span', { class: 'menu-sub' }, `${pet.summary()} · 长到哪了、装扮、显示不显示`)),
-            )
+        item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
+        folders.length
+          ? [
+              sep(),
+              title('文件夹'),
+              folders.map((f) =>
+                item(`#/folder/${encodeURIComponent(f.id)}`, 'folder', f.name || '未命名文件夹', {
+                  match: (x) => x === `#/folder/${encodeURIComponent(f.id)}` || x.startsWith(`#/set/folder%3A${encodeURIComponent(f.id)}`),
+                }),
+              ),
+            ]
           : null,
+        sep(),
+        title('更多'),
+        item('#/games', 'game', '学习游戏', { match: starts('#/games') }),
+        item('#/arcade', 'arcade', '游戏厅', { match: starts('#/arcade') }),
+        pet ? action('turtle', `小乌龟${pet.name()}`, () => pet.openPanel()) : null,
+        h('div', { class: 'menu-spacer' }),
+        sep(),
+        item('#/settings', 'gear', '设置', { note: syncError ? '同步出错' : '', match: (x) => starts('#/settings')(x) || starts('#/sync')(x) }),
       ),
     );
     // 点旁边灰色的地方关上 (换页时 app.js 也会关)

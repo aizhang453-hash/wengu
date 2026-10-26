@@ -31,7 +31,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     scope = setId ? store.getSet(setId) : null;
     sets = setId ? store.setsOf(setId) : store.allSets();
     groups = !setId ? store.plannedFolders() : scope?.virtual && scope.plan?.on ? [scope] : [];
-    learnable = setId ? (scope?.virtual ? [scope] : sets.filter((s) => s.kind !== 'quiz')) : [...groups, ...plannedSets(sets)];
+    learnable = setId ? (scope?.virtual ? [scope] : sets) : [...groups, ...plannedSets(sets)];
   }
   resolve();
   const back = scope ? (scope.virtual ? `#/folder/${encodeURIComponent(scope.folderId)}` : `#/set/${encodeURIComponent(scope.id)}`) : '#/';

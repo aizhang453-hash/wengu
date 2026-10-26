@@ -1,7 +1,6 @@
 // 入口: 按网址 # 后面的部分决定显示哪一页
 //   #/                    首页 (所有卡片集)
 //   #/new                 新建卡片集
-//   #/new-quiz            新建题目集 (像 Kahoot 那样每道题自己写选项)
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
 //   #/games               学习游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
@@ -25,7 +24,6 @@
 //   #/set/<id>/gems       宝石游戏
 //   #/set/<id>/wordle     Wordle
 //   #/set/<id>/diagram    标注图练习
-//   #/set/<id>/play       题目集: 限时答题 (卡片集页、编辑页碰到题目集就换成题目集的)
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
@@ -54,9 +52,6 @@ import { renderQuizlet } from './views/quizlet.js';
 import { renderGames } from './views/gamehub.js';
 import { renderArcade } from './views/arcade.js';
 import { renderPinball } from './views/pinball.js';
-import { renderQuizEdit } from './views/quizedit.js';
-import { renderQuizSet } from './views/quizset.js';
-import { renderQuizPlay } from './views/quizplay.js';
 import { renderMistakes } from './views/mistakes.js';
 import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
@@ -125,7 +120,6 @@ function parse(hash) {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decode);
   if (parts.length === 0) return { page: 'home' };
   if (parts[0] === 'new') return { page: 'edit', id: null };
-  if (parts[0] === 'new-quiz') return { page: 'quiz-edit', id: null };
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'games') return { page: 'games', game: parts[1] ?? null };
@@ -158,7 +152,6 @@ function parse(hash) {
     if (sub === 'gems') return { page: 'gems', id: parts[1] };
     if (sub === 'wordle') return { page: 'wordle', id: parts[1] };
     if (sub === 'diagram') return { page: 'diagram', id: parts[1] };
-    if (sub === 'play') return { page: 'play', id: parts[1] };
   }
   return { page: 'missing' };
 }
@@ -183,19 +176,15 @@ function render() {
 
   const route = parse(hash);
   // 游戏: 整页深色, 顶上的搜索栏收起来 (照 Quizlet)
-  const inGame = GAME_KEYS.includes(route.page) || route.page === 'play' || route.page === 'pinball';
+  const inGame = GAME_KEYS.includes(route.page) || route.page === 'pinball';
   document.body.classList.toggle('in-game', inGame);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inGame ? '#0a092d' : '#b8372e');
   if (!inGame) outsideHash = hash;
   const ctx = { store, go, syncer, from: outsideHash };
   let view;
-  const quiz = route.id ? store.getSet(route.id)?.kind === 'quiz' : false;
   if (route.page === 'home') view = renderHome(ctx);
-  else if (route.page === 'quiz-edit' || (route.page === 'edit' && quiz)) view = renderQuizEdit(ctx, route.id);
   else if (route.page === 'edit') view = renderEdit(ctx, route.id, { openImport: route.openImport });
-  else if (route.page === 'set' && quiz) view = renderQuizSet(ctx, store.getSet(route.id));
   else if (route.page === 'set') view = renderSet(ctx, route.id);
-  else if (route.page === 'play') view = renderQuizPlay(ctx, route.id);
   else if (route.page === 'cards') view = renderCards(ctx, route.id);
   else if (route.page === 'learn') view = renderLearn(ctx, route.id);
   else if (route.page === 'test') view = renderExam(ctx, route.id);

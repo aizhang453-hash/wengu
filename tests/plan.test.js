@@ -149,13 +149,6 @@ test('记住哪天开始背的; 今天复习了几张不算新词; 撤销又变�
   assert.equal(merged.settings.reviewsPerDay, 120);
 });
 
-test('题目集没有每天新词的计划', () => {
-  const store = new Store(memoryStorage());
-  const quiz = store.putSet(makeSet({ kind: 'quiz', cards: [makeCard('q', '')] }));
-  assert.equal(store.setPlan(quiz.id, { on: true }), null);
-  assert.equal(newToday({ ...quiz, plan: cleanPlan({ on: true }) }, now).today, 0);
-});
-
 test('文件夹的计划: 新词照文件夹里卡片集的顺序; 今天的新词记回原来的卡片集; 卡片集也定了的同一张只出一次', () => {
   const store = new Store(memoryStorage());
   const book1 = store.putSet(makeSet({ title: '1.Book', cards: cardsOf(3) }));

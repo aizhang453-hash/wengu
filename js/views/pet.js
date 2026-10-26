@@ -150,7 +150,7 @@ function countLeeches(sets) {
 
 export function situation(store, now = Date.now()) {
   const data = store.data;
-  const sets = store.allSets().filter((s) => s.kind !== 'quiz');
+  const sets = store.allSets();
   const q = todayAll(store);
   const s = streak(data.activity, now);
   const xp = xpOf(data.pet, data.activity);
@@ -206,7 +206,7 @@ const shortText = (text, n = 18) => {
 //   leech 忘得最多的那张, neglect 很久没碰、还有好多新词的卡片集, week 这 7 天 (「学得怎么样」用)
 export function insight(store, now = Date.now()) {
   const data = store.data;
-  const sets = store.allSets().filter((s) => s.kind !== 'quiz');
+  const sets = store.allSets();
   const today0 = startOfDay(now);
   const from7 = daysLater(now, -6); // 今天和前 6 天
   const from14 = daysLater(now, -13);

@@ -17,7 +17,7 @@ export function renderStats({ store, go }, id = null) {
   if (id && !scope) {
     return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '找不到这个卡片集'), h('a', { class: 'btn primary', href: '#/stats' }, '看全部的统计')) };
   }
-  const sets = (id ? store.setsOf(id) : store.allSets()).filter((s) => s.kind !== 'quiz');
+  const sets = id ? store.setsOf(id) : store.allSets();
   const here = `#/stats${id ? `/${encodeURIComponent(id)}` : ''}`;
   const review = `#/review${id ? `/${encodeURIComponent(id)}` : ''}`; // 只看一个卡片集的: 去复习也只复习它
   const redraw = () => {
@@ -36,7 +36,6 @@ export function renderStats({ store, go }, id = null) {
     store.allFolders().map((f) => h('option', { value: FOLDER_PREFIX + f.id, selected: id === FOLDER_PREFIX + f.id }, `📁 ${f.name || '未命名文件夹'}`)),
     store
       .allSets()
-      .filter((s) => s.kind !== 'quiz')
       .map((s) => h('option', { value: s.id, selected: id === s.id }, s.title || '未命名卡片集')),
   );
 

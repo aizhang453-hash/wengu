@@ -16,7 +16,7 @@ export function examInfo(store, now = Date.now()) {
   const exam = nearestExam([...store.data.sets, ...store.data.folders], now);
   if (!exam || exam.days > 1) return null;
   const today = todayAll(store);
-  const sets = store.allSets().filter((s) => s.kind !== 'quiz');
+  const sets = store.allSets();
   let leeches = 0;
   let starred = 0;
   for (const set of sets) {
