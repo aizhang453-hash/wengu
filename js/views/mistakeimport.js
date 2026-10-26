@@ -8,30 +8,15 @@ import { putMedia, shrinkImage } from '../media.js';
 import { LETTERS, MAX_IMAGES, mistakeProblem, kindOf } from '../mistakes.js';
 import { aiPrompt, parseMistakeImport, findSame, ImportError } from '../mistakeimport.js';
 import { queueMistakes } from './mistakeedit.js';
+import { promptControls } from './aiprompt.js';
 
 const ACCEPT = '.json,.txt,.md,application/json,text/plain';
 const MAX_FILE = 5_000_000;
 
 export function renderMistakeImport({ store, go }) {
-  const prompt = aiPrompt();
+  const ask = promptControls(aiPrompt());
   let items = []; // 认出来的: [{ mistake, problem 还差什么, same 错题集里一样的那道, on 勾没勾 }]
   let added = false;
-
-  // ---- ① 给 AI 的话 ----
-  const promptBox = h('textarea', { class: 'input mi-prompt', rows: 12, readonly: true, 'aria-label': '给 AI 的话' });
-  promptBox.value = prompt;
-  const promptDetails = h('details', { class: 'mi-prompt-box' }, h('summary', {}, '看看这段话'), promptBox);
-  async function copyPrompt() {
-    try {
-      await navigator.clipboard.writeText(prompt);
-      toast('复制好了: 去 AI 那儿粘贴, 再发题目照片');
-    } catch {
-      promptDetails.open = true;
-      promptBox.focus();
-      promptBox.select();
-      toast('复制不了, 下面的字选好了, 自己复制一下');
-    }
-  }
 
   // ---- ② AI 回的 ----
   const pasteEl = h('textarea', { class: 'input mi-paste', rows: 6, placeholder: 'AI 回的整段直接粘贴进来 (前后多的话不要紧)', 'aria-label': 'AI 回的', oninput: () => read(pasteEl.value) });
@@ -247,8 +232,8 @@ export function renderMistakeImport({ store, go }) {
           {},
           h('strong', {}, '复制给 AI 的话'),
           h('p', { class: 'muted small' }, '打开 Claude (或者别的能看图的 AI: ChatGPT、豆包、Kimi……), 粘贴这段话, 再把题目的照片 / 截图发过去。照片上看不出来的, 加一句「我选的是 C」「答案是 B」。'),
-          h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: copyPrompt }, '📋 复制给 AI 的话')),
-          promptDetails,
+          h('div', { class: 'row' }, ask.button),
+          ask.details,
         ),
         h(
           'li',

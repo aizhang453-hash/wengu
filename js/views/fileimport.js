@@ -7,7 +7,7 @@ import { SQLiteError } from '../sqlite.js';
 import { putMediaMany, shrinkImage } from '../media.js';
 import { stripMarks } from '../rich.js';
 
-export const ACCEPT = '.xlsx,.xlsm,.csv,.tsv,.txt,.apkg,.colpkg';
+export const ACCEPT = '.xlsx,.xlsm,.csv,.tsv,.txt,.json,.md,.apkg,.colpkg';
 const BIG = 2000; // 卡片多过这么多张, 加进编辑页会很慢, 建议直接建成卡片集
 
 // onText(text, title): 普通文字, 放进粘贴框
@@ -24,7 +24,7 @@ export function fileImportPanel({ onText, onCards, onSets }) {
   const el = h(
     'div',
     { class: 'file-pick' },
-    h('div', { class: 'file-pick-row' }, pickBtn, h('span', { class: 'muted small' }, 'Excel (.xlsx)、CSV、Anki 卡组 (.apkg) 或者 .txt, 也可以直接拖进来')),
+    h('div', { class: 'file-pick-row' }, pickBtn, h('span', { class: 'muted small' }, 'Excel (.xlsx)、CSV、Anki 卡组 (.apkg)、.txt, AI 给的 .json 也行; 也可以直接拖进来')),
     input,
     panel,
   );

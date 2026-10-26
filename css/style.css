@@ -7700,19 +7700,37 @@ body.has-pet main {
   margin: 4px 0 8px;
 }
 
-.mi-prompt-box {
+/* 复制给 AI 的话 (错题、卡片都用) */
+.ai-prompt-box {
   margin-top: 8px;
 }
 
-.mi-prompt-box summary {
+.ai-prompt-box summary {
   color: var(--muted);
+  font-weight: 400;
   cursor: pointer;
 }
 
-.mi-prompt {
+.ai-prompt {
   margin-top: 6px;
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+/* 编辑页「导入」里的拍照让 AI 做 */
+.ai-cards {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.ai-cards p {
+  margin: 2px 0 0;
+}
+
+.import-box .ai-cards .btn {
+  margin-top: 8px;
 }
 
 .mi-paste {
