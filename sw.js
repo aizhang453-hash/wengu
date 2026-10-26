@@ -103,6 +103,7 @@ const FILES = [
   'js/views/review.js',
   'js/views/search.js',
   'js/views/set.js',
+  'js/views/settings.js',
   'js/views/share.js',
   'js/views/stats.js',
   'js/views/sync.js',

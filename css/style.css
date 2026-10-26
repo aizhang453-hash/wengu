@@ -730,15 +730,42 @@ a.today-stat:hover .today-label {
 }
 
 /* ---- 卡片集页 ---- */
+.set-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.set-head h1 {
+  flex: 1 1 320px;
+  margin-bottom: 4px;
+}
+
+.set-head .row {
+  margin-top: 6px;
+}
+
+.set-meta {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.set-meta a {
+  color: var(--muted);
+}
+
 .description {
-  margin: 0 0 6px;
+  margin: 0 0 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 10px;
   margin: 18px 0;
 }
@@ -746,28 +773,80 @@ a.today-stat:hover .today-label {
 .mode {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
+  font: inherit;
+  text-align: left;
   text-decoration: none;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
 }
 
-a.mode:hover {
-  border-color: var(--accent);
+a.mode:hover,
+button.mode:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.mode-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .mode-name {
-  font-weight: 650;
+  font-weight: 600;
+}
+
+.mode-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .mode.disabled {
   box-shadow: none;
   background: transparent;
-  opacity: 0.6;
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 选游戏 */
+.game-pick {
+  display: grid;
+  gap: 6px;
+}
+
+.game-pick-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.game-pick-item:hover {
+  background: var(--surface-2);
+}
+
+.game-pick-item.disabled {
+  opacity: 0.55;
+}
+
+.game-pick-name {
+  font-weight: 600;
 }
 
 .list-head {
@@ -797,8 +876,8 @@ a.mode:hover {
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
   gap: 4px 16px;
   align-items: start;
-  padding: 12px 12px 12px 16px;
-  border: 1px solid var(--border);
+  padding: 12px 12px 12px 18px;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   /* 几百张卡片的列表: 看不到的先不排版, 打开快 */
@@ -832,13 +911,32 @@ a.mode:hover {
 
 .card-side.def {
   padding-left: 16px;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--line);
 }
 
 .card-row-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+
+/* 不常用的 (查词典、暂停): 电脑上指到这一行才出来, 手机上不显示 */
+@media (hover: hover) {
+  .card-row .row-extra {
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  .card-row:hover .row-extra,
+  .card-row:focus-within .row-extra {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .card-row .row-extra {
+    display: none;
+  }
 }
 
 .empty-note {
@@ -860,7 +958,7 @@ a.mode:hover {
     padding-left: 0;
     border-left: none;
     padding-top: 6px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--line);
   }
 
   .card-row-tools {
@@ -3467,18 +3565,18 @@ a.card-row.search-hit:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 14px;
+  gap: 12px 16px;
   margin: 6px 0 14px;
-  padding: 12px 16px;
-  border: 1px dashed var(--border);
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .plan-panel.on {
-  border-style: solid;
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-left-color: var(--accent);
 }
 
 .plan-text {
@@ -3486,12 +3584,19 @@ a.card-row.search-hit:hover {
   min-width: 0;
 }
 
+.plan-desc {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .done-chip {
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: var(--good-soft);
   color: var(--good);
-  font-weight: 650;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .plan-field {
@@ -7969,4 +8074,62 @@ body.has-pet main {
 
 .btn.small.icon-only {
   width: 34px;
+}
+
+/* ==== 设置 ==== */
+.settings-page {
+  max-width: 720px;
+}
+
+.settings-group h2 {
+  margin: 28px 0 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+}
+
+.settings-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 18px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+
+.settings-text {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-label {
+  font-weight: 550;
+}
+
+.settings-desc {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.settings-value {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 6px;
 }

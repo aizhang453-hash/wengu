@@ -12,7 +12,7 @@ import { dueTomorrow, leechAlert, LEECH } from '../srs.js';
 import { reviewCount } from '../revlog.js';
 import { reviewedToday, mixIn, newCards, newToday, plannedSets, planOf, shareOf } from '../plan.js';
 import { CUSTOM, PRACTICE, customCards } from '../custom.js';
-import { todayText, planLine, openCapDialog, openRetentionDialog, dateText, todayAll, laterText, percent } from './plan.js';
+import { todayText, planLine, dateText, todayAll, laterText } from './plan.js';
 import { openOptimizeDialog } from './optimize.js';
 
 const PREFS_KEY = 'wengu:review-prefs';
@@ -307,10 +307,8 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   }
 
   // 改了每天的上限、想记住的把握、复习排法: 正在背的不打断 (只改按钮上的字), 已经做完的重新算一下今天的
+  // 复习的设置改了 (按自己的记录优化以后): 按新的重新算
   function settingsChanged() {
-    fill(capBtn, icon('gear', 16), ` 每天最多复习 ${store.reviewCap} 张`);
-    fill(retBtn, `🎯 想记住 ${percent(store.retention)}`);
-    fill(optBtn, store.data.settings.fsrs ? '📈 复习排法: 按我的记录' : '📈 复习排法: 默认');
     // 做完了的: 今天的、一张都没背过的重新算一下今天的; 背过的 (自定义学习、能撤销) 留着, 只更新下面的字
     if (!queue.length) return mode === 'today' && !history.length ? start() : finish({ quiet: true });
     // 按钮上的「几天后」换成新的 (翻过来了的还是翻着)
@@ -493,10 +491,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   }
   document.addEventListener('keydown', onKey);
 
-  const capBtn = h('button', { class: 'btn small', onclick: () => openCapDialog({ store, onSaved: settingsChanged }) });
-  const retBtn = h('button', { class: 'btn small', title: '到该复习那天还记得的把握: 越高复习得越勤', onclick: () => openRetentionDialog({ store, onSaved: settingsChanged }) });
-  const optBtn = h('button', { class: 'btn small', onclick: () => openOptimizeDialog({ store, onChanged: settingsChanged }) });
-  const customBtn = h('button', { class: 'btn small', title: '再学几个新词、提前复习、今天忘了的再过一遍、难记卡……', onclick: openCustom }, '自定义学习');
+  const customBtn = h('button', { class: 'btn small quiet', type: 'button', title: '加学新词、提前复习、重练遗忘或难记的卡片', onclick: openCustom }, '自定义学习');
   settingsChanged();
   // 从考前清单来的: 直接练难记卡 / 星标的
   if (PRACTICE.has(startWith) && startWith !== 'forgot') start(startWith);
@@ -532,9 +527,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
       ' 音效',
     ),
     customBtn,
-    capBtn,
-    retBtn,
-    optBtn,
+    h('a', { class: 'btn small quiet', href: '#/settings', title: '每日复习上限、目标记忆率、复习参数' }, icon('gear', 16), '复习设置'),
   );
 
   return {

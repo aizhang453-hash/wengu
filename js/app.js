@@ -9,6 +9,7 @@
 //                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道)
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
+//   #/settings            设置 (复习、同步、备份、温温)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的; #/review/practice:leech 直接练难记卡、:starred 星标的)
 //   #/stats               统计 (#/stats/<卡片集或 folder:文件夹>: 只看那里的)
@@ -56,6 +57,7 @@ import { renderMistakes } from './views/mistakes.js';
 import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
 import { renderMistakeImport } from './views/mistakeimport.js';
+import { renderSettings } from './views/settings.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
@@ -72,7 +74,7 @@ document.addEventListener('visibilitychange', () => {
 
 // 数据变了 (别的标签页存了、别的设备同步来了、过了一夜): 首页、卡片集页这些重画, 停在原来的地方;
 // 正在背、正在编辑的不打断。开着窗口 (正在改卡片、定计划) 时先不画, 关了再画, 免得打了一半的字没了
-const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats', 'arcade'];
+const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats', 'arcade', 'settings'];
 let refreshLater = null;
 function refreshPage(pages = REFRESHABLE) {
   if (!pages.includes(current?.page)) return;
@@ -136,6 +138,7 @@ function parse(hash) {
   if (parts[0] === 'stats') return { page: 'stats', id: parts[1] ?? null };
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
+  if (parts[0] === 'settings') return { page: 'settings' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
@@ -180,7 +183,7 @@ function render() {
   document.body.classList.toggle('in-game', inGame);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', inGame ? '#0a092d' : '#b8372e');
   if (!inGame) outsideHash = hash;
-  const ctx = { store, go, syncer, from: outsideHash };
+  const ctx = { store, go, syncer, pet, from: outsideHash };
   let view;
   if (route.page === 'home') view = renderHome(ctx);
   else if (route.page === 'edit') view = renderEdit(ctx, route.id, { openImport: route.openImport });
@@ -205,6 +208,7 @@ function render() {
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id, { practice: route.practice });
   else if (route.page === 'stats') view = renderStats(ctx, route.id);
+  else if (route.page === 'settings') view = renderSettings(ctx);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);
