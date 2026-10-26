@@ -7198,19 +7198,21 @@ body.has-pet main {
 
 .mk-kind-list li {
   display: grid;
-  grid-template-columns: 7em minmax(60px, 1fr) auto auto;
+  grid-template-columns: 12em minmax(60px, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 5px 0;
 }
 
 .mk-kind-name {
+  font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .mk-kind-bar {
-  height: 10px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-2);
@@ -7225,7 +7227,7 @@ body.has-pet main {
 
 @media (max-width: 600px) {
   .mk-kind-list li {
-    grid-template-columns: 6em minmax(40px, 1fr) auto;
+    grid-template-columns: 8.5em minmax(40px, 1fr) auto;
   }
 
   .mk-kind-list li > .muted {

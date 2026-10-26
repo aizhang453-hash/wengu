@@ -45,7 +45,7 @@ const PREFS_KEY = 'wengu:pet';
 const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'search', 'games', 'sync', 'settings', 'arcade']);
 const QUOTE_EVERY = [6 * 60e3, 12 * 60e3]; // 自己念《论语》: 隔 6–12 分钟一次
 
-// 这台设备上的: hidden 不显示, quiet 不自己说话, mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」,
+// 这台设备上的: hidden 不显示, quiet 不自己说话 (没设过算不说: 默认只在点它的时候说话), mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」,
 //   reported 哪天说过「这 7 天学得怎么样」, heardQ / heardT 这一轮念过的《论语》、小窍门 (都说一遍才从头来)
 function loadPrefs() {
   try {
@@ -323,6 +323,7 @@ export function insight(store, now = Date.now()) {
 
 export function setupPet({ store }) {
   let prefs = loadPrefs();
+  const quiet = () => prefs.quiet !== false;
   let page = null;
   let c = null; // 最近算的 situation
   let base = null; // 这次打开网页以后第一次算的 (比一比吃了几口、多了几张难记卡)
@@ -421,7 +422,7 @@ export function setupPet({ store }) {
     draw();
     if (!quoteTimer) scheduleQuote();
     // 有事先说事; 没有事, 今天第一次见面打个招呼
-    if (bubble.hidden && !prefs.quiet && !prefs.mini) {
+    if (bubble.hidden && !quiet() && !prefs.mini) {
       const hello = prefs.greeted !== dayKey();
       if (hello) savePref({ greeted: dayKey() });
       if (events.length) setTimeout(() => shown() && bubble.hidden && sayEvent(), 700);
@@ -561,7 +562,7 @@ export function setupPet({ store }) {
     bubble.hidden = true;
     root.classList.remove('talking');
     draw();
-    if (next && events.length && !prefs.quiet) setTimeout(() => shown() && bubble.hidden && sayEvent(), 1500);
+    if (next && events.length && !quiet()) setTimeout(() => shown() && bubble.hidden && sayEvent(), 1500);
   }
 
   function sayEvent() {
@@ -570,8 +571,8 @@ export function setupPet({ store }) {
     draw();
     if (e.kind === 'hello') {
       const pet = petData();
-      const grown = e.stage > 0 ? `你已经学了 ${e.xp} 次, 我一下就长成「${STAGES[e.stage].name}」了!${e.outfits ? ` 还送你 ${e.outfits} 件装扮。` : ''}` : '我现在还是个蛋。你每学一题就是喂我一口, 喂够了我就孵出来。';
-      say({ text: `你好! 我是小乌龟${pet.name}, 以后住在这个角落陪你学习。${grown} 点我, 我会告诉你今天该做什么。`, action: { label: '去小窝看看', panel: true } });
+      const grown = e.stage > 0 ? `你已学习 ${e.xp} 次，我已成长为「${STAGES[e.stage].name}」。${e.outfits ? `解锁了 ${e.outfits} 件装扮。` : ''}` : '每完成一题，我就会成长一点。';
+      say({ text: `你好，我是小乌龟${pet.name}。${grown}点击我可查看今日建议。`, action: { label: '查看', panel: true } });
       return true;
     }
     say(eventLine(e), { auto: true });
@@ -673,7 +674,7 @@ export function setupPet({ store }) {
     quoteTimer = setTimeout(() => {
       quoteTimer = null;
       const busy = dialogOpen() || document.visibilityState !== 'visible' || !bubble.hidden;
-      if (shown() && !busy && !prefs.quiet && !prefs.mini) say(quote(), { auto: true });
+      if (shown() && !busy && !quiet() && !prefs.mini) say(quote(), { auto: true });
       if (shown()) scheduleQuote();
     }, lo + Math.random() * (hi - lo));
   }
@@ -793,7 +794,7 @@ export function setupPet({ store }) {
       ),
       h('h3', {}, '这台设备上'),
       switchRow({ label: `显示${pet.name}`, desc: '待在首页、卡片集页这些地方的右下角。背卡、测试、游戏、编辑的时候不出来', checked: !prefs.hidden, onchange: (on) => setPrefs({ hidden: !on }) }),
-      switchRow({ label: '自己说话', desc: '每天打个招呼, 时不时念一句《论语》, 长大了、背完了说一声。关了就只在点它的时候说', checked: !prefs.quiet, onchange: (on) => setPrefs({ quiet: !on }) }),
+      switchRow({ label: '主动提示', desc: '每日问候、《论语》摘句、成长提醒；关闭时仅在点击后显示', checked: !quiet(), onchange: (on) => setPrefs({ quiet: !on }) }),
       switchRow({ label: '缩成小圆点', desc: '不占地方, 点一下再出来', checked: Boolean(prefs.mini), onchange: (on) => setPrefs({ mini: on }) }),
     ];
   }

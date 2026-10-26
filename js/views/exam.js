@@ -98,7 +98,7 @@ export function renderExam({ store }, id) {
     );
 
     const typeRows = [
-      ['tf', '判断对错'],
+      ['tf', '判断题'],
       ['mc', '选择题'],
       ['match', '配对'],
       ['written', '拼写题'],

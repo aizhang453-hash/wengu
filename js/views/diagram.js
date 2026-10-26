@@ -12,7 +12,7 @@ function diagramImage(id, box) {
   const img = h('img', { class: 'diagram-img', alt: '标注图', decoding: 'async' });
   mediaURL(id).then((url) => {
     if (url) img.src = url;
-    else box.replaceWith(h('p', { class: 'diagram-missing muted' }, '🖼 这张图还不在这台设备上 (可能还没同步过来), 过一会儿再打开看看。'));
+    else box.replaceWith(h('p', { class: 'diagram-missing muted' }, '图片尚未同步到本设备，请稍后再试。'));
   });
   return img;
 }
@@ -39,7 +39,7 @@ export function diagramFigure(set, { highlight = null, labels = 'number', onPick
         class: `pin${p.cardId === highlight ? ' on' : ''}${highlight && p.cardId !== highlight ? ' dim' : ''}`,
         style: `left:${p.x * 100}%;top:${p.y * 100}%`,
         type: onPick ? 'button' : null,
-        'aria-label': onPick ? `第 ${p.number} 个点` : null,
+        'aria-label': onPick ? `第 ${p.number} 个标注` : null,
         onclick: onPick
           ? (e) => {
               e.stopPropagation();
@@ -72,7 +72,7 @@ export function diagramFigure(set, { highlight = null, labels = 'number', onPick
 export function diagramSection(set) {
   const pins = pinnedCards(set);
   if (!set.diagram) return null;
-  const caption = h('div', { class: 'diagram-caption muted small' }, pins.length ? '点一下图上的数字看是什么' : '图上还没有标点, 去「编辑」里标');
+  const caption = h('div', { class: 'diagram-caption muted small' }, pins.length ? '点击编号查看对应卡片' : '暂无标注，请在编辑页中添加');
   const show = (cardId) => {
     const p = pins.find((x) => x.cardId === cardId);
     if (!p) return;
@@ -80,7 +80,7 @@ export function diagramSection(set) {
     fill(caption, h('strong', {}, `${p.number}. `), rich(p.card.term), p.card.def ? h('span', { class: 'muted' }, ' — ') : null, p.card.def ? rich(p.card.def) : null);
   };
   const figure = diagramFigure(set, { onPick: show });
-  return h('section', { class: 'diagram-section' }, h('h2', {}, `标注图 (${pins.length} 个点)`), figure, caption);
+  return h('section', { class: 'diagram-section' }, h('h2', {}, `标注图 · ${pins.length}`), figure, caption);
 }
 
 // ---- 编辑页里标点 ----
@@ -98,15 +98,15 @@ export function diagramEditor({ diagram, rows, addCard, focusCard, onChange }) {
     fill(box, diagramImage(diagram.image, box), diagram.pins.map((p, i) => pinEl(p, i + 1)));
     box.classList.toggle('placing', Boolean(placing));
     hint.textContent = placing
-      ? '在图上点一下, 放这张卡片的点 (按 Esc 取消)'
+      ? '点击图片放置该卡片的标注（Esc 取消）'
       : diagram.pins.length
-        ? '点图上空白的地方再加一个点; 拖动点可以挪位置; 点一下点跳到它的卡片。'
-        : '在图上点一下要考的地方, 下面会多一张卡片, 写上这个地方叫什么。';
+        ? '点击空白处添加标注，拖动可调整位置，点击标注跳转到卡片。'
+        : '点击需要记忆的位置，将新增一张卡片，填写名称即可。';
   }
 
   function pinEl(p, number) {
     const label = rows().find((r) => r.id === p.cardId)?.label ?? '';
-    const pin = h('button', { class: 'pin', type: 'button', style: `left:${p.x * 100}%;top:${p.y * 100}%`, title: label || `第 ${number} 个点`, 'aria-label': `第 ${number} 个点${label ? `: ${label}` : ''}` }, String(number));
+    const pin = h('button', { class: 'pin', type: 'button', style: `left:${p.x * 100}%;top:${p.y * 100}%`, title: label || `第 ${number} 个标注`, 'aria-label': `第 ${number} 个标注${label ? `：${label}` : ''}` }, String(number));
     let start = null;
     let moved = false;
     pin.addEventListener('pointerdown', (e) => {
@@ -191,7 +191,7 @@ export function renderDiagramPractice({ store }, id) {
   if (pins.length < 2) {
     return {
       title: '标注图',
-      el: h('section', { class: 'empty' }, h('h1', {}, '标注图上至少要有两个点'), h('p', { class: 'muted' }, '在卡片集的「编辑」里加一张图, 在图上标出要考的地方。'), h('a', { class: 'btn primary', href: set ? `${back}/edit` : '#/' }, set ? '去编辑' : '回首页')),
+      el: h('section', { class: 'empty' }, h('h1', {}, '标注图至少需要两个标注'), h('p', { class: 'muted' }, '请在卡片集编辑页中添加图片并标注。'), h('a', { class: 'btn primary', href: set ? `${back}/edit` : '#/' }, set ? '前往编辑' : '返回首页')),
     };
   }
   let queue = [];
@@ -234,11 +234,11 @@ export function renderDiagramPractice({ store }, id) {
     const cont = h('button', { class: 'btn primary', onclick: next }, '继续');
     if (correct) {
       fb.className = 'feedback good';
-      fill(fb, h('strong', {}, '对了!'), ' ', rich(q.card.term), q.card.def ? h('span', { class: 'muted' }, ' — ', rich(q.card.def)) : null);
+      fill(fb, h('strong', {}, '正确'), ' ', rich(q.card.term), q.card.def ? h('span', { class: 'muted' }, ' — ', rich(q.card.def)) : null);
       view.timer = setTimeout(next, 1100);
     } else {
       fb.className = 'feedback bad';
-      fill(fb, h('strong', {}, '不对, 是这个: '), rich(q.card.term), q.card.def ? h('div', { class: 'muted small' }, rich(q.card.def)) : null, h('div', { class: 'row' }, cont));
+      fill(fb, h('strong', {}, '错误，正确答案：'), rich(q.card.term), q.card.def ? h('div', { class: 'muted small' }, rich(q.card.def)) : null, h('div', { class: 'row' }, cont));
       cont.focus();
     }
     stage.next = next;
@@ -253,9 +253,9 @@ export function renderDiagramPractice({ store }, id) {
     const figure = diagramFigure(set, { highlight: q.card.id, labels: 'none' });
     const feedback = h('div', { class: 'feedback', 'aria-live': 'polite' });
     const buttons = q.options.map((opt, i) =>
-      h('button', { class: 'option', onclick: () => choose(i) }, h('span', { class: 'key' }, String(i + 1)), h('span', { class: 'option-text' }, opt ? rich(opt) : '(空)')),
+      h('button', { class: 'option', onclick: () => choose(i) }, h('span', { class: 'key' }, String(i + 1)), h('span', { class: 'option-text' }, opt ? rich(opt) : '（空）')),
     );
-    const view = h('div', { class: 'question diagram-q' }, h('div', { class: 'q-label muted small' }, '这是哪个? · 亮着的那个点'), figure, h('div', { class: 'options-grid' }, buttons), feedback);
+    const view = h('div', { class: 'question diagram-q' }, h('div', { class: 'q-label muted small' }, '识别 · 高亮的标注是哪一项'), figure, h('div', { class: 'options-grid' }, buttons), feedback);
     view.feedback = feedback;
     const choose = (i) => {
       if (phase !== 'question' || !buttons[i]) return;
@@ -292,7 +292,7 @@ export function renderDiagramPractice({ store }, id) {
     view = h(
       'div',
       { class: 'question diagram-q' },
-      h('div', { class: 'q-label muted small' }, '找到它 · 在图上点出来'),
+      h('div', { class: 'q-label muted small' }, '定位 · 在图中点出该位置'),
       h('div', { class: 'q-prompt' }, h('div', { class: 'q-text' }, rich(q.card.term)), sayButton(q.card, 'term', set)),
       figure,
       feedback,
@@ -311,10 +311,10 @@ export function renderDiagramPractice({ store }, id) {
         'div',
         { class: 'summary' },
         h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, firstTry === total ? '🎯' : '🗺️'),
-        h('h2', {}, firstTry === total ? '全对了!' : '练完了'),
-        h('p', { class: 'muted' }, `${total} 道题, ${firstTry} 道第一次就答对`),
-        wrongCards.length ? h('p', {}, '要多看看: ', wrongCards.map((c, i) => [i ? '、' : '', stripMarks(c.term)])) : null,
-        h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: start }, '再练一次'), h('a', { class: 'btn', href: back }, '回卡片集')),
+        h('h2', {}, firstTry === total ? '全部正确' : '练习完成'),
+        h('p', { class: 'muted' }, `共 ${total} 题，首次答对 ${firstTry} 题`),
+        wrongCards.length ? h('p', {}, '需加强：', wrongCards.map((c, i) => [i ? '、' : '', stripMarks(c.term)])) : null,
+        h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: start }, '再练一次'), h('a', { class: 'btn', href: back }, '返回卡片集')),
       ),
     );
   }
@@ -344,7 +344,7 @@ export function renderDiagramPractice({ store }, id) {
       h('a', { class: 'back', href: back }, `← ${set.title || '未命名卡片集'}`),
       h('span', { class: 'meter thin' }, bar),
       stage,
-      h('p', { class: 'muted small keys' }, '键盘: 「这是哪个」按 1–4 · 回车继续'),
+      h('p', { class: 'muted small keys' }, '快捷键：识别题 1–4 · 回车 继续'),
     ),
     cleanup: () => {
       clearTimeout(stage.firstChild?.timer);

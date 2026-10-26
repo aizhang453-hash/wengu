@@ -70,7 +70,7 @@ function todaySection(store, sets, log, now, review) {
   const t = todayStats(sets, log, now);
   const [today] = retentionStats(sets, log, now, [1]);
   return section(
-    '今天',
+    '今日',
     t.reviews
       ? h(
           'div',

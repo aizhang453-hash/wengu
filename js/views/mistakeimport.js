@@ -241,7 +241,7 @@ export function renderMistakeImport({ store, go }) {
           h('strong', {}, '粘贴 AI 的回复'),
           h('p', { class: 'muted small' }, '复制完整回复后粘贴；若 AI 返回文件（.json、.txt），可选择或拖入。'),
           pasteEl,
-          h('div', { class: 'file-pick-row' }, h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '选文件'), h('span', { class: 'muted small' }, '.json、.txt'), fileInput),
+          h('div', { class: 'file-pick-row' }, h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '选择文件'), h('span', { class: 'muted small' }, '.json、.txt'), fileInput),
         ),
         h('li', {}, h('strong', {}, '核对并加入'), resultEl),
       ),

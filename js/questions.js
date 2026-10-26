@@ -6,7 +6,7 @@ import { normalize } from './grade.js';
 export const TYPE_NAMES = {
   mc: '选择题',
   tf: '判断题',
-  written: '打字',
+  written: '拼写题',
   flash: '单词卡',
   match: '配对',
 };
