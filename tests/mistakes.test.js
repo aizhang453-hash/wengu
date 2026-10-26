@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newMistake, cleanMistake, mistakeProblem, tidyMistake, parseNumber, answerChoices, checkInput, checkMistake, answerLabel, mineLabel, firstReview, reviewAfter, mistakeStatus, dueMistakes, matchesSearch, mergeMistake, MASTER_STREAK } from '../js/mistakes.js';
+import { newMistake, cleanMistake, mistakeProblem, tidyMistake, parseNumber, answerChoices, checkInput, checkMistake, answerLabel, mineLabel, firstReview, reviewAfter, mistakeStatus, dueMistakes, matchesSearch, mergeMistake, attempted, scheduleNote, MASTER_STREAK } from '../js/mistakes.js';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { DAY } from '../js/srs.js';
@@ -143,6 +143,27 @@ test('存: 记一道明天开始排, 改题目不动重做记录; 删了记下�
   store.deleteMistake('m1');
   assert.equal(store.allMistakes().length, 0);
   assert.ok(store.data.deleted['mistake:m1'] > 0);
+});
+
+test('还没做过的练习题 (没记我的答案): 今天就排上; 做错的明天开始', () => {
+  const store = new Store(memoryStorage());
+  const now = new Date(2026, 9, 17, 9).getTime();
+  const practice = store.putMistake(sat({ id: 'p1', mine: -1 }), now);
+  assert.equal(practice.review.due, now);
+  assert.equal(mistakeStatus(practice, now), 'due');
+  const blank = store.putMistake({ ...newMistake('p2'), type: 'input', question: '2+2=?', answer: '4' }, now);
+  assert.equal(blank.review.due, now);
+  const wrong = store.putMistake(sat({ id: 'w1' }), now);
+  assert.equal(wrong.review.due, new Date(2026, 9, 18).getTime());
+  assert.deepEqual(
+    dueMistakes(store.allMistakes(), now).map((m) => m.id),
+    ['p1', 'p2'],
+  );
+  assert.equal(attempted(sat()), true);
+  assert.equal(attempted({ ...blank, mineText: ' 5 ' }), true);
+  assert.equal(scheduleNote([wrong]), '明日开始安排重做');
+  assert.equal(scheduleNote([practice, blank]), '今日即可练习');
+  assert.equal(scheduleNote([practice, wrong]), '其中 1 道未作答，今日即可练习');
 });
 
 test('一下删好几道: 存一次, 都记下删除时间; 同步回来不会再出现', () => {

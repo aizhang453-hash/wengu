@@ -1,4 +1,4 @@
-// 拍照让 AI 记错题: 题目的照片和 aiPrompt() 这段话一起发给 AI (Claude、ChatGPT……), AI 回一段 JSON
+// 拍照让 AI 记错题 (做错的题、还没做过的练习题都行): 题目的照片和 aiPrompt() 这段话一起发给 AI (Claude、ChatGPT……), AI 回一段 JSON
 // (或者一个 .json 文件), 粘贴 / 拖进来就认成错题, 不用一个字一个字打。
 // AI 写得不太规矩的也尽量认: 前后有别的话、```json 包着、一道题一段; 选项前面带「A.」; 答案写字母、写选项的字、写「选 B」;
 // 字段名写成中文; 数学写成 LaTeX (\frac{3}{4}、$x^2$) —— 换成普通的字 (3/4、x^2)。
@@ -13,12 +13,12 @@ export const MAX_IMPORT = 100; // 一次最多认这么多道
 
 export class ImportError extends Error {}
 
-// 给 AI 看的格式 (照着写), 两道: 一道选择题、一道填空题
+// 给 AI 看的格式 (照着写), 两道: 一道做错的选择题、一道还没做过的填空题
 const EXAMPLE = {
   wengu: FORMAT,
   mistakes: [
     { type: 'choice', passage: '题目前面的文章 / 材料 (没有就空着)', question: '题目', options: ['选项 A 的字', '选项 B 的字', '选项 C 的字', '选项 D 的字'], answer: 'B', mine: 'C', note: '为什么错 / 解析', kind: '词汇题' },
-    { type: 'input', passage: '', question: '填空题的题目', options: [], answer: '3/4', mine: '0.5', note: '为什么错 / 解析', kind: '代数' },
+    { type: 'input', passage: '', question: '填空题的题目', options: [], answer: '3/4', mine: '', note: '解题思路 / 要点', kind: '代数' },
   ],
 };
 const EXAMPLE_QUESTIONS = new Set(EXAMPLE.mistakes.map((m) => m.question));
@@ -28,7 +28,9 @@ export function aiPrompt() {
   const kinds = Object.entries(KINDS)
     .map(([exam, list]) => `  ${exam}: ${list.join('、')}`)
     .join('\n');
-  return `请把照片里我做错的题抄成下面格式的 JSON, 我要导入错题集。
+  return `请把照片里的题目抄成下面格式的 JSON, 我要导入错题集。
+
+照片里的题可能是我做错的, 也可能是还没做过的练习题 (比如老师布置的)。不管做没做过、做对做错, 照片里的每一道题都要抄进来; 不要因为「没有错题」「没有作答」就不抄, 也不要只回一句话。
 
 要求:
 - 照着照片一字不差地抄, 英文题就写英文, 不要翻译; 文章 / 材料整段抄完, 不要省略
@@ -39,8 +41,8 @@ export function aiPrompt() {
 - options: 选项的字, 前面不要带 A. B.; 填空题写 []
 - answer: 对的答案。选择题写字母 (比如 "B"); 填空题写答案 (比如 "3/4", 几个都对的用逗号隔开)。
   照片上看得出来就照着写; 看不出来、我也没说的, 你自己做一遍, 并且在 note 开头写「⚠ 答案是 AI 做的, 核对一下」
-- mine: 我当时选的字母 (填空题写我当时写的); 照片上没标、我也没说就写 ""
-- note: 用中文简短讲讲 (两三句): 对的为什么对, 我选的错在哪, 下次怎么避开
+- mine: 我当时选的字母 (填空题写我当时写的); 还没做过的题、照片上没标、我也没说的写 ""
+- note: 用中文简短讲讲 (两三句): 做错的题讲对的为什么对、我错在哪、下次怎么避开; 没做过的题讲解题思路和要点
 - kind: 题型。SAT 的从这些里挑一个:
 ${kinds}
   别的考试写个短的 (20 个字以内); 拿不准就写 ""

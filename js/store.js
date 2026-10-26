@@ -1,7 +1,7 @@
 import { schedule, replay, dayKey, useParameters, isLapse, cleanRetention, startOfDay, daysLater, DAY, DEFAULT_RETENTION } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { quizToMistakes } from './quiz.js';
-import { cleanMistake, firstReview, reviewAfter, mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
+import { cleanMistake, firstReview, reviewAfter, mergeMistake, attempted, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
 import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
@@ -568,14 +568,14 @@ export class Store {
     return this.data.mistakes.find((m) => m.id === id) ?? null;
   }
 
-  // 新记的明天开始排进复习; 改题目不动重做记录
+  // 新记的: 做错的明天开始排进复习, 还没做过的今天就排上; 改题目不动重做记录
   putMistake(mistake, now = Date.now()) {
     const clean = cleanMistake({ ...mistake, updatedAt: now });
     const i = this.data.mistakes.findIndex((m) => m.id === clean.id);
     const prev = this.data.mistakes[i];
     if (i === -1) {
       clean.createdAt = now;
-      clean.review ??= firstReview(now);
+      clean.review ??= firstReview(now, !attempted(clean));
       this.data.mistakes.push(clean);
     } else {
       clean.review = prev.review;
