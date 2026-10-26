@@ -11,7 +11,7 @@ export function renderGames({ store }, key = null) {
 
   const tabs = h(
     'div',
-    { class: 'game-tabs', role: 'tablist', 'aria-label': '玩哪个游戏' },
+    { class: 'game-tabs', role: 'tablist', 'aria-label': '选择游戏' },
     GAMES.map((x) =>
       h(
         'a',
@@ -29,14 +29,14 @@ export function renderGames({ store }, key = null) {
     el: h(
       'section',
       { class: 'games-hub' },
-      h('a', { class: 'back', href: '#/' }, '← 主页'),
-      h('h1', {}, '🎮 学习游戏'),
-      h('p', { class: 'muted' }, '挑一个游戏, 再挑拿哪个卡片集来玩。学累了想玩别的? 去 ', h('a', { href: '#/arcade' }, '游戏厅'), '。'),
+      h('a', { class: 'back', href: '#/' }, '← 首页'),
+      h('h1', {}, '学习游戏'),
+      h('p', { class: 'muted' }, '选择游戏和卡片集。休闲游戏见', h('a', { href: '#/arcade' }, '游戏厅'), '。'),
       tabs,
-      h('h2', { class: 'games-title' }, `拿哪个卡片集玩「${g.name}」`),
+      h('h2', { class: 'games-title' }, `选择卡片集 · ${g.name}`),
       hasSets
-        ? choiceList(store, current, { tag: last?.game === current && last.set ? { [last.set]: '上次玩的' } : {} })
-        : h('div', { class: 'empty-note' }, h('p', { class: 'muted' }, '还没有卡片集。先建一个, 再来玩。'), h('a', { class: 'btn primary', href: '#/new' }, '＋ 新建卡片集')),
+        ? choiceList(store, current, { tag: last?.game === current && last.set ? { [last.set]: '上次' } : {} })
+        : h('div', { class: 'empty-note' }, h('p', { class: 'muted' }, '暂无卡片集。'), h('a', { class: 'btn primary', href: '#/new' }, '新建卡片集')),
     ),
   };
 }

@@ -4,7 +4,7 @@ import { h, toast, openDialog, icon } from '../dom.js';
 import { MARKS, toggleMark } from '../rich.js';
 
 // 小铅笔按钮。onEdit 时打开下面的窗口
-export function editButton(onclick, { title = '改这张卡片' } = {}) {
+export function editButton(onclick, { title = '编辑卡片' } = {}) {
   return h(
     'button',
     {
@@ -38,15 +38,15 @@ export function editCardDialog({ store, setId, card, onSaved = () => {} }) {
     }
   };
   const area = (value, label) => h('textarea', { class: 'input', rows: 3, value, 'aria-label': label, onkeydown: keys });
-  const termEl = area(card.term, '词');
-  const defEl = area(card.def, '解释');
+  const termEl = area(card.term, '词语');
+  const defEl = area(card.def, '释义');
   const hasMedia = card.image || card.termAudio || card.defAudio;
 
   function save() {
     const term = termEl.value.trim();
     const def = defEl.value.trim();
     if (!term && !def && !card.image) {
-      toast('词和解释不能都空着');
+      toast('词语和释义不能同时为空');
       termEl.focus();
       return;
     }
@@ -57,23 +57,23 @@ export function editCardDialog({ store, setId, card, onSaved = () => {} }) {
     try {
       store.updateCard(setId, card.id, { term, def });
     } catch {
-      toast('存不下了: 浏览器的空间满了');
+      toast('存储空间已满，无法保存');
       return;
     }
     Object.assign(card, { term, def });
     d.close();
-    toast('改好了');
+    toast('已保存');
     onSaved(card);
   }
 
   const d = openDialog({
-    title: '改这张卡片',
+    title: '编辑卡片',
     body: [
-      h('label', { class: 'ask-label' }, '词'),
+      h('label', { class: 'ask-label' }, '词语'),
       termEl,
-      h('label', { class: 'ask-label' }, '解释'),
+      h('label', { class: 'ask-label' }, '释义'),
       defEl,
-      h('p', { class: 'muted small' }, 'Ctrl + B 加粗, Ctrl + I 斜体, Ctrl + Enter 保存。', hasMedia ? '图片和录音要到「编辑」页去改。' : ''),
+      h('p', { class: 'muted small' }, 'Ctrl+B 加粗 · Ctrl+I 斜体 · Ctrl+Enter 保存。', hasMedia ? '图片和录音请在编辑页修改。' : ''),
     ],
     footer: [h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, '取消'), h('button', { class: 'btn primary', type: 'button', onclick: save }, '保存')],
   });

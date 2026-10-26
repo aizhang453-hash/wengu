@@ -12,7 +12,7 @@ export function renderSearch({ store }, query = '') {
   const input = h('input', {
     class: 'input big',
     type: 'search',
-    placeholder: '搜卡片集的名字、词、解释',
+    placeholder: '搜索卡片集、词语、释义',
     value: query,
     'aria-label': '搜索',
     oninput: () => {
@@ -24,14 +24,14 @@ export function renderSearch({ store }, query = '') {
 
   function draw(q) {
     if (!q.trim()) {
-      results.replaceChildren(h('p', { class: 'muted' }, '打几个字, 在所有卡片集里找。'));
+      results.replaceChildren(h('p', { class: 'muted' }, '输入关键词，在全部卡片集中搜索。'));
       return;
     }
     const { sets, cards } = search(store.allSets(), q);
     const parts = [];
     if (sets.length) {
       parts.push(
-        h('h2', {}, `卡片集 (${sets.length})`),
+        h('h2', {}, `卡片集 · ${sets.length}`),
         h(
           'ul',
           { class: 'set-grid' },
@@ -52,7 +52,7 @@ export function renderSearch({ store }, query = '') {
     }
     if (cards.length) {
       parts.push(
-        h('h2', {}, `卡片 (${cards.length}${cards.length >= 200 ? '+' : ''})`),
+        h('h2', {}, `卡片 · ${cards.length}${cards.length >= 200 ? '+' : ''}`),
         h(
           'ul',
           { class: 'card-list' },
@@ -72,7 +72,7 @@ export function renderSearch({ store }, query = '') {
         ),
       );
     }
-    if (!parts.length) parts.push(h('p', { class: 'muted' }, `没找到「${q}」。`));
+    if (!parts.length) parts.push(h('p', { class: 'muted' }, `未找到「${q}」。`));
     results.replaceChildren(...parts);
   }
 

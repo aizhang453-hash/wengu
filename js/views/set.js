@@ -296,7 +296,8 @@ function levelBadge(level) {
 const MODE_ICONS = { cards: 'cards', learn: 'bulb', test: 'list', game: 'game', pin: 'folder' };
 const modeIcon = (key) => h('span', { class: 'mode-icon' }, icon(MODE_ICONS[key] ?? key, 20));
 
-function mode(key, name, hint, href, enabled) {
+// 学习方式的一格 (卡片集页、文件夹页都用)
+export function mode(key, name, hint, href, enabled) {
   if (!enabled) return h('div', { class: 'mode disabled', 'aria-disabled': 'true' }, modeIcon(key), h('span', { class: 'mode-name' }, name), h('span', { class: 'mode-hint' }, '请先添加卡片'));
   return h('a', { class: 'mode', href }, modeIcon(key), h('span', { class: 'mode-name' }, name), h('span', { class: 'mode-hint' }, hint));
 }

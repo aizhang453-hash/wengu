@@ -61,8 +61,8 @@ export function renderCards({ store }, id) {
       el: h(
         'section',
         { class: 'empty' },
-        h('h1', {}, set ? '这个卡片集还没有卡片' : '找不到这个卡片集'),
-        h('a', { class: 'btn primary', href: set ? `${base}/edit` : '#/' }, set ? '去加卡片' : '回首页'),
+        h('h1', {}, set ? '该卡片集暂无卡片' : '卡片集不存在'),
+        h('a', { class: 'btn primary', href: set ? `${base}/edit` : '#/' }, set ? '添加卡片' : '返回首页'),
       ),
     };
   }
@@ -110,7 +110,7 @@ export function renderCards({ store }, id) {
   const faceBack = h('div', { class: 'face back' });
   const cardEl = h(
     'div',
-    { class: 'flashcard', tabindex: 0, role: 'button', 'aria-label': '单词卡, 点一下翻面' },
+    { class: 'flashcard', tabindex: 0, role: 'button', 'aria-label': '单词卡，点击翻面' },
     h('div', { class: 'flashcard-inner' }, faceFront, faceBack),
   );
   const keysStrip = h('div', { class: 'keys-strip' });
@@ -123,7 +123,7 @@ export function renderCards({ store }, id) {
     onchange: (e) => setPref('track', e.target.checked),
   });
   const center = h('div', { class: 'cc-center' });
-  const undoBtn = h('button', { class: 'icon-btn tool', title: '撤销 (Z)', 'aria-label': '撤销', onclick: () => undo() }, icon('undo'));
+  const undoBtn = h('button', { class: 'icon-btn tool', title: '撤销（Z）', 'aria-label': '撤销', onclick: () => undo() }, icon('undo'));
   const shuffleBtn = h(
     'button',
     { class: 'icon-btn tool', title: '打乱顺序', 'aria-label': '打乱顺序', onclick: () => setPref('shuffle', !prefs.shuffle) },
@@ -131,7 +131,7 @@ export function renderCards({ store }, id) {
   );
   const playBtn = h('button', { class: 'icon-btn tool', 'aria-label': '自动播放', onclick: () => togglePlay() }, icon('play'));
   const settingsBtn = h('button', { class: 'icon-btn tool', title: '设置', 'aria-label': '设置', onclick: () => openSettings() }, icon('gear'));
-  const fullBtn = h('button', { class: 'icon-btn tool', title: '全屏 (F)', 'aria-label': '全屏', onclick: () => toggleFull() }, icon('expand'));
+  const fullBtn = h('button', { class: 'icon-btn tool', title: '全屏（F）', 'aria-label': '全屏', onclick: () => toggleFull() }, icon('expand'));
   const page = h('section', { class: 'cards-page' });
 
   // 点一下翻面; 开着「跟踪进度」时手机上左右滑 = 还不会 / 会了
@@ -286,8 +286,8 @@ export function renderCards({ store }, id) {
         h('strong', {}, ' 快捷键 '),
         ' 按 ',
         h('kbd', {}, '空格'),
-        ' 或点卡片翻面',
-        prefs.track ? [' · ', h('kbd', {}, '←'), ' 还不会 ', h('kbd', {}, '→'), ' 会了'] : [' · ', h('kbd', {}, '←'), ' ', h('kbd', {}, '→'), ' 上一张 / 下一张'],
+        ' 或点击卡片翻面',
+        prefs.track ? [' · ', h('kbd', {}, '←'), ' 不会 ', h('kbd', {}, '→'), ' 会'] : [' · ', h('kbd', {}, '←'), ' ', h('kbd', {}, '→'), ' 上一张 / 下一张'],
       ),
     );
     drawTools();
@@ -318,23 +318,23 @@ export function renderCards({ store }, id) {
       center.replaceChildren(
         h(
           'button',
-          { class: 'round-choice bad', title: '还不会 (←)', 'aria-label': '还不会', disabled: finished, onclick: () => mark(false) },
+          { class: 'round-choice bad', title: '不会（←）', 'aria-label': '不会', disabled: finished, onclick: () => mark(false) },
           icon('x', 22),
           still ? h('span', { class: 'tally' }, String(still)) : null,
         ),
         counter,
         h(
           'button',
-          { class: 'round-choice good', title: '会了 (→)', 'aria-label': '会了', disabled: finished, onclick: () => mark(true) },
+          { class: 'round-choice good', title: '会（→）', 'aria-label': '会', disabled: finished, onclick: () => mark(true) },
           icon('check', 22),
           knew ? h('span', { class: 'tally' }, String(knew)) : null,
         ),
       );
     } else {
       center.replaceChildren(
-        h('button', { class: 'round-choice', title: '上一张 (←)', 'aria-label': '上一张', disabled: index === 0 && !finished, onclick: prev }, icon('left', 22)),
+        h('button', { class: 'round-choice', title: '上一张（←）', 'aria-label': '上一张', disabled: index === 0 && !finished, onclick: prev }, icon('left', 22)),
         counter,
-        h('button', { class: 'round-choice', title: '下一张 (→)', 'aria-label': '下一张', disabled: finished, onclick: next }, icon('right', 22)),
+        h('button', { class: 'round-choice', title: '下一张（→）', 'aria-label': '下一张', disabled: finished, onclick: next }, icon('right', 22)),
       );
     }
   }
@@ -346,7 +346,7 @@ export function renderCards({ store }, id) {
     playBtn.replaceChildren(icon(playTimer ? 'pause' : 'play'));
     playBtn.classList.toggle('on', Boolean(playTimer));
     playBtn.disabled = prefs.track || finished;
-    playBtn.title = prefs.track ? '自动播放 (关掉跟踪进度才能用)' : playTimer ? '暂停 (P)' : '自动播放 (P)';
+    playBtn.title = prefs.track ? '自动播放（需关闭跟踪进度）' : playTimer ? '暂停（P）' : '自动播放（P）';
   }
 
   // 卡片的一面 (side: 'term' / 'def'; 图片在解释那面)。hintFor 是背面的答案, 只有正面给「显示提示」
@@ -364,7 +364,7 @@ export function renderCards({ store }, id) {
             'button',
             {
               class: 'hint-btn',
-              title: '显示提示 (H)',
+              title: '显示提示（H）',
               onclick: (e) => {
                 e.stopPropagation();
                 toggleHint();
@@ -377,8 +377,8 @@ export function renderCards({ store }, id) {
       h(
         'span',
         { class: 'row' },
-        sayButton(card, side, set, { title: '朗读 (S)' }),
-        dictButton(card, set, { title: '查词典 (D)' }),
+        sayButton(card, side, set, { title: '朗读（S）' }),
+        dictButton(card, set, { title: '查词典（D）' }),
         editButton(() => editCardDialog({ store, setId: set.id, card, onSaved: () => draw({ speakIt: false }) })),
         h(
           'button',
@@ -409,7 +409,7 @@ export function renderCards({ store }, id) {
         { class: `face-text${size}${image ? ' with-image' : ''}` },
         card.image && side === 'def' ? cardImage(card.image, 'face-img') : null,
         pinned ? diagramFigure(set, { highlight: card.id, labels: 'none', size: 'small' }) : null,
-        text.trim() ? rich(text) : image ? null : h('span', { class: 'muted' }, '(空)'),
+        text.trim() ? rich(text) : image ? null : h('span', { class: 'muted' }, '（空）'),
       ),
       hintEl,
     ];
@@ -425,13 +425,13 @@ export function renderCards({ store }, id) {
       return h(
         'div',
         { class: 'summary' },
-        h('h2', {}, '看完一遍了'),
+        h('h2', {}, '已浏览完毕'),
         h(
           'div',
           { class: 'row center' },
-          h('button', { class: 'btn primary', onclick: () => start() }, '从头再来'),
-          h('a', { class: 'btn', href: `${base}/learn` }, '用学习模式练'),
-          h('a', { class: 'btn', href: base }, '回到卡片集'),
+          h('button', { class: 'btn primary', onclick: () => start() }, '重新开始'),
+          h('a', { class: 'btn', href: `${base}/learn` }, '学习模式'),
+          h('a', { class: 'btn', href: base }, '返回卡片集'),
         ),
       );
     }
@@ -441,20 +441,20 @@ export function renderCards({ store }, id) {
     return h(
       'div',
       { class: 'summary' },
-      h('h2', {}, missed.length ? '你做得很好! 接着背还不会的吧' : '全都会了 🎉'),
+      h('h2', {}, missed.length ? '本轮完成' : '已全部掌握'),
       h(
         'div',
         { class: 'score' },
-        h('div', { class: 'score-item good' }, h('strong', {}, String(got)), h('span', {}, '会了')),
-        h('div', { class: 'score-item bad' }, h('strong', {}, String(missed.length)), h('span', {}, '还不会')),
+        h('div', { class: 'score-item good' }, h('strong', {}, String(got)), h('span', {}, '会')),
+        h('div', { class: 'score-item bad' }, h('strong', {}, String(missed.length)), h('span', {}, '不会')),
       ),
       h(
         'div',
         { class: 'row center' },
-        missed.length ? h('button', { class: 'btn primary', onclick: () => start(missed) }, `接着背还不会的 ${missed.length} 张`) : null,
-        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: restart }, '重新开始单词卡模式'),
-        h('a', { class: 'btn', href: `${base}/learn` }, '用学习模式练'),
-        h('button', { class: 'btn', disabled: history.length === 0, onclick: undo }, '撤销最后一张'),
+        missed.length ? h('button', { class: 'btn primary', onclick: () => start(missed) }, `继续复习不会的 ${missed.length} 张`) : null,
+        h('button', { class: missed.length ? 'btn' : 'btn primary', onclick: restart }, '重新开始'),
+        h('a', { class: 'btn', href: `${base}/learn` }, '学习模式'),
+        h('button', { class: 'btn', disabled: history.length === 0, onclick: undo }, '撤销上一张'),
       ),
     );
   }
@@ -471,34 +471,34 @@ export function renderCards({ store }, id) {
         {},
         [
           ['空格 / ↑ / ↓', '翻面'],
-          ['← / →', '跟踪进度时: 还不会 / 会了; 不跟踪时: 上一张 / 下一张'],
+          ['← / →', '跟踪进度时为 不会 / 会；否则为 上一张 / 下一张'],
           ['Z', '撤销'],
-          ['S', '朗读看到的这一面'],
+          ['S', '朗读当前面'],
           ['H', '显示 / 隐藏提示'],
-          ['D', '查词典 (要联网)'],
+          ['D', '查词典（需联网）'],
           ['F', '全屏'],
-          ['P', '自动播放 (不跟踪进度时)'],
+          ['P', '自动播放（不跟踪进度时）'],
         ].map(([k, v]) => [h('dt', {}, h('kbd', {}, k)), h('dd', {}, v)]),
       ),
     );
     const frontSelect = h(
       'select',
       { class: 'input', 'aria-label': '正面', onchange: (e) => setPref('front', e.target.value) },
-      h('option', { value: 'term', selected: prefs.front === 'term' }, '词'),
-      h('option', { value: 'def', selected: prefs.front === 'def' }, '解释'),
+      h('option', { value: 'term', selected: prefs.front === 'term' }, '词语'),
+      h('option', { value: 'def', selected: prefs.front === 'def' }, '释义'),
     );
     dialog = openDialog({
       title: '选项',
       body: [
         switchRow({
           label: '跟踪进度',
-          desc: '把卡片分成「还不会」和「会了」两堆, 记下你会了哪些。只想快速翻一遍的话关掉。',
+          desc: '将卡片分为「会」与「不会」并记录。仅需浏览时可关闭。',
           checked: prefs.track,
           onchange: (v) => setPref('track', v),
         }),
         switchRow({
-          label: `只学星标的卡片${set.starred.length ? ` (${set.starred.length})` : ''}`,
-          desc: set.starred.length ? null : '还没有加星标的卡片',
+          label: `仅学习星标卡片${set.starred.length ? `（${set.starred.length}）` : ''}`,
+          desc: set.starred.length ? null : '暂无星标卡片',
           checked: prefs.starredOnly,
           disabled: set.starred.length === 0,
           onchange: (v) => setPref('starredOnly', v),
@@ -506,7 +506,7 @@ export function renderCards({ store }, id) {
         h('label', { class: 'switch-row' }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, '正面')), frontSelect),
         switchRow({
           label: '自动朗读',
-          desc: canSpeak() ? '每张卡片一出来、一翻面就念出来' : '这个浏览器不能朗读',
+          desc: canSpeak() ? '显示卡片和翻面时自动朗读' : '当前浏览器不支持朗读',
           checked: prefs.autoSpeak,
           disabled: !canSpeak(),
           onchange: (v) => {
@@ -520,12 +520,12 @@ export function renderCards({ store }, id) {
           {
             class: 'link-btn danger-link',
             onclick: () => {
-              if (!confirm('把「会了」的记录都清掉, 从第一张重新开始?')) return;
+              if (!confirm('清除「会」的记录，从第一张重新开始？')) return;
               dialog?.close();
               restart();
             },
           },
-          '重新开始单词卡模式',
+          '重置单词卡进度',
         ),
       ],
       onClose: () => {

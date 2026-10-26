@@ -52,7 +52,7 @@ export function choiceList(store, key, { mark = null, tag = {} } = {}) {
     'ul',
     { class: 'pick-list' },
     choices.map(({ set, why }) => {
-      const meta = set.virtual ? `${set.cards.length} 张卡片 · 文件夹里的合起来` : `${set.cards.length} 张卡片`;
+      const meta = set.virtual ? `${set.cards.length} 张卡片 · 文件夹合并` : `${set.cards.length} 张卡片`;
       const best = bestText(key, set.best);
       const body = [
         h('span', { class: 'pick-title' }, set.virtual ? '📁 ' : '', set.title || '未命名卡片集', tag[set.id] ? h('span', { class: 'pick-tag' }, tag[set.id]) : null),
@@ -71,7 +71,7 @@ export function choiceList(store, key, { mark = null, tag = {} } = {}) {
 
 function pickGameDialog(set, current) {
   openDialog({
-    title: '换个游戏',
+    title: '更换游戏',
     body: h(
       'ul',
       { class: 'pick-list' },
@@ -91,7 +91,7 @@ function pickGameDialog(set, current) {
 }
 
 function pickSetDialog(store, set, game) {
-  openDialog({ title: `拿哪个卡片集玩「${gameOf(game).name}」`, body: choiceList(store, game, { mark: set.id }) });
+  openDialog({ title: `选择卡片集 · ${gameOf(game).name}`, body: choiceList(store, game, { mark: set.id }) });
 }
 
 // 游戏页顶上那一条。settings: 点 ⚙ 时调 (没有就不显示 ⚙)
@@ -100,14 +100,14 @@ export function gameHeader({ store, set, game, from, settings = null }) {
   return h(
     'header',
     { class: 'game-head' },
-    h('button', { class: 'gh-game', title: '换个游戏', onclick: () => pickGameDialog(set, game) }, h('span', { 'aria-hidden': 'true' }, g.emoji), h('span', { class: 'gh-name' }, g.name), icon('down', 18)),
-    h('button', { class: 'gh-set', title: '换个卡片集', onclick: () => pickSetDialog(store, set, game) }, h('span', { class: 'gh-title' }, set.title || '未命名卡片集'), icon('down', 16)),
+    h('button', { class: 'gh-game', title: '更换游戏', onclick: () => pickGameDialog(set, game) }, h('span', { 'aria-hidden': 'true' }, g.emoji), h('span', { class: 'gh-name' }, g.name), icon('down', 18)),
+    h('button', { class: 'gh-set', title: '更换卡片集', onclick: () => pickSetDialog(store, set, game) }, h('span', { class: 'gh-title' }, set.title || '未命名卡片集'), icon('down', 16)),
     h(
       'div',
       { class: 'gh-tools' },
       soundToggle(),
       settings ? h('button', { class: 'icon-btn tool', title: '设置', 'aria-label': '设置', onclick: settings }, icon('gear', 22)) : null,
-      h('a', { class: 'icon-btn tool', href: exitHref(from, set), title: '不玩了', 'aria-label': '不玩了' }, icon('x', 22)),
+      h('a', { class: 'icon-btn tool', href: exitHref(from, set), title: '退出', 'aria-label': '退出' }, icon('x', 22)),
     ),
   );
 }
@@ -121,14 +121,14 @@ export function cantPlay({ set, game, from }) {
       'section',
       { class: 'empty game-empty' },
       h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, g.emoji),
-      h('h1', {}, set ? `这个卡片集玩不了${g.name}` : '找不到这个卡片集'),
+      h('h1', {}, set ? `该卡片集不适用于「${g.name}」` : '卡片集不存在'),
       set ? h('p', { class: 'muted' }, whyNotPlayable(game, set)) : null,
       h(
         'div',
         { class: 'row center' },
-        h('a', { class: 'btn primary', href: `#/games/${game}` }, '换个卡片集'),
-        set && !set.virtual ? h('a', { class: 'btn', href: `${setHref(set)}/edit` }, '去加卡片') : null,
-        h('a', { class: 'btn', href: from?.startsWith('#/games') ? from : set ? setHref(set) : '#/' }, '回去'),
+        h('a', { class: 'btn primary', href: `#/games/${game}` }, '更换卡片集'),
+        set && !set.virtual ? h('a', { class: 'btn', href: `${setHref(set)}/edit` }, '添加卡片') : null,
+        h('a', { class: 'btn', href: from?.startsWith('#/games') ? from : set ? setHref(set) : '#/' }, '返回'),
       ),
     ),
   };

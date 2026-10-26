@@ -7,11 +7,11 @@ import { playable } from './wordle.js';
 
 // ---- 有哪几个游戏 ----
 export const GAMES = [
-  { key: 'match', emoji: '🧩', name: '配对', hint: '把词和解释配起来, 比谁快' },
-  { key: 'blast', emoji: '☄️', name: '打陨石', hint: '上面出解释, 打中写着对的词的陨石' },
-  { key: 'blocks', emoji: '🧱', name: '方块', hint: '答对题拿积木, 放满一行就消掉' },
-  { key: 'gems', emoji: '💎', name: '宝石', hint: '三个连一线消掉, 答题加步数' },
-  { key: 'wordle', emoji: '🟩', name: 'Wordle', hint: '6 次猜出卡片集里的词' },
+  { key: 'match', emoji: '🧩', name: '配对', hint: '将词语与释义配对，计时' },
+  { key: 'blast', emoji: '☄️', name: '打陨石', hint: '根据释义击中正确词语' },
+  { key: 'blocks', emoji: '🧱', name: '方块', hint: '答题获得方块，填满一行即消除' },
+  { key: 'gems', emoji: '💎', name: '宝石', hint: '三消玩法，答题增加步数' },
+  { key: 'wordle', emoji: '🟩', name: 'Wordle', hint: '6 次内猜出卡片集中的单词' },
 ];
 export const GAME_KEYS = GAMES.map((g) => g.key);
 export const gameOf = (key) => GAMES.find((g) => g.key === key) ?? null;
@@ -24,9 +24,9 @@ export function quizCards(cards) {
 // 这个卡片集玩不玩得了这个游戏: 能玩返回 '', 不能玩返回为什么
 export function whyNotPlayable(key, set) {
   const cards = set?.cards ?? [];
-  if (key === 'wordle') return playable(cards).items.length ? '' : '要有字母拼的单词 (3 到 10 个字母)';
+  if (key === 'wordle') return playable(cards).items.length ? '' : '需要包含 3–10 个字母的英文单词';
   const pool = key === 'blocks' || key === 'gems' ? quizCards(cards) : cards;
-  return pickDistinct(pool, 2).length >= 2 ? '' : '至少要两张词和解释都不一样的卡片';
+  return pickDistinct(pool, 2).length >= 2 ? '' : '至少需要两张不同的卡片';
 }
 
 // 最好成绩怎么说; 还没玩过返回 ''
