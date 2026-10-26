@@ -17,7 +17,7 @@ export function queueMistakes(list) {
 export function renderMistakeEdit({ store, go }, id = null) {
   const existing = id ? store.getMistake(id) : null;
   if (id && !existing) {
-    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '找不到这道错题'), h('a', { class: 'btn primary', href: '#/mistakes' }, '回错题集')) };
+    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '错题不存在'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')) };
   }
   const queue = existing ? [] : queued;
   queued = [];
@@ -33,11 +33,11 @@ export function renderMistakeEdit({ store, go }, id = null) {
     ['choice', '选择题'],
     ['input', '填空题'],
   ].map(([type, label]) => h('button', { class: 'chip', type: 'button', onclick: () => ((draft.type = type), markDirty(), draw()) }, label));
-  const passageEl = h('textarea', { class: 'input mk-passage-input', rows: 5, placeholder: 'SAT 阅读写作题的那段文字、数学题给的条件……', 'aria-label': '文章', oninput: () => ((draft.passage = passageEl.value), markDirty(), drawKindHint()) });
-  const questionEl = h('textarea', { class: 'input', rows: 3, placeholder: '比如 Which choice completes the text with the most logical and precise word or phrase?', 'aria-label': '题目', oninput: () => ((draft.question = questionEl.value), markDirty(), drawKindHint()) });
-  const noteEl = h('textarea', { class: 'input', rows: 3, placeholder: '比如「没看清问的是 NOT」「把 x 当成了 y」, 或者把解析抄下来', 'aria-label': '为什么错', oninput: () => ((draft.note = noteEl.value), markDirty()) });
-  const answerEl = h('input', { class: 'input', placeholder: '比如 3/4 (3/4 和 0.75 都算对; 几个都对的用逗号隔开)', 'aria-label': '对的答案', autocomplete: 'off', oninput: () => ((draft.answer = answerEl.value), markDirty()) });
-  const mineTextEl = h('input', { class: 'input', placeholder: '当时写的 (可以不写)', 'aria-label': '当时写的', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
+  const passageEl = h('textarea', { class: 'input mk-passage-input', rows: 5, placeholder: '阅读材料、题干条件等', 'aria-label': '材料', oninput: () => ((draft.passage = passageEl.value), markDirty(), drawKindHint()) });
+  const questionEl = h('textarea', { class: 'input', rows: 3, placeholder: '题目', 'aria-label': '题目', oninput: () => ((draft.question = questionEl.value), markDirty(), drawKindHint()) });
+  const noteEl = h('textarea', { class: 'input', rows: 3, placeholder: '错误原因或解析', 'aria-label': '解析', oninput: () => ((draft.note = noteEl.value), markDirty()) });
+  const answerEl = h('input', { class: 'input', placeholder: '如 3/4；多个答案用逗号分隔', 'aria-label': '正确答案', autocomplete: 'off', oninput: () => ((draft.answer = answerEl.value), markDirty()) });
+  const mineTextEl = h('input', { class: 'input', placeholder: '选填', 'aria-label': '我的答案', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
   const answersEl = h('div', { class: 'mk-answers' });
   // 题型: 自己写, 或者从列表里挑 (SAT 的几类、以前写过的); 空着就按题目猜, 下面写着猜的是什么
   const kindList = h(
@@ -46,10 +46,10 @@ export function renderMistakeEdit({ store, go }, id = null) {
     [...new Set([...Object.values(KINDS).flat(), ...store.allMistakes().map((m) => m.kind).filter(Boolean)])].map((k) => h('option', { value: k })),
   );
   const kindHint = h('span', { class: 'muted small' });
-  const kindEl = h('input', { class: 'input mk-kind-input', list: 'mk-kinds', maxlength: MAX_KIND, placeholder: '比如 词汇题、语法·标点、几何三角 (可以不写)', 'aria-label': '题型', autocomplete: 'off', oninput: () => ((draft.kind = kindEl.value), markDirty(), drawKindHint()) });
+  const kindEl = h('input', { class: 'input mk-kind-input', list: 'mk-kinds', maxlength: MAX_KIND, placeholder: '选填，如 词汇题、几何三角', 'aria-label': '题型', autocomplete: 'off', oninput: () => ((draft.kind = kindEl.value), markDirty(), drawKindHint()) });
   function drawKindHint() {
     const guess = guessKind(draft);
-    kindHint.textContent = draft.kind.trim() ? '' : guess ? `不写的话, 按题目猜是「${guess}」` : '不写的话算「其他」';
+    kindHint.textContent = draft.kind.trim() ? '' : guess ? `自动识别为「${guess}」` : '未填写时归为「其他」';
   }
 
   // ---- 图片: 点按钮选、直接粘贴截图、拖进来 ----
@@ -60,7 +60,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
     if (!list.length) return false;
     for (const file of list) {
       if (draft.images.length >= MAX_IMAGES) {
-        toast(`一道题最多放 ${MAX_IMAGES} 张图片`);
+        toast(`每道题最多 ${MAX_IMAGES} 张图片`);
         break;
       }
       try {
@@ -68,7 +68,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
         draft.images.push(await putMedia(await shrinkImage(file, 1600)));
         markDirty();
       } catch {
-        toast('图片存不进去, 可能浏览器空间满了');
+        toast('图片保存失败，存储空间可能已满');
         break;
       }
     }
@@ -83,11 +83,11 @@ export function renderMistakeEdit({ store, go }, id = null) {
           'span',
           { class: 'media-chip image-chip' },
           cardImage(id, 'mk-thumb'),
-          h('button', { class: 'chip-x', type: 'button', title: '去掉这张图片', 'aria-label': `去掉第 ${i + 1} 张图片`, onclick: () => (draft.images.splice(i, 1), markDirty(), drawImages()) }, '✕'),
+          h('button', { class: 'chip-x', type: 'button', title: '移除图片', 'aria-label': `移除第 ${i + 1} 张图片`, onclick: () => (draft.images.splice(i, 1), markDirty(), drawImages()) }, '✕'),
         ),
       ),
-      draft.images.length < MAX_IMAGES ? h('button', { class: 'tool-btn', type: 'button', onclick: () => fileInput.click() }, '🖼 加图片') : null,
-      h('span', { class: 'muted small' }, '题目截图、函数图像、几何图都行; 也可以直接粘贴 (Ctrl+V) 或者拖进来'),
+      draft.images.length < MAX_IMAGES ? h('button', { class: 'tool-btn', type: 'button', onclick: () => fileInput.click() }, '添加图片') : null,
+      h('span', { class: 'muted small' }, '支持截图、函数图像等，可直接粘贴或拖入'),
       fileInput,
     );
   }
@@ -96,14 +96,14 @@ export function renderMistakeEdit({ store, go }, id = null) {
   const importNote = h('p', { class: 'muted' });
   const footEl = h('div', { class: 'row end' });
   function drawHead() {
-    headEl.textContent = existing ? '改错题' : total > 1 ? `导入的错题 (${total - queue.length} / ${total})` : total ? '导入的错题' : '记一道错题';
+    headEl.textContent = existing ? '编辑错题' : total > 1 ? `核对导入（${total - queue.length} / ${total}）` : total ? '核对导入' : '记录错题';
     if (!total) return;
     drawNote();
     fill(
       footEl,
       h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
-      h('button', { class: 'btn', onclick: () => next(false) }, '跳过这道'),
-      h('button', { class: 'btn primary', onclick: () => save(false) }, queue.length ? `保存, 下一道 (还有 ${queue.length} 道)` : '保存'),
+      h('button', { class: 'btn', onclick: () => next(false) }, '跳过'),
+      h('button', { class: 'btn primary', onclick: () => save(false) }, queue.length ? `保存并继续（剩余 ${queue.length} 道）` : '保存'),
     );
   }
 
@@ -121,7 +121,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
     typeBtns.forEach((b, i) => b.classList.toggle('on', ['choice', 'input'][i] === draft.type));
     problemEl.hidden = true;
     if (draft.type === 'input') {
-      answersEl.replaceChildren(h('label', { class: 'ask-label' }, '对的答案'), answerEl, h('label', { class: 'ask-label' }, '我当时写的'), mineTextEl);
+      answersEl.replaceChildren(h('label', { class: 'ask-label' }, '正确答案'), answerEl, h('label', { class: 'ask-label' }, '我的答案'), mineTextEl);
       return;
     }
     if (draft.options.length < MIN_OPTIONS) draft.options = ['', '', '', ''];
@@ -140,7 +140,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
             type: 'button',
             class: `mk-mark ok${right ? ' on' : ''}`,
             'aria-pressed': String(right),
-            title: '这个是对的',
+            title: '标为正确答案',
             onclick: () => {
               draft.correct = right ? -1 : i;
               if (draft.mine === i) draft.mine = -1;
@@ -148,7 +148,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
               draw();
             },
           },
-          '✓ 对',
+          '正确',
         ),
         h(
           'button',
@@ -156,15 +156,15 @@ export function renderMistakeEdit({ store, go }, id = null) {
             type: 'button',
             class: `mk-mark bad${mine ? ' on' : ''}`,
             'aria-pressed': String(mine),
-            title: '我当时选的 (错的)',
+            title: '标为我的答案',
             onclick: () => {
-              if (draft.correct === i) return toast('这个是对的答案呀; 点你当时选错的那个');
+              if (draft.correct === i) return toast('该选项已标为正确答案');
               draft.mine = mine ? -1 : i;
               markDirty();
               draw();
             },
           },
-          '✕ 我选的',
+          '我的答案',
         ),
         draft.options.length > MIN_OPTIONS
           ? h(
@@ -172,8 +172,8 @@ export function renderMistakeEdit({ store, go }, id = null) {
               {
                 type: 'button',
                 class: 'qe-opt-x',
-                title: '删掉这个选项',
-                'aria-label': `删掉选项 ${LETTERS[i]}`,
+                title: '删除选项',
+                'aria-label': `删除选项 ${LETTERS[i]}`,
                 onclick: () => {
                   draft.options.splice(i, 1);
                   const shift = (x) => (x === i ? -1 : x > i ? x - 1 : x);
@@ -194,7 +194,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
         'div',
         { class: 'row qe-opt-foot' },
         draft.options.length < MAX_OPTIONS ? h('button', { class: 'btn small', type: 'button', onclick: () => (draft.options.push(''), markDirty(), draw(), answersEl.querySelectorAll('.qe-opt-input')[draft.options.length - 1]?.focus()) }, '＋ 加一个选项') : null,
-        h('span', { class: 'muted small' }, '点「✓ 对」标出对的答案, 点「✕ 我选的」标出当时选错的那个'),
+        h('span', { class: 'muted small' }, '分别标出正确答案和我的答案'),
       ),
     );
   }
@@ -211,17 +211,17 @@ export function renderMistakeEdit({ store, go }, id = null) {
     try {
       store.putMistake(m);
     } catch {
-      toast('存不下了: 浏览器给的空间满了');
+      toast('存储空间已满，无法保存');
       return;
     }
     dirty = false;
     if (total) return next(true);
     if (!again) {
-      toast(existing ? '改好了' : '记好了, 明天开始排进复习');
+      toast(existing ? '已保存' : '已记录，明日开始安排重做');
       return go('#/mistakes');
     }
     // 接着记下一道: 题型留着, 别的清空
-    toast('记好了, 接着记下一道');
+    toast('已记录');
     draft = { ...newMistake(newId()), type: draft.type };
     fillInputs();
     draw();
@@ -233,17 +233,17 @@ export function renderMistakeEdit({ store, go }, id = null) {
   // 导入的: 写着还差什么 (改着改着就更新)
   function drawNote() {
     const problem = mistakeProblem(tidyMistake(draft));
-    fill(importNote, 'AI 认出来的, 看一遍: 不对的地方改一改, 有图 (函数图像、几何图) 的把照片也放进去。', problem ? h('strong', { class: 'qe-problem' }, ` 还差: ${problem}`) : null);
+    fill(importNote, '请核对 AI 识别的内容；含图表的题目可添加照片。', problem ? h('strong', { class: 'qe-problem' }, ` 待补充：${problem}`) : null);
   }
 
   // 导入的: 下一道 (saved: 这道存了还是跳过了); 没有了回错题集
   function next(saved) {
     if (!queue.length) {
       dirty = false;
-      toast(saved ? '记好了, 明天开始排进复习' : '跳过了');
+      toast(saved ? '已记录，明日开始安排重做' : '已跳过');
       return go('#/mistakes');
     }
-    toast(saved ? '记好了, 下一道' : '跳过了, 下一道');
+    toast(saved ? '已记录' : '已跳过');
     draft = queue.shift();
     dirty = true;
     fillInputs();
@@ -261,12 +261,12 @@ export function renderMistakeEdit({ store, go }, id = null) {
     fill(
       footEl,
       h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
-      existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存, 再记一道'),
+      existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存并新建'),
       h('button', { class: 'btn primary', onclick: () => save(false) }, '保存'),
     );
   }
   return {
-    title: existing ? '改错题' : total ? '导入的错题' : '记一道错题',
+    title: existing ? '编辑错题' : total ? '核对导入' : '记录错题',
     el: h(
       'section',
       {
@@ -289,15 +289,15 @@ export function renderMistakeEdit({ store, go }, id = null) {
       },
       h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
       h('div', { class: 'page-head' }, headEl, h('div', { class: 'row' }, h('div', { class: 'chips', role: 'group', 'aria-label': '题型' }, typeBtns))),
-      total ? importNote : existing ? null : h('p', { class: 'muted small' }, '题目长、不想打字? ', h('a', { href: '#/mistakes/import' }, '📷 拍照让 AI 记 →')),
-      h('label', { class: 'ask-label' }, '文章 / 材料 (可以不写)'),
+      total ? importNote : existing ? null : h('p', { class: 'muted small' }, '也可以', h('a', { href: '#/mistakes/import' }, '拍照录入'), '。'),
+      h('label', { class: 'ask-label' }, '材料（选填）'),
       passageEl,
       h('label', { class: 'ask-label' }, '题目'),
       questionEl,
-      h('label', { class: 'ask-label' }, '图片 (可以不放)'),
+      h('label', { class: 'ask-label' }, '图片（选填）'),
       imagesEl,
       answersEl,
-      h('label', { class: 'ask-label' }, '为什么错 / 解析'),
+      h('label', { class: 'ask-label' }, '解析'),
       noteEl,
       h('label', { class: 'ask-label' }, '题型'),
       kindEl,
@@ -308,6 +308,6 @@ export function renderMistakeEdit({ store, go }, id = null) {
     ),
     focus: existing || total ? null : passageEl,
     isDirty: () => dirty,
-    canLeave: () => !dirty || confirm(total ? `这道${queue.length ? `和后面 ${queue.length} 道` : ''}导入的错题还没存, 确定要走吗?` : '改的东西还没保存, 确定要走吗?'),
+    canLeave: () => !dirty || confirm(total ? `还有 ${queue.length + 1} 道导入的错题未保存，确定离开吗？` : '修改尚未保存，确定离开吗？'),
   };
 }

@@ -156,15 +156,15 @@ export function parseCardImport(text) {
   if (!t.trim()) return null;
   const values = findJson(t);
   const objects = values.filter((v) => v && typeof v === 'object' && !Array.isArray(v));
-  if (objects.some((v) => v.app === 'wengu' || Array.isArray(v.sets))) return { error: '这是温故的备份文件。恢复备份在首页最下面的「导入备份」。' };
-  if (objects.some((v) => v.wengu === 'wengu-mistakes' || Array.isArray(v.mistakes))) return { error: '这是错题, 要放进错题集: 错题集页上的「📷 拍照让 AI 记」。' };
+  if (objects.some((v) => v.app === 'wengu' || Array.isArray(v.sets))) return { error: '这是温故的备份文件，请在「设置 › 备份」中恢复。' };
+  if (objects.some((v) => v.wengu === 'wengu-mistakes' || Array.isArray(v.mistakes))) return { error: '这是错题数据，请在错题集的「拍照录入」中粘贴。' };
   const out = { title: '', cards: [] };
   for (const v of values) cardsIn(v, out);
   if (!out.cards.length) out.cards = tableCards(t);
-  if (out.cards.length) return isExample(out) ? { error: '粘贴的是给 AI 的那段话。要粘贴的是 AI 回你的。' } : out;
+  if (out.cards.length) return isExample(out) ? { error: '粘贴的是提示词，请粘贴 AI 的回复。' } : out;
   // 看着像 JSON 又读不出来: 别照分隔方式拆成一堆怪卡片
   if (/```/.test(t) || /^\s*[{[]\s*["{[]/.test(t) || /"(cards|term|def|word)"\s*:/.test(t)) {
-    return { error: values.length ? '里面没有卡片。' : 'AI 写的格式有点问题, 读不出来。让它「只回一个 JSON 代码块」再来一次, 把整个代码块复制过来。' };
+    return { error: values.length ? '未包含卡片。' : '格式无法识别，请让 AI「只回复一个 JSON 代码块」后重试。' };
   }
   return null;
 }

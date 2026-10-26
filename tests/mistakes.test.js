@@ -45,13 +45,13 @@ test('错题的图片也算「用到的」: 同步、备份会带上, 清理不�
 
 test('错题: 没写完的说差什么', () => {
   assert.equal(mistakeProblem(sat()), '');
-  assert.match(mistakeProblem(sat({ question: '  ' })), /题目还没写/);
+  assert.match(mistakeProblem(sat({ question: '  ' })), /请填写题目/);
   assert.equal(mistakeProblem(sat({ question: '', images: ['m_shot'] })), ''); // 题目截图了就不用打字
-  assert.match(mistakeProblem(sat({ options: ['only one', '', '', ''] })), /至少写 2 个/);
-  assert.match(mistakeProblem(sat({ options: ['a', '', 'c', ''] })), /选项 B 是空的/);
-  assert.match(mistakeProblem(sat({ correct: -1 })), /哪个是对的/);
-  assert.match(mistakeProblem(sat({ options: ['a', 'b', '', ''], correct: 3 })), /哪个是对的/);
-  assert.equal(mistakeProblem({ ...newMistake('i'), type: 'input', question: 'x = ?', answer: '' }), '写上对的答案');
+  assert.match(mistakeProblem(sat({ options: ['only one', '', '', ''] })), /至少需要 2 个/);
+  assert.match(mistakeProblem(sat({ options: ['a', '', 'c', ''] })), /选项 B 为空/);
+  assert.match(mistakeProblem(sat({ correct: -1 })), /请标出正确答案/);
+  assert.match(mistakeProblem(sat({ options: ['a', 'b', '', ''], correct: 3 })), /请标出正确答案/);
+  assert.equal(mistakeProblem({ ...newMistake('i'), type: 'input', question: 'x = ?', answer: '' }), '请填写正确答案');
   assert.equal(mistakeProblem({ ...newMistake('i'), type: 'input', question: 'x = ?', answer: '3/4' }), '');
 });
 

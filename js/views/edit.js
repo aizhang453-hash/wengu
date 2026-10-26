@@ -32,8 +32,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       el: h(
         'section',
         { class: 'empty' },
-        h('h1', {}, '找不到这个卡片集'),
-        h('a', { class: 'btn primary', href: '#/' }, '回首页'),
+        h('h1', {}, '卡片集不存在'),
+        h('a', { class: 'btn primary', href: '#/' }, '返回首页'),
       ),
     };
   }
@@ -46,7 +46,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   // ---- 标题、简介、语言 ----
   const titleInput = h('input', {
     class: 'input big',
-    placeholder: '标题, 比如「托福核心词 第 1 单元」',
+    placeholder: '标题',
     value: draft.title,
     maxlength: 200,
     oninput: markDirty,
@@ -54,7 +54,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   const descInput = h('textarea', {
     class: 'input',
     rows: 2,
-    placeholder: '简介 (可以不写)',
+    placeholder: '简介（选填）',
     value: draft.description,
     oninput: markDirty,
   });
@@ -74,7 +74,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     ]) {
       const texts = rows.slice(0, 400).map((r) => r[key].value);
       const name = texts.some((t) => t.trim()) ? LANGS.find(([code]) => code === guessLangOf(texts))?.[1] : null;
-      select.options[0].textContent = name ? `自动 (像是${name.replace(/ \(.*\)$/, '')})` : '自动';
+      select.options[0].textContent = name ? `自动（${name.replace(/ \(.*\)$/, '')}）` : '自动';
     }
   }
   for (const select of [termLang, defLang]) {
@@ -82,7 +82,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     select.addEventListener('pointerdown', drawAutoLangs);
   }
   // 每天背新词时先背哪些 (plan.js): 照卡片的顺序 (导入的就是文件里的顺序), 或者打乱
-  const orderSel = h('select', { class: 'input', onchange: markDirty }, h('option', { value: 'set' }, '按卡片的顺序'), h('option', { value: 'random' }, '随机'));
+  const orderSel = h('select', { class: 'input', onchange: markDirty }, h('option', { value: 'set' }, '按卡片顺序'), h('option', { value: 'random' }, '随机'));
   orderSel.value = planOf(draft).order;
   const orderAtOpen = orderSel.value;
 
@@ -106,18 +106,18 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     const termEl = h('textarea', {
       class: 'input grow',
       rows: 1,
-      placeholder: '词',
+      placeholder: '词语',
       value: card.term,
-      'aria-label': '词',
+      'aria-label': '词语',
       oninput: onInput,
       onkeydown: formatKeys,
     });
     const defEl = h('textarea', {
       class: 'input grow',
       rows: 1,
-      placeholder: '解释',
+      placeholder: '释义',
       value: card.def,
-      'aria-label': '解释',
+      'aria-label': '释义',
       oninput: onInput,
       onkeydown: (e) => {
         formatKeys(e);
@@ -144,12 +144,12 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         if (file) setImage(row, file);
       },
     });
-    const imageBtn = h('button', { class: 'tool-btn', type: 'button', title: '加图片 (也可以直接粘贴或拖进来)', onclick: () => fileInput.click() }, '🖼 图片');
+    const imageBtn = h('button', { class: 'tool-btn', type: 'button', title: '添加图片（可直接粘贴或拖入）', onclick: () => fileInput.click() }, '图片');
 
     const audioSlots = { term: h('span', { class: 'media-slot' }), def: h('span', { class: 'media-slot' }) };
     const micBtns = {
-      term: h('button', { class: 'tool-btn', type: 'button', title: '给词录音', onclick: () => toggleRecord(row, 'term') }, '🎤 录音'),
-      def: h('button', { class: 'tool-btn', type: 'button', title: '给解释录音', onclick: () => toggleRecord(row, 'def') }, '🎤 录音'),
+      term: h('button', { class: 'tool-btn', type: 'button', title: '为词语录音', onclick: () => toggleRecord(row, 'term') }, '录音'),
+      def: h('button', { class: 'tool-btn', type: 'button', title: '为释义录音', onclick: () => toggleRecord(row, 'def') }, '录音'),
     };
     row.micBtns = micBtns;
 
@@ -161,7 +161,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
               'span',
               { class: 'media-chip image-chip' },
               cardImage(row.image, 'edit-thumb'),
-              h('button', { class: 'chip-x', type: 'button', title: '去掉图片', 'aria-label': '去掉图片', onclick: () => ((row.image = ''), row.drawMedia(), markDirty()) }, '✕'),
+              h('button', { class: 'chip-x', type: 'button', title: '移除图片', 'aria-label': '移除图片', onclick: () => ((row.image = ''), row.drawMedia(), markDirty()) }, '✕'),
             )
           : null,
       );
@@ -174,8 +174,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
             ? h(
                 'span',
                 { class: 'media-chip' },
-                h('button', { class: 'chip-play', type: 'button', title: '听录音', onclick: () => playMedia(row[key]) }, '▶ 录音'),
-                h('button', { class: 'chip-x', type: 'button', title: '删掉录音', 'aria-label': '删掉录音', onclick: () => ((row[key] = ''), row.drawMedia(), markDirty()) }, '✕'),
+                h('button', { class: 'chip-play', type: 'button', title: '播放录音', onclick: () => playMedia(row[key]) }, '▶ 播放'),
+                h('button', { class: 'chip-x', type: 'button', title: '删除录音', 'aria-label': '删除录音', onclick: () => ((row[key] = ''), row.drawMedia(), markDirty()) }, '✕'),
               )
             : null,
         );
@@ -245,8 +245,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         'button',
         {
           class: 'icon-btn',
-          title: '删掉这张',
-          'aria-label': '删掉这张',
+          title: '删除此卡',
+          'aria-label': '删除此卡',
           onclick: () => {
             rows.splice(rows.indexOf(row), 1);
             row.li.remove();
@@ -282,14 +282,14 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       row.drawMedia();
       markDirty();
     } catch {
-      toast('图片存不进去, 可能浏览器空间满了');
+      toast('图片保存失败，存储空间可能已满');
     }
   }
 
   let player = null;
   async function playMedia(id) {
     const url = await mediaURL(id);
-    if (!url) return toast('录音找不到了');
+    if (!url) return toast('录音不存在');
     player?.pause();
     player = new Audio(url);
     player.play().catch(() => {});
@@ -304,25 +304,25 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     const btn = row.micBtns[side];
     let rec;
     try {
-      rec = await record({ onTick: (ms) => (btn.textContent = `⏹ 停 ${Math.floor(ms / 1000)} 秒`) });
+      rec = await record({ onTick: (ms) => (btn.textContent = `停止 ${Math.floor(ms / 1000)}″`) });
     } catch {
-      toast('用不了麦克风 (要在浏览器里允许温故用麦克风)');
+      toast('无法使用麦克风，请在浏览器中允许访问');
       return;
     }
     recording = rec;
     btn.classList.add('recording');
-    btn.textContent = '⏹ 停 0 秒';
+    btn.textContent = '停止 0″';
     const blob = await rec.done;
     recording = null;
     btn.classList.remove('recording');
-    btn.textContent = '🎤 录音';
-    if (!blob.size) return toast('没录到声音');
+    btn.textContent = '录音';
+    if (!blob.size) return toast('未录到声音');
     try {
       row[side === 'term' ? 'termAudio' : 'defAudio'] = await putMedia(blob);
       row.drawMedia();
       markDirty();
     } catch {
-      toast('录音存不进去, 可能浏览器空间满了');
+      toast('录音保存失败，存储空间可能已满');
     }
   }
 
@@ -343,14 +343,14 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         if (draft.diagram) draft.diagram.image = image;
         else draft.diagram = { image, pins: [] };
       } catch {
-        toast('图片存不进去, 可能浏览器空间满了');
+        toast('图片保存失败，存储空间可能已满');
         return;
       }
       buildDiagram();
       markDirty();
     },
   });
-  const diagramBox = h('details', { class: 'import-box diagram-edit-box', open: Boolean(draft.diagram) }, h('summary', {}, '标注图 (可以不用)'), diagramBody);
+  const diagramBox = h('details', { class: 'import-box diagram-edit-box', open: Boolean(draft.diagram) }, h('summary', {}, '标注图（选用）'), diagramBody);
 
   function drawPin(row) {
     if (!editor) {
@@ -364,10 +364,10 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         ? h(
             'span',
             { class: 'media-chip pin-chip' },
-            h('button', { class: 'chip-play', type: 'button', title: '在图上看', onclick: () => (diagramBox.scrollIntoView({ block: 'center', behavior: 'smooth' }), showQuick(row.id)) }, `📍 ${n}`),
-            h('button', { class: 'chip-x', type: 'button', title: '从图上去掉这个点', 'aria-label': '从图上去掉这个点', onclick: () => editor.unpin(row.id) }, '✕'),
+            h('button', { class: 'chip-play', type: 'button', title: '在图中查看', onclick: () => (diagramBox.scrollIntoView({ block: 'center', behavior: 'smooth' }), showQuick(row.id)) }, `📍 ${n}`),
+            h('button', { class: 'chip-x', type: 'button', title: '从图中移除', 'aria-label': '从图中移除', onclick: () => editor.unpin(row.id) }, '✕'),
           )
-        : h('button', { class: 'tool-btn', type: 'button', title: '在标注图上放一个点', onclick: () => editor.place(row.id) }, '📍 标到图上'),
+        : h('button', { class: 'tool-btn', type: 'button', title: '在标注图中标记', onclick: () => editor.place(row.id) }, '标注'),
     );
   }
 
@@ -388,8 +388,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     const t = h('input', {
       class: 'input',
       value: r.termEl.value,
-      placeholder: '这个点是什么 (词)',
-      'aria-label': `第 ${n} 个点: 词`,
+      placeholder: '名称',
+      'aria-label': `第 ${n} 个标注：名称`,
       oninput: () => {
         r.termEl.value = t.value;
         autoGrow(r.termEl);
@@ -405,8 +405,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     const d = h('input', {
       class: 'input',
       value: r.defEl.value,
-      placeholder: '解释 (可以不写)',
-      'aria-label': `第 ${n} 个点: 解释`,
+      placeholder: '释义（选填）',
+      'aria-label': `第 ${n} 个标注：释义`,
       oninput: () => {
         r.defEl.value = d.value;
         autoGrow(r.defEl);
@@ -419,7 +419,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         }
       },
     });
-    fill(quick, h('strong', { class: 'quick-num' }, `📍 ${n}`), t, d, h('button', { class: 'btn small', type: 'button', onclick: done }, '好了'));
+    fill(quick, h('strong', { class: 'quick-num' }, `📍 ${n}`), t, d, h('button', { class: 'btn small', type: 'button', onclick: done }, '完成'));
     quick.hidden = false;
     t.focus();
   }
@@ -430,8 +430,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       editor = null;
       fill(
         diagramBody,
-        h('p', { class: 'muted small' }, '地图、人体、零件图……传一张图, 在图上标出要考的地方, 每个点是一张卡片。练习时会问「这是哪个?」, 也会让你在图上找出来。'),
-        h('button', { class: 'btn', type: 'button', onclick: () => diagramFile.click() }, '加一张图'),
+        h('p', { class: 'muted small' }, '上传地图、结构图等图片，标注需要记忆的位置，每个标注对应一张卡片，可用于识图练习。'),
+        h('button', { class: 'btn', type: 'button', onclick: () => diagramFile.click() }, '添加图片'),
         diagramFile,
       );
       rows.forEach(drawPin);
@@ -458,20 +458,20 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       h(
         'div',
         { class: 'row' },
-        h('button', { class: 'btn small', type: 'button', onclick: () => diagramFile.click() }, '换一张图'),
+        h('button', { class: 'btn small', type: 'button', onclick: () => diagramFile.click() }, '更换图片'),
         h(
           'button',
           {
             class: 'btn small danger',
             type: 'button',
             onclick: () => {
-              if (!confirm('不要标注图了? 图上的点去掉, 卡片还在。')) return;
+              if (!confirm('移除标注图？标注将被删除，卡片保留。')) return;
               draft.diagram = null;
               buildDiagram();
               markDirty();
             },
           },
-          '不要标注图',
+          '移除标注图',
         ),
         diagramFile,
       ),
@@ -496,7 +496,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   const pasteEl = h('textarea', {
     class: 'input mono',
     rows: 6,
-    placeholder: '把 Quizlet 导出的文字、或者 AI 回的整段粘贴到这里\n比如:\napple\t苹果\nbanana\t香蕉',
+    placeholder: '粘贴 Quizlet 导出的文本或 AI 的回复\n例如：\napple\t苹果\nbanana\t香蕉',
     oninput: () => {
       if (!sepTouched) {
         pick(termSepGroup, guessTermSep(pasteEl.value));
@@ -505,7 +505,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       preview();
     },
   });
-  const termSepGroup = sepGroup('termSep', '词和解释之间', [
+  const termSepGroup = sepGroup('termSep', '词语与释义之间', [
     ['tab', 'Tab'],
     ['comma', '逗号'],
   ]);
@@ -527,7 +527,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         addImported(cards, title);
       },
     },
-    '加进来',
+    '添加',
   );
 
   // 从 Anki 搬来的复习记录、暂停了没有 (卡片 id → [[{ at, rating }], 暂停了]), 保存以后接上
@@ -535,8 +535,8 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
 
   // 存不下的时候说清楚 (size: 一共要存多少字)
   const tooBig = (size) =>
-    `存不下了: 浏览器给的空间满了${size ? ` (这些一共要 ${(size / 1e6).toFixed(1)} 百万字, 浏览器一般最多给 500 万字左右, iPhone 上更少)` : ''}。可以少导入几个牌组 (上面「牌组」选一个), 或者先删掉用不着的卡片集。`;
-  const mediaNote = (failed) => (failed ? `; ${failed} 个图片 / 声音拿不到, 跳过了` : '');
+    `存储空间不足${size ? `（约需 ${(size / 1e6).toFixed(1)} MB，浏览器通常上限约 5 MB）` : ''}。请减少导入的牌组，或删除不需要的卡片集。`;
+  const mediaNote = (failed) => (failed ? `；${failed} 个图片或音频无法获取，已跳过` : '');
 
   // 导入的卡片加到最后 (cards: [{ term, def, image?, termAudio?, defAudio?, reviews? }])
   function addImported(cards, title = '', failed = 0) {
@@ -553,7 +553,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     if (title && !titleInput.value.trim()) titleInput.value = title;
     markDirty();
     importBox.open = false;
-    toast(`加进来 ${cards.length} 张卡片, 记得保存${mediaNote(failed)}`);
+    toast(`已添加 ${cards.length} 张卡片，请保存${mediaNote(failed)}`);
     rows.at(-cards.length)?.termEl.scrollIntoView({ block: 'center' });
   }
 
@@ -598,12 +598,12 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         });
       } catch (e) {
         console.warn(e);
-        toast(e?.size !== undefined ? tooBig(e.size) : `导入出错了: ${e?.message ?? e}`);
+        toast(e?.size !== undefined ? tooBig(e.size) : `导入失败：${e?.message ?? e}`);
         return;
       }
       if (!made.length) return;
       toast(
-        (folders.length === 1 ? `建好了 ${made.length} 个卡片集, 放进文件夹「${folders[0].name}」` : `建好了 ${made.length} 个卡片集${folders.length ? `, 放进 ${folders.length} 个文件夹` : ''}`) + mediaNote(failed),
+        (folders.length === 1 ? `已创建 ${made.length} 个卡片集，并放入文件夹「${folders[0].name}」` : `已创建 ${made.length} 个卡片集${folders.length ? `，分入 ${folders.length} 个文件夹` : ''}`) + mediaNote(failed),
       );
       if (!existing && rows.every(isBlank)) dirty = false;
       const inOne = folders.length === 1 && folders[0].setIds.length === made.length;
@@ -625,12 +625,12 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       ondragleave: fileImport.drop.dragleave,
       ondrop: fileImport.drop.drop,
     },
-    h('summary', {}, '导入 (Quizlet 的文字、Excel、CSV、Anki、拍照让 AI 做)'),
+    h('summary', {}, '导入'),
     h(
       'div',
       { class: 'ai-cards' },
-      h('strong', {}, '📷 拍照让 AI 做'),
-      h('p', { class: 'muted small' }, '单词表、课本、笔记拍照, 跟这段话一起发给 Claude (或者 ChatGPT、豆包、Kimi……), 再把 AI 回的整段粘贴到下面的框里。只有词没有解释的, AI 会帮你写上意思。'),
+      h('strong', {}, '拍照生成'),
+      h('p', { class: 'muted small' }, '将单词表、课本或笔记的照片连同提示词发给 Claude、ChatGPT 等 AI，再把回复粘贴到下方。'),
       ask.button,
       ask.details,
     ),
@@ -638,9 +638,9 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     h(
       'p',
       { class: 'muted small' },
-      '或者粘贴文字: 在 Quizlet 上打开卡片集, 点「…」→「导出」→「复制文字」, 再粘贴到下面。Excel、Word 里一列词一列解释的表格, 复制过来也行。',
+      '也可粘贴文本：Quizlet 卡片集「…」›「导出」›「复制文字」；或从 Excel、Word 复制两列表格。',
       ' ',
-      h('a', { href: '#/quizlet' }, '别人的卡片集也想搬? 用「一键搬」书签 →'),
+      h('a', { href: '#/quizlet' }, 'Quizlet 一键导入书签'),
     ),
     pasteEl,
     sepGroupsEl,
@@ -730,12 +730,12 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       return;
     }
     if (!cards.length) {
-      previewEl.replaceChildren('没认出卡片, 换个分隔方式试试。');
+      previewEl.replaceChildren('未识别到卡片，请尝试其他分隔方式。');
       return;
     }
     const noDef = cards.filter((c) => !c.def).length;
     previewEl.replaceChildren(
-      h('p', {}, (ai ? `AI 做的${title ? `「${title}」` : ''}: 认出 ${cards.length} 张卡片` : `认出 ${cards.length} 张卡片`) + (noDef ? `, 其中 ${noDef} 张没有解释${ai ? '' : ' (分隔方式可能不对)'}` : '') + '。前几张:'),
+      h('p', {}, (ai ? `AI 生成${title ? `「${title}」` : ''}：识别到 ${cards.length} 张卡片` : `识别到 ${cards.length} 张卡片`) + (noDef ? `，其中 ${noDef} 张缺少释义${ai ? '' : '（分隔方式可能有误）'}` : '') + '。预览：'),
       h(
         'table',
         { class: 'preview-table' },
@@ -761,7 +761,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         defAudio: r.defAudio,
       }));
     if (cards.length === 0) {
-      toast('至少写一张卡片');
+      toast('请至少填写一张卡片');
       rows[0]?.termEl.focus();
       return;
     }
@@ -789,12 +789,12 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
         return importedReviews.size ? store.importReviews(set.id, [...importedReviews].map(([id, [reviews, suspended]]) => [id, reviews, suspended])) : 0;
       });
     } catch (e) {
-      toast(e?.size !== undefined ? tooBig(e.size) : `保存出错了: ${e?.message ?? e}`);
+      toast(e?.size !== undefined ? tooBig(e.size) : `保存失败：${e?.message ?? e}`);
       return;
     }
     importedReviews.clear();
     dirty = false;
-    toast(resumed ? `保存好了, ${resumed} 张接着 Anki 的进度排复习` : '保存好了');
+    toast(resumed ? `已保存，${resumed} 张沿用 Anki 的复习进度` : '已保存');
     cleanMedia(store); // 不用的图片、录音删掉
     go(`#/set/${encodeURIComponent(draft.id)}`);
   }
@@ -812,7 +812,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   }
 
   const cancelHref = existing ? `#/set/${encodeURIComponent(existing.id)}` : '#/';
-  const saveBtn = () => h('button', { class: 'btn primary', onclick: save }, existing ? '保存' : '建好了');
+  const saveBtn = () => h('button', { class: 'btn primary', onclick: save }, existing ? '保存' : '创建');
 
   const el = h(
     'section',
@@ -828,10 +828,10 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     h(
       'div',
       { class: 'lang-row' },
-      h('label', {}, '词的语言 (朗读用) ', termLang),
-      h('label', {}, '解释的语言 ', defLang),
-      h('label', {}, '背新词的顺序 ', orderSel),
-      h('button', { class: 'btn small', onclick: swapAll, title: '所有卡片的词和解释对调' }, '⇄ 词和解释对调'),
+      h('label', {}, '词语语言 ', termLang),
+      h('label', {}, '释义语言 ', defLang),
+      h('label', {}, '新词顺序 ', orderSel),
+      h('button', { class: 'btn small', onclick: swapAll, title: '交换所有卡片的词语与释义' }, '⇄ 交换正反面'),
     ),
     importBox,
     diagramBox,
@@ -839,7 +839,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     h(
       'button',
       { class: 'btn add-row', onclick: () => (addRow(makeCard(), { focus: true }), markDirty()) },
-      '＋ 加一张卡片',
+      '添加卡片',
     ),
     h('div', { class: 'row end' }, saveBtn()),
   );
@@ -853,7 +853,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     focus: openImport ? pasteEl : existing ? null : titleInput,
     // 正在存导入的图片声音时也算没保存 (走了就不导入了)
     isDirty: () => dirty || fileImport.busy(),
-    canLeave: () => (!dirty && !fileImport.busy()) || confirm(fileImport.busy() ? '还在导入, 走了就不导入了。确定要走吗?' : '改的东西还没保存, 确定要走吗?'),
+    canLeave: () => (!dirty && !fileImport.busy()) || confirm(fileImport.busy() ? '导入尚未完成，离开将取消导入。确定离开吗？' : '修改尚未保存，确定离开吗？'),
     cleanup: () => {
       fileImport.cancel();
       document.removeEventListener('keydown', onEsc);

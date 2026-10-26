@@ -111,7 +111,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
 
   const bar = h('span', { class: 'meter-fill' });
   const counter = h('span', { class: 'counter' });
-  const undoBtn = h('button', { class: 'btn small undo-btn', title: '撤销 (Z): 退回上一张重新选', onclick: () => undo() }, icon('undo', 16), ' 撤销');
+  const undoBtn = h('button', { class: 'btn small undo-btn', title: '撤销（Z）', onclick: () => undo() }, icon('undo', 16), ' 撤销');
   const stage = h('div', { class: 'learn-stage' });
 
   function sides() {
@@ -120,8 +120,8 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
 
   // 上面那行: 这次背什么、几张 (明天再背 / 暂停了的不算)
   function subText() {
-    if (mode === 'ahead') return `提前复习 ${total} 张: 还没到日子的, 最可能忘的先来`;
-    if (practice) return `练一下${{ forgot: '今天忘了的', leech: '难记卡', starred: '星标的' }[mode]} ${total} 张 · 只算答对答错, 不动复习的日子`;
+    if (mode === 'ahead') return `提前复习 ${total} 张`;
+    if (practice) return `练习${{ forgot: '今日遗忘', leech: '难记卡片', starred: '星标卡片' }[mode]} ${total} 张 · 不影响复习安排`;
     return todayText(total - freshTotal, freshTotal);
   }
 
@@ -142,7 +142,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     const answer = h(
       'div',
       { class: 'flash-answer', hidden: true },
-      h('span', { class: 'muted small' }, backSide === 'term' ? '词' : '解释'),
+      h('span', { class: 'muted small' }, backSide === 'term' ? '词语' : '释义'),
       backSide === 'def' ? cardImage(card.image, 'q-img') : null,
       h('div', { class: 'q-text small' }, rich(card[backSide])),
       h('span', { class: 'answer-tools' }, sayButton(card, backSide, set), dictButton(card, set)),
@@ -150,17 +150,17 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     const judge = h(
       'div',
       { class: 'options-grid two', hidden: true },
-      h('button', { class: 'option tf bad-choice', onclick: () => grade(false) }, h('span', { class: 'key' }, '1'), h('span', { class: 'judge-text' }, fresh ? '✗ 不会' : '✗ 忘了', when(next?.again))),
-      h('button', { class: 'option tf good-choice', onclick: () => grade(true) }, h('span', { class: 'key' }, '2'), h('span', { class: 'judge-text' }, fresh ? '✓ 会' : '✓ 记得', when(next?.good))),
+      h('button', { class: 'option tf bad-choice', onclick: () => grade(false) }, h('span', { class: 'key' }, '1'), h('span', { class: 'judge-text' }, fresh ? '不认识' : '忘记', when(next?.again))),
+      h('button', { class: 'option tf good-choice', onclick: () => grade(true) }, h('span', { class: 'key' }, '2'), h('span', { class: 'judge-text' }, fresh ? '认识' : '记得', when(next?.good))),
     );
     // 今天先不背、暂停 (练习时只能暂停)
     const asideTools = h(
       'div',
       { class: 'row center review-aside' },
-      practice ? null : h('button', { class: 'link-btn', title: '今天先不背这张, 明天再来', onclick: () => setAside(queue[0], 'bury') }, '明天再背这张'),
-      h('button', { class: 'link-btn', title: '不再排进复习, 在卡片集页能恢复', onclick: () => setAside(queue[0], 'suspend') }, '暂停这张'),
+      practice ? null : h('button', { class: 'link-btn', title: '今日跳过，明日再复习', onclick: () => setAside(queue[0], 'bury') }, '推迟到明天'),
+      h('button', { class: 'link-btn', title: '不再安排复习，可在卡片集页恢复', onclick: () => setAside(queue[0], 'suspend') }, '暂停此卡'),
     );
-    const flipBtn = h('button', { class: 'btn primary', onclick: () => reveal() }, '翻过来看答案');
+    const flipBtn = h('button', { class: 'btn primary', onclick: () => reveal() }, '显示答案');
     stage.replaceChildren(
       h(
         'div',
@@ -171,9 +171,9 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
           h(
             'span',
             { class: 'muted small' },
-            front === 'term' ? '词' : '解释',
+            front === 'term' ? '词语' : '释义',
             fresh ? h('span', { class: 'badge new-badge' }, '新词') : null,
-            stat?.lapses >= LEECH ? h('span', { class: 'badge leech-badge', title: `忘了 ${stat.lapses} 次` }, '难记卡') : null,
+            stat?.lapses >= LEECH ? h('span', { class: 'badge leech-badge', title: `遗忘 ${stat.lapses} 次` }, '难记') : null,
           ),
           h('span', { class: 'muted small' }, set.title || '未命名卡片集'),
         ),
@@ -202,7 +202,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
         answer,
         h('div', { class: 'row center' }, flipBtn),
         judge,
-        h('p', { class: 'muted small center-text' }, fresh ? '空格翻面 · 1 不会 · 2 会 · Z 撤销' : '空格翻面 · 1 忘了 · 2 记得 · Z 撤销'),
+        h('p', { class: 'muted small center-text' }, fresh ? '空格 显示答案 · 1 不认识 · 2 认识 · Z 撤销' : '空格 显示答案 · 1 忘记 · 2 记得 · Z 撤销'),
         asideTools,
       ),
     );
@@ -261,7 +261,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
       if (item.fresh) freshTotal--;
     }
     clearNotice(item.card.id);
-    toast(how === 'bury' ? '这张明天再来' : '暂停了, 不再排进复习 (在卡片集页、统计页能恢复)');
+    toast(how === 'bury' ? '已推迟到明天' : '已暂停，可在卡片集页恢复');
     draw();
   }
 
@@ -293,14 +293,14 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
       h(
         'div',
         { class: 'leech-note', role: 'status' },
-        h('strong', {}, `🐌 难记卡: 「${stripMarks(item.card.term).slice(0, 40)}」已经忘了 ${lapses} 次`),
-        h('p', { class: 'muted small' }, '老是忘的, 光多背几遍不一定管用, 换个记法更好记: 加个例句、图片, 拆开词根词缀, 编个谐音, 或者跟长得像的词放一起比一比。也可以先暂停它, 以后再说。'),
+        h('strong', {}, `难记卡片：「${stripMarks(item.card.term).slice(0, 40)}」已遗忘 ${lapses} 次`),
+        h('p', { class: 'muted small' }, '反复遗忘的卡片，重复记忆效果有限。建议补充例句或图片、拆分词根词缀，或与形近词对比；也可暂时搁置。'),
         h(
           'div',
           { class: 'row' },
-          h('button', { class: 'btn small', onclick: () => editCardDialog({ store, setId: item.set.id, card: item.card, onSaved: () => draw() }) }, '✏️ 改卡片'),
-          h('button', { class: 'btn small', onclick: () => setAside(item, 'suspend') }, '暂停这张'),
-          h('button', { class: 'btn small', onclick: close }, '知道了'),
+          h('button', { class: 'btn small', onclick: () => editCardDialog({ store, setId: item.set.id, card: item.card, onSaved: () => draw() }) }, '编辑卡片'),
+          h('button', { class: 'btn small', onclick: () => setAside(item, 'suspend') }, '暂停此卡'),
+          h('button', { class: 'btn small', onclick: close }, '继续'),
         ),
       ),
     );
@@ -325,12 +325,12 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     const counts = {};
     const sizes = Object.fromEntries(Object.keys(CUSTOM).map((k) => [k, k === 'nocap' ? todayOf().held : customPool(k).length]));
     const desc = {
-      more: '计划以外, 还没背过的再多学几个',
-      nocap: '到日子了、超过每天上限排到明天的',
-      ahead: '还没到日子的, 最可能忘的先来; 照常排下次 (考前多巩固一下)',
-      forgot: '今天点了忘了 / 不会的, 再过一遍',
-      leech: `忘了 ${LEECH} 次以上的, 看看怎么记`,
-      starred: '卡片右边点了 ★ 的',
+      more: '计划之外，加学未学过的卡片',
+      nocap: '已到期、但超出每日上限的卡片',
+      ahead: '未到期的卡片，最易遗忘的优先；适合考前巩固',
+      forgot: '今日标记为忘记或不认识的卡片',
+      leech: `遗忘 ${LEECH} 次以上的卡片`,
+      starred: '已加星标的卡片',
     };
     const rows = Object.entries(CUSTOM).map(([k, name]) => {
       const id = `custom-${k}`;
@@ -346,7 +346,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
           value: Math.max(1, value),
           inputmode: 'numeric',
           disabled: empty,
-          'aria-label': `${name}几张`,
+          'aria-label': `${name}数量`,
           oninput: () => {
             radios[k].checked = true;
             kind = k;
@@ -359,7 +359,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
         h(
           'label',
           { class: 'switch-text', for: id },
-          h('span', { class: 'switch-label' }, name, h('span', { class: 'muted' }, ` (${sizes[k]} 张)`), PRACTICE.has(k) ? h('span', { class: 'badge practice-badge' }, '不动日子') : null),
+          h('span', { class: 'switch-label' }, name, h('span', { class: 'muted' }, `（${sizes[k]} 张）`), PRACTICE.has(k) ? h('span', { class: 'badge practice-badge' }, '练习') : null),
           h('span', { class: 'switch-desc' }, desc[k]),
         ),
         counts[k] ? h('span', { class: 'scope-count' }, counts[k], ' 张') : null,
@@ -369,7 +369,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     const d = openDialog({
       title: '自定义学习',
       body: [
-        h('p', { class: 'muted small' }, `${scope ? `只在「${scope.title || '未命名卡片集'}」里。` : '所有卡片集一起。'}标着「不动日子」的是练习: 只算答对答错, 不改下次哪天复习。`),
+        h('p', { class: 'muted small' }, `${scope ? `范围：「${scope.title || '未命名卡片集'}」。` : '范围：全部卡片集。'}标有「练习」的不影响复习安排。`),
         rows,
       ],
       footer: [
@@ -379,7 +379,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
           {
             class: 'btn primary',
             onclick: () => {
-              if (!kind) return toast('选一种');
+              if (!kind) return toast('请选择一项');
               const n = counts[kind] ? Math.min(sizes[kind], Math.max(1, Math.round(Number(counts[kind].value)) || 1)) : 0;
               d.close();
               start(kind, n);
@@ -398,11 +398,11 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     if (!n) return null;
     const own = store.data.settings.fsrs;
     const text = own
-      ? `现在按你的记录优化过的参数排 (${dateText(own.at)})。翻卡自评的记录一共 ${n} 次, 攒多了可以再优化一次。`
+      ? `当前使用个人复习参数（${dateText(own.at)}），共 ${n} 次复习记录。`
       : n >= 400
-        ? `翻卡自评的记录已经攒了 ${n} 次, 可以按你自己的记录优化排法了。`
-        : `翻卡自评的记录已经攒了 ${n} 次。现在按 FSRS 的默认参数排; 攒到 1000 次左右, 按你自己的记录优化会更准。`;
-    return h('p', { class: 'muted small' }, text, ' ', optimizeBtn('按我的记录优化'));
+        ? `已有 ${n} 次复习记录，可按个人记录优化复习参数。`
+        : `已有 ${n} 次复习记录。当前使用默认参数；积累约 1000 次后，优化效果更好。`;
+    return h('p', { class: 'muted small' }, text, ' ', optimizeBtn('优化参数'));
   }
 
   // 计划走到哪了 (这里有定了计划的卡片集才有)
@@ -420,9 +420,9 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   function moreButtons() {
     const left = moreCards().length;
     return [
-      held ? h('button', { class: 'btn', onclick: () => start('nocap') }, `接着复习剩下的 ${held} 张`) : null,
-      left ? h('button', { class: 'btn', onclick: () => start('more', MORE) }, `再学 ${Math.min(MORE, left)} 个新词`) : null,
-      h('button', { class: 'btn', onclick: openCustom }, '自定义学习…'),
+      held ? h('button', { class: 'btn', onclick: () => start('nocap') }, `继续复习剩余 ${held} 张`) : null,
+      left ? h('button', { class: 'btn', onclick: () => start('more', MORE) }, `加学 ${Math.min(MORE, left)} 个新词`) : null,
+      h('button', { class: 'btn', onclick: openCustom }, '自定义学习'),
     ];
   }
 
@@ -430,42 +430,42 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
     resolve();
     held = todayOf().held; // 做完以后按现在的算 (复习到上限了, 剩下的都超了)
     const tomorrow = dueTomorrow(sets) + held; // 超过上限的明天再来
-    const backBtn = h('a', { class: 'btn primary', href: back }, `回到${backText}`);
-    const heldNote = held ? h('p', {}, `还有 ${held} 张到日子的, 超过了每天最多复习 ${store.reviewCap} 张的上限, 明天先来最可能忘的。想现在接着复习也行。`) : null;
+    const backBtn = h('a', { class: 'btn primary', href: back }, `返回${backText}`);
+    const heldNote = held ? h('p', {}, `另有 ${held} 张已到期，超出每日上限（${store.reviewCap} 张），已顺延；也可现在继续复习。`) : null;
     if (total === 0) {
       const busy = reviewedToday(sets) > 0 || learnable.some((set) => newToday(set).learned) || history.length > 0;
       stage.replaceChildren(
         h(
           'div',
           { class: 'summary' },
-          h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '✅'),
-          h('h2', {}, held ? '今天复习够了' : busy ? '今天的背完了' : '今天没有要复习的'),
+          h('div', { class: 'done-mark', 'aria-hidden': 'true' }, icon('check', 28)),
+          h('h2', {}, held ? '已达今日上限' : busy ? '今日任务已完成' : '今日没有待复习的卡片'),
           heldNote ??
             (busy
               ? null
-              : h('p', { class: 'muted' }, '在单词卡里 (还有学习里的单词卡题) 翻过来、自己说了会不会的卡片, 会用 FSRS 排到以后某一天再出来: 记得的隔得越来越久, 忘了的很快再来。在卡片集里定个「每天背新词」的计划, 每天的新词也会在这里出。')),
-          tomorrow ? h('p', {}, `明天有 ${tomorrow} 张要复习。`) : null,
+              : h('p', { class: 'muted' }, '在单词卡中标记过「会 / 不会」的卡片，会按 FSRS 算法安排复习；在卡片集中设置每日新词计划后，新词也会出现在这里。')),
+          tomorrow ? h('p', {}, `明日待复习 ${tomorrow} 张。`) : null,
           planNotes(),
           logNote(),
-          h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), ' 撤销最后一张') : null, moreButtons(), backBtn),
+          h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), '撤销上一张') : null, moreButtons(), backBtn),
         ),
       );
       return;
     }
     if (prefs.sound && !quiet) playSound('done');
-    const fresh = freshTotal ? ` (新词 ${freshTotal} 个)` : '';
+    const fresh = freshTotal ? `（新词 ${freshTotal}）` : '';
     stage.replaceChildren(
       h(
         'div',
         { class: 'summary' },
-        h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '🎉'),
-        h('h2', {}, mode !== 'today' ? '做完了' : '今天的复习做完了'),
-        h('p', { class: 'muted' }, `背了 ${total} 张${fresh}, 一次就会的 ${right} 张。`),
+        h('div', { class: 'done-mark', 'aria-hidden': 'true' }, icon('check', 28)),
+        h('h2', {}, mode !== 'today' ? '已完成' : '今日复习已完成'),
+        h('p', { class: 'muted' }, `共 ${total} 张${fresh}，一次答对 ${right} 张。`),
         heldNote,
-        tomorrow ? h('p', {}, `明天还有 ${tomorrow} 张。`) : h('p', { class: 'muted' }, '明天没有要复习的。'),
+        tomorrow ? h('p', {}, `明日待复习 ${tomorrow} 张。`) : h('p', { class: 'muted' }, '明日没有待复习的卡片。'),
         planNotes(),
         logNote(),
-        h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), ' 撤销最后一张') : null, moreButtons(), backBtn),
+        h('div', { class: 'row center' }, history.length ? h('button', { class: 'btn', onclick: undo }, icon('undo', 16), '撤销上一张') : null, moreButtons(), backBtn),
       ),
     );
   }
@@ -531,12 +531,12 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   );
 
   return {
-    title: '今天的复习',
+    title: '今日复习',
     el: h(
       'section',
       { class: 'learn-page' },
       h('div', { class: 'cards-head' }, h('a', { class: 'back', href: back }, `← ${backText}`), h('div', { class: 'row' }, undoBtn, counter)),
-      h('h1', { class: 'review-title' }, scope ? `复习: ${scope.title || '未命名卡片集'}` : '今天的复习'),
+      h('h1', { class: 'review-title' }, scope ? `复习：${scope.title || '未命名卡片集'}` : '今日复习'),
       sub,
       h('span', { class: 'meter thin' }, bar),
       notice,

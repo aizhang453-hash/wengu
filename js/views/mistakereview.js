@@ -5,7 +5,7 @@
 //   #/mistakes/review/<id>  只做这一道
 //   #/mistakes/review/kind:<题型>  这类还没掌握的全做一遍
 
-import { h, fill, dialogOpen, openDialog } from '../dom.js';
+import { h, fill, dialogOpen, openDialog, icon } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { shuffle } from '../questions.js';
 import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel, kindOf } from '../mistakes.js';
@@ -26,8 +26,8 @@ export function renderMistakeReview({ store }, which = null) {
         'div',
         { class: 'summary' },
         h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '✓'),
-        h('h1', {}, which === 'all' ? '没有还没掌握的错题' : which?.startsWith('kind:') ? `「${which.slice(5)}」的都掌握了` : which ? '找不到这道错题' : '今天没有要重做的错题'),
-        h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: '#/mistakes' }, '回错题集')),
+        h('h1', {}, which === 'all' ? '没有未掌握的错题' : which?.startsWith('kind:') ? `「${which.slice(5)}」已全部掌握` : which ? '错题不存在' : '今日没有待重做的错题'),
+        h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')),
       ),
     );
     return { title: '重做错题', el: root };
@@ -39,7 +39,7 @@ export function renderMistakeReview({ store }, which = null) {
       ? h(
           'div',
           { class: 'mk-images' },
-          ids.map((id) => h('button', { class: 'mk-image-btn', type: 'button', title: '放大看', onclick: () => openDialog({ title: '图片', body: cardImage(id, 'mk-img-big') }) }, cardImage(id, 'mk-img'))),
+          ids.map((id) => h('button', { class: 'mk-image-btn', type: 'button', title: '查看大图', onclick: () => openDialog({ title: '图片', body: cardImage(id, 'mk-img-big') }) }, cardImage(id, 'mk-img'))),
         )
       : null;
 
@@ -63,16 +63,16 @@ export function renderMistakeReview({ store }, which = null) {
       const left = MASTER_STREAK - (review?.streak ?? 0);
       const mine = mineLabel(m);
       const last = i + 1 >= list.length;
-      const next = h('button', { class: 'btn primary', onclick: () => goNext() }, last ? '看结果' : '下一题');
+      const next = h('button', { class: 'btn primary', onclick: () => goNext() }, last ? '查看结果' : '下一题');
       feedback.className = `mk-feedback ${correct ? 'good' : 'bad'}`;
       feedback.hidden = false;
       fill(
         feedback,
-        h('strong', {}, correct ? (review?.mastered ? '答对了! 连对 3 次, 这道掌握了 🎉' : `答对了! 再连对 ${left} 次算掌握`) : '又错了, 很快会再出这道'),
-        h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '✓ 对的'), rich(answerLabel(m))),
-        mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '✕ 上次选的'), rich(mine)) : null,
-        m.note ? h('div', { class: 'mk-note' }, h('div', { class: 'mk-line-label' }, '为什么错'), rich(m.note)) : null,
-        h('div', { class: 'row end' }, h('a', { class: 'btn', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '改这道题'), next),
+        h('strong', {}, correct ? (review?.mastered ? '回答正确，已连续答对 3 次，此题已掌握' : `回答正确，再连续答对 ${left} 次即为掌握`) : '回答错误，此题将很快再次出现'),
+        h('div', { class: 'mk-line ok' }, h('span', { class: 'mk-line-label' }, '正确答案'), rich(answerLabel(m))),
+        mine ? h('div', { class: 'mk-line bad' }, h('span', { class: 'mk-line-label' }, '上次答案'), rich(mine)) : null,
+        m.note ? h('div', { class: 'mk-note' }, h('div', { class: 'mk-line-label' }, '解析'), rich(m.note)) : null,
+        h('div', { class: 'row end' }, h('a', { class: 'btn', href: `#/mistakes/${encodeURIComponent(m.id)}/edit` }, '编辑'), next),
       );
       keys = { next: goNext };
       next.focus({ preventScroll: true });
@@ -101,7 +101,7 @@ export function renderMistakeReview({ store }, which = null) {
       answerArea = h('div', { class: 'mk-options' }, buttons);
       keys = { pick: (j) => buttons[j]?.click() };
     } else {
-      const input = h('input', { class: 'input', type: 'text', placeholder: '写答案 (分数、小数都行)', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': '答案' });
+      const input = h('input', { class: 'input', type: 'text', placeholder: '输入答案（可填分数或小数）', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', 'aria-label': '答案' });
       const submit = () => {
         if (answered || !input.value.trim()) return;
         input.disabled = true;
@@ -114,7 +114,7 @@ export function renderMistakeReview({ store }, which = null) {
           submit();
         }
       });
-      answerArea = h('div', { class: 'written' }, h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: submit }, '答')));
+      answerArea = h('div', { class: 'written' }, h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: submit }, '提交')));
       keys = {};
       setTimeout(() => input.focus({ preventScroll: true }), 0);
     }
@@ -145,10 +145,10 @@ export function renderMistakeReview({ store }, which = null) {
       h(
         'div',
         { class: 'summary' },
-        h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, right === results.length ? '🎉' : '📕'),
-        h('h1', {}, '重做完了'),
+        h('div', { class: 'done-mark', 'aria-hidden': 'true' }, icon('check', 28)),
+        h('h1', {}, '重做完成'),
         h('div', { class: `big-score ${right === results.length ? 'good' : 'mid'}` }, `${right} / ${results.length}`),
-        h('p', { class: 'muted' }, `${newlyMastered ? `新掌握 ${newlyMastered} 道 · ` : ''}做错的会很快再出, 做对的隔几天再来`),
+        h('p', { class: 'muted' }, `${newlyMastered ? `新掌握 ${newlyMastered} 道 · ` : ''}答错的题将很快再次出现，答对的按间隔安排`),
         h(
           'div',
           { class: 'row center' },
@@ -164,10 +164,10 @@ export function renderMistakeReview({ store }, which = null) {
                     show();
                   },
                 },
-                `做错的 ${wrong.length} 道再来一次`,
+                `重做答错的 ${wrong.length} 道`,
               )
             : null,
-          h('a', { class: `btn${wrong.length ? '' : ' primary'}`, href: '#/mistakes' }, '回错题集'),
+          h('a', { class: `btn${wrong.length ? '' : ' primary'}`, href: '#/mistakes' }, '返回错题集'),
         ),
       ),
     );

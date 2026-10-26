@@ -8133,3 +8133,15 @@ body.has-pet main {
   display: flex;
   gap: 6px;
 }
+
+/* 做完了的勾 (复习、错题重做) */
+.done-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  background: var(--good-soft);
+  color: var(--good);
+}

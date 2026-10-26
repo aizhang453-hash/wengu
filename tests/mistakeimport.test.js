@@ -137,7 +137,7 @@ test('没写完的说差什么 (存的时候一道道打开补上)', () => {
   const items = parseMistakeImport('{"mistakes": [{"question": "Q", "options": ["a", "b", "c", "d"], "answer": "", "mine": "B"}, {"question": "Q2", "type": "input"}, {"question": "Q3", "type": "choice"}]}', ids());
   assert.deepEqual(
     items.map((x) => x.problem),
-    ['点一下哪个是对的', '写上对的答案', '至少写 2 个选项'],
+    ['请标出正确答案', '请填写正确答案', '至少需要 2 个选项'],
   );
   assert.equal(items[0].mistake.mine, 1);
   assert.deepEqual(items[2].mistake.options, ['', '']); // 后面空着的去掉了, 编辑时再加
@@ -154,12 +154,12 @@ test('认不出来的说怎么办', () => {
     }
     return '';
   };
-  assert.match(message(''), /还没有粘贴/);
-  assert.match(message('照片太模糊了, 看不清'), /没找到/);
-  assert.match(message('{"question": "Q", "options": ['), /格式有点问题/);
-  assert.match(message('{"mistakes": []}'), /没有题目/);
-  assert.match(message('{"mistakes": [{"note": "只有笔记"}]}'), /没有题目/);
-  assert.match(message(aiPrompt()), /给 AI 的那段话/);
+  assert.match(message(''), /请粘贴/);
+  assert.match(message('照片太模糊了, 看不清'), /未找到/);
+  assert.match(message('{"question": "Q", "options": ['), /格式无法识别/);
+  assert.match(message('{"mistakes": []}'), /未包含题目/);
+  assert.match(message('{"mistakes": [{"note": "只有笔记"}]}'), /未包含题目/);
+  assert.match(message(aiPrompt()), /提示词/);
   assert.match(message(JSON.stringify({ app: 'wengu', version: 1, sets: [], mistakes: [{ id: 'x', question: 'Q' }] })), /备份/);
 });
 

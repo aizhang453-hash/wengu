@@ -15,7 +15,7 @@ const LIST_MAX = 30; // 难记卡、暂停的一次列几张
 export function renderStats({ store, go }, id = null) {
   const scope = id ? store.getSet(id) : null;
   if (id && !scope) {
-    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '找不到这个卡片集'), h('a', { class: 'btn primary', href: '#/stats' }, '看全部的统计')) };
+    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '卡片集不存在'), h('a', { class: 'btn primary', href: '#/stats' }, '查看全部统计')) };
   }
   const sets = id ? store.setsOf(id) : store.allSets();
   const here = `#/stats${id ? `/${encodeURIComponent(id)}` : ''}`;
@@ -31,9 +31,9 @@ export function renderStats({ store, go }, id = null) {
   // 看哪些: 全部 / 文件夹 / 卡片集
   const picker = h(
     'select',
-    { class: 'input stats-scope', 'aria-label': '看哪些的统计', onchange: (e) => go(e.target.value ? `#/stats/${encodeURIComponent(e.target.value)}` : '#/stats') },
-    h('option', { value: '' }, '所有卡片集'),
-    store.allFolders().map((f) => h('option', { value: FOLDER_PREFIX + f.id, selected: id === FOLDER_PREFIX + f.id }, `📁 ${f.name || '未命名文件夹'}`)),
+    { class: 'input stats-scope', 'aria-label': '统计范围', onchange: (e) => go(e.target.value ? `#/stats/${encodeURIComponent(e.target.value)}` : '#/stats') },
+    h('option', { value: '' }, '全部卡片集'),
+    store.allFolders().map((f) => h('option', { value: FOLDER_PREFIX + f.id, selected: id === FOLDER_PREFIX + f.id }, `文件夹：${f.name || '未命名文件夹'}`)),
     store
       .allSets()
       .map((s) => h('option', { value: s.id, selected: id === s.id }, s.title || '未命名卡片集')),
@@ -46,7 +46,7 @@ export function renderStats({ store, go }, id = null) {
       'section',
       { class: 'stats-page' },
       h('a', { class: 'back', href: back }, `← ${scope ? scope.title || '未命名卡片集' : '首页'}`),
-      h('div', { class: 'page-head' }, h('h1', {}, '📊 统计'), picker),
+      h('div', { class: 'page-head' }, h('h1', {}, '统计'), picker),
       sets.some((s) => s.cards.length)
         ? [
             todaySection(store, sets, log, now, review),
@@ -58,7 +58,7 @@ export function renderStats({ store, go }, id = null) {
             leechSection(store, sets, redraw, review),
             suspendedSection(store, sets, redraw),
           ]
-        : h('p', { class: 'muted' }, '还没有卡片。'),
+        : h('p', { class: 'muted' }, '暂无卡片。'),
     ),
   };
 }
@@ -75,14 +75,14 @@ function todaySection(store, sets, log, now, review) {
       ? h(
           'div',
           { class: 'stat-figs' },
-          figure(num(t.reviews), '翻卡几次'),
+          figure(num(t.reviews), '复习次数'),
           figure(num(t.fresh), '新词'),
-          figure(num(t.again), '忘了几次'),
-          figure(t.minutes ? `${t.minutes} 分钟` : '不到 1 分钟', '大约用了'),
-          today.n ? figure(percent(today.ok / today.n), `记住率 (${today.n} 张到日子的)`) : null,
+          figure(num(t.again), '遗忘次数'),
+          figure(t.minutes ? `${t.minutes} 分钟` : '< 1 分钟', '学习时长'),
+          today.n ? figure(percent(today.ok / today.n), `记忆率（${today.n} 张到期）`) : null,
         )
-      : h('p', { class: 'muted' }, '今天还没翻卡自评过。'),
-    h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: review }, '去今天的复习')),
+      : h('p', { class: 'muted' }, '今日尚未复习。'),
+    h('div', { class: 'row' }, h('a', { class: 'btn primary small', href: review }, '开始复习')),
   );
 }
 
@@ -119,12 +119,12 @@ function forecastSection(sets, now) {
     const when = (i) => (i === 0 ? '今天' : i === 1 ? '明天' : dateText(startOfDay(now) + i * DAY + DAY / 2, now));
     fill(
       box,
-      bars(values, { label: (i) => (i === 0 ? '今天' : i % step === 0 ? `${i}天` : null), title: (i, v) => `${when(i)}: ${v} 张`, cls: days > 30 ? 'dense' : '' }),
-      h('p', { class: 'muted small' }, `今天 ${num(values[0])} 张 (连已经到日子的) · 明天 ${num(values[1] ?? 0)} 张 · 一周内 ${num(week)} 张 · ${days === 30 ? '一个月' : '三个月'}里平均每天 ${num(sum / days)} 张`),
+      bars(values, { label: (i) => (i === 0 ? '今天' : i % step === 0 ? `${i}天` : null), title: (i, v) => `${when(i)}：${v} 张`, cls: days > 30 ? 'dense' : '' }),
+      h('p', { class: 'muted small' }, `今日 ${num(values[0])} 张（含已到期） · 明日 ${num(values[1] ?? 0)} 张 · 一周内 ${num(week)} 张 · ${days === 30 ? '一个月' : '三个月'}内日均 ${num(sum / days)} 张`),
     );
   }
   draw();
-  return section('以后每天要复习几张', h('div', { class: 'chips' }, tabs), box, h('p', { class: 'muted small' }, '还没背过的新词不算 (每天背几个新词在卡片集的计划里定)。某几天特别多, 是同一天背的一批又一起到日子了; 以后排的日子会自己错开。'));
+  return section('复习预测', h('div', { class: 'chips' }, tabs), box, h('p', { class: 'muted small' }, '不含未学的新词。同一天学习的卡片可能在同一天到期，之后的复习日期会自动错开。'));
 }
 
 // 日历: 最近一年每天翻卡自评了几次 (像 Anki、GitHub 的那种格子), 一列一周, 星期一在上面
@@ -142,7 +142,7 @@ function calendarSection(sets, log, now) {
   for (let t = start + DAY / 2; t <= today0 + DAY / 2; t += DAY) {
     const key = dayKey(t);
     const n = byDay.get(key) ?? 0;
-    cells.push(h('span', { class: `cal-cell l${level(n)}`, title: `${key}: ${n} 次` }));
+    cells.push(h('span', { class: `cal-cell l${level(n)}`, title: `${key}：${n} 次` }));
   }
   let days = 0;
   let total = 0;
@@ -156,27 +156,27 @@ function calendarSection(sets, log, now) {
   const wrap = h('div', { class: 'cal-wrap' }, h('div', { class: 'cal-days' }, [...WEEKDAYS].map((d, i) => h('span', {}, i % 2 ? '' : d))), grid);
   requestAnimationFrame(() => (wrap.scrollLeft = wrap.scrollWidth)); // 手机上放不下: 先看最近的
   return section(
-    '每天背了多少',
+    '学习记录',
     wrap,
     h(
       'p',
       { class: 'muted small' },
-      total ? `最近一年背了 ${days} 天, 翻卡自评 ${num(total)} 次 (连从 Anki 搬来的), 背的那些天平均每天 ${num(total / days)} 次。颜色越深背得越多。` : '最近一年还没有翻卡自评的记录。',
+      total ? `近一年学习 ${days} 天，复习 ${num(total)} 次（含 Anki 导入），日均 ${num(total / days)} 次。颜色越深表示复习越多。` : '近一年暂无复习记录。',
     ),
   );
 }
 
 function retentionSection(store, sets, log, now, redraw) {
   const rows = retentionStats(sets, log, now);
-  const names = { 1: '今天', 7: '最近 7 天', 30: '最近 30 天', 365: '最近一年' };
+  const names = { 1: '今日', 7: '近 7 天', 30: '近 30 天', 365: '近一年' };
   const target = store.retention;
   return section(
-    '记住率',
-    h('p', { class: 'muted small' }, '到日子 (隔了一天以上) 来复习时还记得的比例。当天又练的、新词第一次背的不算。'),
+    '记忆率',
+    h('p', { class: 'muted small' }, '到期复习时仍记得的比例，不含当日重复练习和新词首次学习。'),
     h(
       'table',
       { class: 'opt-table stats-table' },
-      h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, '记得'), h('th', {}, '复习了'), h('th', {}, '记住率'))),
+      h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, '记得'), h('th', {}, '复习'), h('th', {}, '记忆率'))),
       h(
         'tbody',
         {},
@@ -195,11 +195,11 @@ function retentionSection(store, sets, log, now, redraw) {
     h(
       'p',
       { class: 'small' },
-      `想记住的把握是 ${percent(target)}: 排复习时按这个算, 记住率差不多就是正常的。`,
+      `目标记忆率为 ${percent(target)}，实际记忆率接近该值即属正常。`,
       ' ',
-      h('button', { class: 'link-btn', onclick: () => openRetentionDialog({ store, onSaved: redraw }) }, '改'),
+      h('button', { class: 'link-btn', onclick: () => openRetentionDialog({ store, onSaved: redraw }) }, '修改'),
       ' · ',
-      h('button', { class: 'link-btn', onclick: () => openCapDialog({ store, onSaved: redraw }) }, `每天最多复习 ${store.reviewCap} 张`),
+      h('button', { class: 'link-btn', onclick: () => openCapDialog({ store, onSaved: redraw }) }, `每日上限 ${store.reviewCap} 张`),
     ),
   );
 }
@@ -208,28 +208,28 @@ function cardsSection(sets, now) {
   const c = cardStates(sets);
   const k = knowledge(sets, now);
   const parts = [
-    ['new', '新词', '还没背过'],
-    ['learning', '学习中', '刚忘了, 今天还要再来'],
-    ['young', '还嫩', `隔不到 ${MATURE} 天`],
-    ['mature', '记牢了', `隔 ${MATURE} 天以上`],
-    ['suspended', '暂停的', '不排进复习'],
+    ['new', '新词', '未学习'],
+    ['learning', '学习中', '刚遗忘，今日还需复习'],
+    ['young', '巩固中', `间隔不足 ${MATURE} 天`],
+    ['mature', '已掌握', `间隔 ${MATURE} 天以上`],
+    ['suspended', '已暂停', '不安排复习'],
   ];
   return section(
-    '卡片背到哪了',
+    '卡片状态',
     h(
       'div',
       { class: 'state-bar', role: 'img', 'aria-label': parts.map(([key, name]) => `${name} ${c[key]} 张`).join(', ') },
-      parts.map(([key, name]) => (c[key] ? h('span', { class: `state-seg ${key}`, style: `flex-grow:${c[key]}`, title: `${name}: ${c[key]} 张` }) : null)),
+      parts.map(([key, name]) => (c[key] ? h('span', { class: `state-seg ${key}`, style: `flex-grow:${c[key]}`, title: `${name}：${c[key]} 张` }) : null)),
     ),
     h(
       'ul',
       { class: 'state-legend' },
       parts.map(([key, name, desc]) =>
-        h('li', {}, h('span', { class: `state-dot ${key}` }), h('strong', {}, name), ` ${num(c[key])} 张`, h('span', { class: 'muted small' }, ` (${percent(c.total ? c[key] / c.total : 0)} · ${desc})`)),
+        h('li', {}, h('span', { class: `state-dot ${key}` }), h('strong', {}, name), ` ${num(c[key])} 张`, h('span', { class: 'muted small' }, `（${percent(c.total ? c[key] / c.total : 0)} · ${desc}）`)),
       ),
     ),
     k.count
-      ? h('p', { class: 'small' }, `估计现在记得 ${num(k.sum)} 张 (背过的 ${num(k.count)} 张, 平均把握 ${percent(k.avg)})。`, c.leech ? ` 难记卡 ${c.leech} 张 (见下面)。` : '')
+      ? h('p', { class: 'small' }, `预计当前记得 ${num(k.sum)} 张（已学 ${num(k.count)} 张，平均记忆率 ${percent(k.avg)}）。`, c.leech ? `难记卡片 ${c.leech} 张，见下文。` : '')
       : null,
   );
 }
@@ -242,7 +242,7 @@ function cardLine(item, extra, tools) {
     h(
       'div',
       { class: 'stats-card-text' },
-      h('strong', {}, stripMarks(item.card.term).slice(0, 60) || '(没有词)'),
+      h('strong', {}, stripMarks(item.card.term).slice(0, 60) || '（空）'),
       h('span', { class: 'muted' }, ` — ${stripMarks(item.card.def).replace(/\s+/g, ' ').slice(0, 60)}`),
       h('div', { class: 'muted small' }, h('a', { href: `#/set/${encodeURIComponent(item.set.id)}` }, item.set.title || '未命名卡片集'), extra ? ` · ${extra}` : ''),
     ),
@@ -254,22 +254,22 @@ function leechSection(store, sets, redraw, review) {
   const list = leeches(sets);
   if (!list.length) return null;
   return section(
-    `🐌 难记卡 (${list.length})`,
-    h('p', { class: 'muted small' }, `复习时忘了 ${LEECH} 次以上的。光多背几遍不一定管用, 换个记法更好记: 加个例句、图片, 拆开词根词缀, 编个谐音, 或者跟长得像的词放一起比一比。不想背的可以先暂停。`),
+    `难记卡片（${list.length}）`,
+    h('p', { class: 'muted small' }, `复习时遗忘 ${LEECH} 次以上的卡片。建议补充例句或图片、拆分词根词缀，或与形近词对比；也可暂时搁置。`),
     h(
       'ul',
       { class: 'stats-list' },
       list.slice(0, LIST_MAX).map((x) => {
         const paused = Boolean(x.set.stats[x.card.id]?.sus);
-        return cardLine(x, `忘了 ${x.lapses} 次${paused ? ' · 暂停了' : ''}`, [
-          h('button', { class: 'btn small', onclick: () => editCardDialog({ store, setId: x.set.id, card: x.card, onSaved: redraw }) }, '✏️ 改'),
+        return cardLine(x, `遗忘 ${x.lapses} 次${paused ? ' · 已暂停' : ''}`, [
+          h('button', { class: 'btn small', onclick: () => editCardDialog({ store, setId: x.set.id, card: x.card, onSaved: redraw }) }, '编辑'),
           h(
             'button',
             {
               class: 'btn small',
               onclick: () => {
                 store.suspend(x.set.id, [x.card.id], !paused);
-                toast(paused ? '恢复了' : '暂停了');
+                toast(paused ? '已恢复' : '已暂停');
                 redraw();
               },
             },
@@ -278,8 +278,8 @@ function leechSection(store, sets, redraw, review) {
         ]);
       }),
     ),
-    list.length > LIST_MAX ? h('p', { class: 'muted small' }, `还有 ${list.length - LIST_MAX} 张, 在卡片集页点「难记卡」看全部。`) : null,
-    h('div', { class: 'row' }, h('a', { class: 'btn small', href: review }, '去复习 (「自定义学习」里能单练难记卡)')),
+    list.length > LIST_MAX ? h('p', { class: 'muted small' }, `另有 ${list.length - LIST_MAX} 张，可在卡片集页的「难记」中查看。`) : null,
+    h('div', { class: 'row' }, h('a', { class: 'btn small', href: review }, '去复习')),
   );
 }
 
@@ -287,20 +287,20 @@ function suspendedSection(store, sets, redraw) {
   const list = suspendedCards(sets);
   if (!list.length) return null;
   return section(
-    `⏸ 暂停的 (${list.length})`,
-    h('p', { class: 'muted small' }, '暂停了不排进复习、不当新词出, 复习记录都留着; 恢复了接着原来的进度排。'),
+    `已暂停（${list.length}）`,
+    h('p', { class: 'muted small' }, '暂停的卡片不安排复习，也不作为新词出现；复习记录保留，恢复后按原进度继续。'),
     h(
       'ul',
       { class: 'stats-list' },
       list.slice(0, LIST_MAX).map((x) =>
-        cardLine(x, `${dateText(x.at)}暂停的`, [
+        cardLine(x, `${dateText(x.at)}暂停`, [
           h(
             'button',
             {
               class: 'btn small',
               onclick: () => {
                 store.suspend(x.set.id, [x.card.id], false);
-                toast('恢复了');
+                toast('已恢复');
                 redraw();
               },
             },
@@ -309,7 +309,7 @@ function suspendedSection(store, sets, redraw) {
         ]),
       ),
     ),
-    list.length > LIST_MAX ? h('p', { class: 'muted small' }, `还有 ${list.length - LIST_MAX} 张。`) : null,
+    list.length > LIST_MAX ? h('p', { class: 'muted small' }, `另有 ${list.length - LIST_MAX} 张。`) : null,
     h(
       'div',
       { class: 'row' },
@@ -318,11 +318,11 @@ function suspendedSection(store, sets, redraw) {
         {
           class: 'btn small',
           onclick: () => {
-            if (!confirm(`${list.length} 张都恢复, 照常排进复习?`)) return;
+            if (!confirm(`恢复全部 ${list.length} 张卡片？`)) return;
             const bySet = new Map();
             for (const x of list) bySet.set(x.set.id, [...(bySet.get(x.set.id) ?? []), x.card.id]);
             for (const [sid, ids] of bySet) store.suspend(sid, ids, false);
-            toast(`恢复了 ${list.length} 张`);
+            toast(`已恢复 ${list.length} 张`);
             redraw();
           },
         },
@@ -335,11 +335,11 @@ function suspendedSection(store, sets, redraw) {
 // 一天里什么时候记得最牢: 每个时间段复习时记住了几成 (最近半年), 最好的比最常学的确实高才建议换时间
 export function timeAdvice(r) {
   const pct = (b) => `${Math.round((b.ok / b.n) * 100)}%`;
-  const range = (b) => `${b.from}–${b.to} 点`;
-  if (!r.enough) return `复习记录还不够看出来 (最近半年复习了 ${r.total} 次; 至少要 ${MIN_TIME_TOTAL} 次, 两个时间段各 ${MIN_BLOCK} 次以上)。再学一阵就有了。`;
-  if (r.same) return `你最常在${r.usual.name} (${range(r.usual)}) 学, 这时候复习记住了 ${pct(r.usual)}, 正好是记得最牢的时候, 保持!`;
-  if (r.sure) return `${r.best.name} (${range(r.best)}) 复习时记住了 ${pct(r.best)}, 比你最常学的${r.usual.name} (${pct(r.usual)}) 高。新词、难记卡这些要动脑子的, 可以放到${r.best.name}学。`;
-  return `各个时间段差不多: 最好的${r.best.name} ${pct(r.best)}, 最常学的${r.usual.name} ${pct(r.usual)}, 差得不多, 可能只是碰巧。什么时候学都行, 重要的是每天都学。`;
+  const range = (b) => `${b.from}–${b.to} 时`;
+  if (!r.enough) return `复习记录不足（近半年 ${r.total} 次；需至少 ${MIN_TIME_TOTAL} 次，且两个时段各 ${MIN_BLOCK} 次以上）。`;
+  if (r.same) return `最常学习的时段是${r.usual.name}（${range(r.usual)}），记忆率 ${pct(r.usual)}，也是记得最牢的时段。`;
+  if (r.sure) return `${r.best.name}（${range(r.best)}）记忆率 ${pct(r.best)}，高于最常学习的${r.usual.name}（${pct(r.usual)}）。新词和难记卡片可安排在${r.best.name}学习。`;
+  return `各时段差异不大：最高为${r.best.name} ${pct(r.best)}，最常学习的${r.usual.name}为 ${pct(r.usual)}。保持每天学习即可。`;
 }
 
 function timeSection(sets, log, now) {
@@ -347,7 +347,7 @@ function timeSection(sets, log, now) {
   if (!blocks.some((b) => b.n)) return null;
   const r = bestTime(blocks);
   return section(
-    '一天里什么时候记得最牢',
+    '学习时段',
     h('p', {}, timeAdvice(r)),
     h(
       'ul',
@@ -361,12 +361,12 @@ function timeSection(sets, log, now) {
           return h(
             'li',
             { class: `tod-row${enough ? '' : ' few'}${best ? ' best' : ''}` },
-            h('span', { class: 'tod-name' }, b.name, h('span', { class: 'muted small' }, ` ${b.from}–${b.to} 点`)),
+            h('span', { class: 'tod-name' }, b.name, h('span', { class: 'muted small' }, ` ${b.from}–${b.to} 时`)),
             h('span', { class: 'tod-bar', 'aria-hidden': 'true' }, h('span', { style: `width: ${enough ? pct : 0}%` })),
-            h('span', { class: 'small' }, enough ? `${pct}% · ${num(b.n)} 次` : `${num(b.n)} 次 (太少, 不算)`),
+            h('span', { class: 'small' }, enough ? `${pct}% · ${num(b.n)} 次` : `${num(b.n)} 次（不足）`),
           );
         }),
     ),
-    h('p', { class: 'muted small' }, '按复习的时候记住了几成算的 (第一次学的、同一天又看的不算)。卡片难不难、隔得久不久也有影响, 记录越多越准。'),
+    h('p', { class: 'muted small' }, '按各时段复习时的记忆率统计，不含首次学习和当日重复练习；记录越多越准确。'),
   );
 }

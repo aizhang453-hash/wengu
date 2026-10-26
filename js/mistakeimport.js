@@ -190,23 +190,23 @@ function listIn(v) {
 //   mistake 是新的错题 (id 用 makeId 起), problem 是还差什么 (mistakeProblem; '' 是写完整了)
 // 一道都认不出来时抛 ImportError, message 写着怎么办
 export function parseMistakeImport(text, makeId = newId) {
-  if (!String(text ?? '').trim()) throw new ImportError('还没有粘贴东西');
+  if (!String(text ?? '').trim()) throw new ImportError('请粘贴内容');
   const values = findJson(text);
   if (!values.length) {
-    throw new ImportError(/[{[]/.test(text) ? 'AI 写的格式有点问题, 读不出来。让它「只回一个 JSON 代码块」再来一次, 把整个代码块复制过来。' : '没找到 AI 写的题目 (要有 { 和 } 的那一段)。把 AI 回的整段都复制过来。');
+    throw new ImportError(/[{[]/.test(text) ? '格式无法识别，请让 AI「只回复一个 JSON 代码块」后重试。' : '未找到题目数据，请复制 AI 的完整回复。');
   }
   if (values.some((v) => v && typeof v === 'object' && !Array.isArray(v) && (v.app === 'wengu' || Array.isArray(v.sets)))) {
-    throw new ImportError('这是温故的备份文件。恢复备份在首页最下面的「导入备份」。');
+    throw new ImportError('这是温故的备份文件，请在「设置 › 备份」中恢复。');
   }
   if (values.some((v) => v && typeof v === 'object' && v.wengu === 'wengu-cards')) {
-    throw new ImportError('这是单词卡, 要放进卡片集: 新建卡片集 (或者编辑), 在「导入」里粘贴。');
+    throw new ImportError('这是卡片数据，请在卡片集编辑页的「导入」中粘贴。');
   }
   const raws = values.flatMap(questionsIn);
   const items = raws
     .map((raw) => toMistake(raw, makeId()))
     .filter((m) => m && !EXAMPLE_QUESTIONS.has(m.question));
   if (!items.length) {
-    throw new ImportError(raws.some((r) => r && typeof r === 'object' && EXAMPLE_QUESTIONS.has(r.question)) ? '粘贴的是给 AI 的那段话。要粘贴的是 AI 回你的。' : '里面没有题目。');
+    throw new ImportError(raws.some((r) => r && typeof r === 'object' && EXAMPLE_QUESTIONS.has(r.question)) ? '粘贴的是提示词，请粘贴 AI 的回复。' : '未包含题目。');
   }
   return items.slice(0, MAX_IMPORT).map((mistake) => ({ mistake, problem: mistakeProblem(mistake) }));
 }

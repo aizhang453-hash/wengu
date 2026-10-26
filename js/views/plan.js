@@ -134,18 +134,18 @@ export function openPlanDialog({ store, set, onSaved }) {
   let mode = plan.exam ? 'exam' : 'fixed';
   let order = plan.order;
   let seed = plan.seed || newSeed();
-  const perDayEl = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_PER_DAY, value: plan.perDay, inputmode: 'numeric', 'aria-label': '每天几个新词', oninput: () => preview(), onkeydown: enterTo(() => save()) });
+  const perDayEl = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_PER_DAY, value: plan.perDay, inputmode: 'numeric', 'aria-label': '每日新词数', oninput: () => preview(), onkeydown: enterTo(() => save()) });
   const examEl = h('input', { class: 'input count wide', type: 'date', value: plan.exam, min: today(), 'aria-label': '考试日期', oninput: () => preview(), onkeydown: enterTo(() => save()) });
-  const restEl = h('input', { class: 'input count', type: 'number', min: 0, max: MAX_REST, value: plan.rest, inputmode: 'numeric', 'aria-label': '考前几天只复习', oninput: () => preview(), onkeydown: enterTo(() => save()) });
-  const fixedBox = h('div', { class: 'plan-field' }, h('label', {}, '每天 ', perDayEl, ' 个新词'));
+  const restEl = h('input', { class: 'input count', type: 'number', min: 0, max: MAX_REST, value: plan.rest, inputmode: 'numeric', 'aria-label': '考前仅复习天数', oninput: () => preview(), onkeydown: enterTo(() => save()) });
+  const fixedBox = h('div', { class: 'plan-field' }, h('label', {}, '每日 ', perDayEl, ' 个新词'));
   const examBox = h(
     'div',
     { class: 'plan-field' },
     h('label', {}, '考试日期 ', examEl),
-    h('label', {}, '考前 ', restEl, ' 天只复习, 不学新词'),
-    h('p', { class: 'muted small' }, '按还剩多少个没背过、离考试几天, 自动算每天学几个 (每天重算一次)。考试过了以后, 按「每天固定几个」那边的个数。'),
+    h('label', {}, '考前 ', restEl, ' 天仅复习'),
+    h('p', { class: 'muted small' }, '根据剩余新词数和距考试天数，每天自动计算新词数量。考试结束后，按固定数量安排。'),
   );
-  const shuffleBtn = h('button', { class: 'btn small', type: 'button', onclick: () => ((seed = newSeed()), toast('重新打乱了'), preview()) }, '重新打乱');
+  const shuffleBtn = h('button', { class: 'btn small', type: 'button', onclick: () => ((seed = newSeed()), toast('已重新打乱'), preview()) }, '重新打乱');
   const previewEl = h('p', { class: 'plan-preview' });
 
   const draft = () =>
@@ -158,50 +158,50 @@ export function openPlanDialog({ store, set, onSaved }) {
     const p = draft();
     const info = newToday({ ...set, plan: p });
     const lines = [];
-    if (mode === 'exam' && !p.exam) lines.push('选一下考试日期。');
-    else if (!info.left) lines.push('卡片都背过了, 没有新词要学。');
-    else if (info.mode === 'passed') lines.push('考试日期已经过了。');
-    else if (info.mode === 'rest') lines.push(`离考试只有 ${info.daysLeft} 天了: 不学新词, 只复习。`);
+    if (mode === 'exam' && !p.exam) lines.push('请选择考试日期。');
+    else if (!info.left) lines.push('全部卡片均已学习，没有新词。');
+    else if (info.mode === 'passed') lines.push('考试日期已过。');
+    else if (info.mode === 'rest') lines.push(`距考试 ${info.daysLeft} 天，进入复习阶段，不再安排新词。`);
     else {
-      const head = info.mode === 'exam' ? `离考试 ${info.daysLeft} 天: 每天 ${info.perDay} 个新词` : `每天 ${info.perDay} 个新词`;
-      lines.push(`${head}, 还有 ${num(info.left)} 个没背过, ${dateText(info.finish)} 学完${info.mode === 'exam' && p.rest ? `, 最后 ${p.rest} 天只复习` : ''}。`);
-      if (info.perDay >= 60) lines.push('一天新词太多, 以后每天要复习的也会跟着多 (新词头几天、头几周都要再见几次), 量力而行。');
+      const head = info.mode === 'exam' ? `距考试 ${info.daysLeft} 天，每日 ${info.perDay} 个新词` : `每日 ${info.perDay} 个新词`;
+      lines.push(`${head}，剩余 ${num(info.left)} 个，预计${dateText(info.finish)}学完${info.mode === 'exam' && p.rest ? `，最后 ${p.rest} 天仅复习` : ''}。`);
+      if (info.perDay >= 60) lines.push('每日新词较多，之后的复习量也会相应增加。');
     }
     fill(previewEl, ...lines.map((t) => h('span', {}, t)));
   }
 
   function save() {
     const p = draft();
-    if (mode === 'exam' && !p.exam) return toast('选一下考试日期');
-    if (mode === 'exam' && examTime(p.exam) < examTime(today())) return toast('考试日期已经过了');
+    if (mode === 'exam' && !p.exam) return toast('请选择考试日期');
+    if (mode === 'exam' && examTime(p.exam) < examTime(today())) return toast('考试日期已过');
     store.setPlan(set.id, p);
     d.close();
-    toast(plan.on ? '计划改好了' : '定好了, 今天的复习里就有新词了');
+    toast(plan.on ? '计划已更新' : '计划已设置，新词将出现在今日复习中');
     onSaved?.();
   }
 
   const d = openDialog({
-    title: '每天背新词',
+    title: '每日新词计划',
     body: [
-      h('p', { class: 'muted small' }, `「${set.title || '未命名卡片集'}」还有 ${num(newToday(set).left)} 张没背过。每天给你几个新词, 跟到日子的复习一起出 (今天的复习); 在单词卡里翻过、说了会不会的也算学过。`),
-      h('div', { class: 'ask-label' }, '每天几个'),
+      h('p', { class: 'muted small' }, `「${set.title || '未命名卡片集'}」尚有 ${num(newToday(set).left)} 张未学。新词与到期复习一起出现在今日复习中。`),
+      h('div', { class: 'ask-label' }, '每日数量'),
       chips(
         [
-          ['fixed', '每天固定几个'],
-          ['exam', '按考试日期算'],
+          ['fixed', '固定数量'],
+          ['exam', '按考试日期计算'],
         ],
         mode,
         (m) => ((mode = m), preview()),
       ),
       fixedBox,
       examBox,
-      h('div', { class: 'ask-label' }, '新词的顺序'),
+      h('div', { class: 'ask-label' }, '新词顺序'),
       h(
         'div',
         { class: 'row' },
         chips(
           [
-            ['set', set.virtual ? '按文件夹里的顺序' : '按卡片集里的顺序'],
+            ['set', set.virtual ? '按文件夹顺序' : '按卡片集顺序'],
             ['random', '随机'],
           ],
           order,
@@ -220,7 +220,7 @@ export function openPlanDialog({ store, set, onSaved }) {
               onclick: () => {
                 store.setPlan(set.id, { on: false });
                 d.close();
-                toast('不按计划背了 (到日子的复习照常)');
+                toast('已停用计划，到期复习不受影响');
                 onSaved?.();
               },
             },
@@ -228,7 +228,7 @@ export function openPlanDialog({ store, set, onSaved }) {
           )
         : null,
       h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
-      h('button', { class: 'btn primary', onclick: save }, plan.on ? '保存' : '开始按计划背'),
+      h('button', { class: 'btn primary', onclick: save }, plan.on ? '保存' : '开始计划'),
     ],
   });
   preview();
@@ -245,7 +245,7 @@ export function openRetentionDialog({ store, onSaved }) {
     max: MAX_RETENTION * 100,
     step: 1,
     value: Math.round(value * 100),
-    'aria-label': '想记住的把握',
+    'aria-label': '目标记忆率',
     oninput: () => {
       value = cleanRetention(Number(input.value) / 100);
       preview();
@@ -254,9 +254,9 @@ export function openRetentionDialog({ store, onSaved }) {
   const shown = h('strong', { class: 'retention-value' });
   const previewEl = h('p', { class: 'plan-preview' });
   const presets = [
-    [0.85, '85% 省时间'],
+    [0.85, '85% 节省时间'],
     [0.9, '90% 默认'],
-    [0.95, '95% 考前'],
+    [0.95, '95% 考前冲刺'],
   ];
   const presetBtns = presets.map(([r, label]) =>
     h('button', { class: 'chip', type: 'button', onclick: () => ((value = r), (input.value = String(r * 100)), preview()) }, label),
@@ -268,24 +268,24 @@ export function openRetentionDialog({ store, onSaved }) {
     const ten = Math.max(1, Math.round(10 * ratio));
     const lines = [
       value === DEFAULT_RETENTION
-        ? '到该复习那天, 大约九成还记得 (默认的)。'
-        : `隔的日子大约是 90% 时的 ${ratio.toFixed(ratio < 1 ? 2 : 1)} 倍: 现在隔 10 天的, 以后隔 ${ten} 天。${ratio < 1 ? '复习得更勤, 每天要复习的多一些。' : '每天要复习的少一些。'}`,
-      `到该复习那天, 大约 ${percent(1 - value)} 想不起来 (要重新记)。`,
+        ? '复习时约有九成仍记得（默认）。'
+        : `复习间隔约为默认的 ${ratio.toFixed(ratio < 1 ? 2 : 1)} 倍：原本间隔 10 天的，将间隔 ${ten} 天。${ratio < 1 ? '复习更频繁，每日复习量增加。' : '每日复习量减少。'}`,
+      `复习时约有 ${percent(1 - value)} 需要重新记忆。`,
     ];
-    if (value >= 0.95) lines.push('太高了每天要复习的会多很多 (把握从 95% 再往上, 多出来的复习越来越不划算), 考前一阵子用用就好。');
-    if (value <= 0.8) lines.push('太低了忘得多, 忘了要重新记, 反而费时间。一般用 85%–95%。');
+    if (value >= 0.95) lines.push('设置过高会大幅增加复习量，建议仅在考前使用。');
+    if (value <= 0.8) lines.push('设置过低会导致遗忘增多，建议在 85%–95% 之间。');
     fill(previewEl, ...lines.map((t) => h('span', {}, t)));
   }
   const save = () => {
     store.setRetention(value);
     d.close();
-    toast(`想记住的把握: ${percent(store.retention)} (下次复习起按这个排)`);
+    toast(`目标记忆率已设为 ${percent(store.retention)}`);
     onSaved?.();
   };
   const d = openDialog({
-    title: '想记住的把握',
+    title: '目标记忆率',
     body: [
-      h('p', { class: 'muted small' }, 'FSRS 按这个算隔几天再复习: 隔到「还有这么大把握记得」的那天。调高复习得勤、记得牢; 调低每天背得少, 但忘得多。所有卡片集一起算, 已经排好的日子不动, 下次复习起按新的排。'),
+      h('p', { class: 'muted small' }, 'FSRS 据此计算复习间隔。调高则复习更频繁、记得更牢；调低则复习量减少、遗忘增多。对全部卡片集生效，已安排的复习日期不变。'),
       h('div', { class: 'retention-row' }, input, shown),
       h('div', { class: 'chips', role: 'group' }, presetBtns),
       previewEl,
@@ -304,15 +304,15 @@ export function openCapDialog({ store, onSaved }) {
   const save = () => {
     store.setReviewCap(intOf(input, 1, MAX_REVIEW_CAP, store.reviewCap));
     d.close();
-    toast(`每天最多复习 ${store.reviewCap} 张`);
+    toast(`每日复习上限已设为 ${store.reviewCap} 张`);
     onSaved?.();
   };
-  const input = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_REVIEW_CAP, value: store.reviewCap, inputmode: 'numeric', 'aria-label': '每天最多复习几张', onkeydown: enterTo(save) });
+  const input = h('input', { class: 'input count', type: 'number', min: 1, max: MAX_REVIEW_CAP, value: store.reviewCap, inputmode: 'numeric', 'aria-label': '每日复习上限', onkeydown: enterTo(save) });
   const d = openDialog({
-    title: '每天最多复习几张',
+    title: '每日复习上限',
     body: [
-      h('label', { class: 'plan-field' }, '每天最多复习 ', input, ' 张'),
-      h('p', { class: 'muted small' }, '到日子的太多时 (比如很久没背了、刚导入 Anki 的卡组), 先来最可能忘的, 剩下的明天再来。今天看过、忘了又到时候的不算; 每天的新词另外算 (在卡片集里定)。'),
+      h('label', { class: 'plan-field' }, '每日最多复习 ', input, ' 张'),
+      h('p', { class: 'muted small' }, '到期卡片超出上限时，优先安排最易遗忘的，其余顺延。今日已复习后再次到期的不计入；新词数量在卡片集中单独设置。'),
     ],
     footer: [
       h('button', { class: 'btn', onclick: () => d.close() }, '取消'),
