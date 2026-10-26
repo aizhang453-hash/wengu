@@ -1041,7 +1041,7 @@ select.input {
 .import-box {
   margin: 16px 0;
   padding: 12px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -1144,7 +1144,7 @@ select.input {
   align-items: flex-start;
   gap: 2px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
@@ -1264,7 +1264,7 @@ select.input {
   align-items: flex-start;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   counter-increment: row;
@@ -1379,7 +1379,7 @@ select.input {
   display: flex;
   flex-direction: column;
   padding: 14px 18px 24px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -1475,7 +1475,7 @@ select.input {
 
 .summary {
   padding: 32px 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -1525,7 +1525,7 @@ select.input {
 
 .question {
   padding: 22px 22px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -1772,7 +1772,7 @@ select.input {
 .settings {
   margin-top: 18px;
   padding: 10px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   font-size: 0.92rem;
@@ -1864,7 +1864,7 @@ select.input {
 
 .panel {
   padding: 18px 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -2110,7 +2110,7 @@ select.input {
 .exam-q {
   margin-bottom: 12px;
   padding: 16px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -3996,7 +3996,7 @@ a.card-row.search-hit:hover {
 
 .sync-steps li {
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -4654,7 +4654,7 @@ body.in-game main {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
@@ -5623,7 +5623,7 @@ a.pick-row:hover {
   gap: 12px;
   margin: 16px 0;
   padding: 18px 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -5689,7 +5689,7 @@ a.pick-row:hover {
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -5892,7 +5892,7 @@ a.pick-row:hover {
   max-height: 45vh;
   overflow: auto;
   padding: 16px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   font-family: Georgia, 'Times New Roman', 'Songti SC', serif;
@@ -6045,7 +6045,7 @@ a.pick-row:hover {
 .leech-note {
   margin: 10px 0;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-left: 4px solid var(--bad);
   border-radius: var(--radius);
   background: var(--surface);
@@ -6100,7 +6100,7 @@ a.pick-row:hover {
 .stats-card {
   margin: 14px 0;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -7180,7 +7180,7 @@ body.has-pet main {
 .mk-kinds {
   margin: 16px 0;
   padding: 14px 16px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
@@ -7410,7 +7410,7 @@ body.has-pet main {
   align-items: center;
   gap: 16px;
   padding: 14px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
