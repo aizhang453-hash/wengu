@@ -1,8 +1,8 @@
-// 错题集: 做错的题 (比如 SAT) 打字记下来, 以后重做。每道错题:
+// 错题集: 做错的题、还没做过的练习题 (比如 SAT、老师给的练习) 记下来, 以后重做。每道题:
 //   { id, type: 'choice' | 'input',
 //     passage   文章 / 材料 (可以没有)      question  题目
 //     options   选项 (选择题, A B C D……)    correct   对的是第几个 (-1 是还没选)
-//     mine      当时选错的是第几个 (-1 是没记)
+//     mine      当时选错的是第几个 (-1 是没记, 或者还没做过)
 //     answer    填空题对的答案 (几个都对的用逗号隔开; 数字 3/4 和 0.75 算一样)    mineText  当时写的
 //     note      为什么错 / 解析
 //     kind      题型 (自己写的; 空着的按题目猜, 见 guessKind)
@@ -131,9 +131,19 @@ export const answerLabel = (m) => (m.type === 'input' ? m.answer : m.correct >= 
 export const mineLabel = (m) => (m.type === 'input' ? m.mineText : m.mine >= 0 ? `${LETTERS[m.mine]}. ${m.options[m.mine]}` : '');
 
 // ---- 复习 ----
-// 刚记下的错题: 明天开始重做 (今天想做也可以「全部重做」)
-export function firstReview(now = Date.now()) {
-  return { right: 0, wrong: 0, streak: 0, interval: 0, due: daysLater(now, 1), at: 0, mastered: false };
+// 刚记下的: 做错的明天开始重做 (今天想做也可以「全部重做」); 还没做过的 (today) 今天就能做
+export function firstReview(now = Date.now(), today = false) {
+  return { right: 0, wrong: 0, streak: 0, interval: 0, due: today ? now : daysLater(now, 1), at: 0, mastered: false };
+}
+
+// 做过没有: 记了「我的答案」的是做过 (做错了) 的; 没记的当成还没做过 (老师给的练习这种)
+export const attempted = (m) => (m.type === 'input' ? Boolean(m.mineText?.trim()) : m.mine >= 0);
+
+// 记好了说一声什么时候做: 做错的明天, 没做过的今天
+export function scheduleNote(list) {
+  const fresh = list.filter((m) => !attempted(m)).length;
+  if (!fresh) return '明日开始安排重做';
+  return fresh === list.length ? '今日即可练习' : `其中 ${fresh} 道未作答，今日即可练习`;
 }
 
 // 重做了一次: 排下次哪天; 连对 3 次算掌握。答错了, 掌握了的也重新排回来

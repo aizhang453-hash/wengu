@@ -1,4 +1,4 @@
-// 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」;
+// 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」(没做过的不点);
 // 填空题写对的答案和当时写的; 为什么错; 题型 (不写就按题目猜)。
 // 拍照让 AI 记的 (mistakeimport.js) 没写完的、想一道道看过的: 一道道打开, 补上存了再下一道 (queueMistakes)
 
@@ -6,7 +6,7 @@ import { h, fill, toast } from '../dom.js';
 import { newId } from '../store.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { cardImage } from '../cardview.js';
-import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, MAX_KIND, KINDS, newMistake, mistakeProblem, tidyMistake, guessKind } from '../mistakes.js';
+import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, MAX_KIND, KINDS, newMistake, mistakeProblem, tidyMistake, guessKind, scheduleNote } from '../mistakes.js';
 
 // 导入的错题先放这里, 下次打开「记一道错题」(#/mistakes/new) 时一道道拿出来
 let queued = [];
@@ -24,6 +24,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
   const total = queue.length; // 导入的一共几道 (0: 不是导入的)
   let draft = existing ? structuredClone(existing) : total ? queue.shift() : newMistake(newId());
   let dirty = total > 0; // 导入的还没存
+  const saved = []; // 导入的存了哪几道 (最后说一声什么时候做)
   const markDirty = () => {
     dirty = true;
     if (total) drawNote();
@@ -37,7 +38,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
   const questionEl = h('textarea', { class: 'input', rows: 3, placeholder: '题目', 'aria-label': '题目', oninput: () => ((draft.question = questionEl.value), markDirty(), drawKindHint()) });
   const noteEl = h('textarea', { class: 'input', rows: 3, placeholder: '错误原因或解析', 'aria-label': '解析', oninput: () => ((draft.note = noteEl.value), markDirty()) });
   const answerEl = h('input', { class: 'input', placeholder: '如 3/4；多个答案用逗号分隔', 'aria-label': '正确答案', autocomplete: 'off', oninput: () => ((draft.answer = answerEl.value), markDirty()) });
-  const mineTextEl = h('input', { class: 'input', placeholder: '选填', 'aria-label': '我的答案', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
+  const mineTextEl = h('input', { class: 'input', placeholder: '选填，未作答可不填', 'aria-label': '我的答案', autocomplete: 'off', oninput: () => ((draft.mineText = mineTextEl.value), markDirty()) });
   const answersEl = h('div', { class: 'mk-answers' });
   // 题型: 自己写, 或者从列表里挑 (SAT 的几类、以前写过的); 空着就按题目猜, 下面写着猜的是什么
   const kindList = h(
@@ -194,7 +195,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
         'div',
         { class: 'row qe-opt-foot' },
         draft.options.length < MAX_OPTIONS ? h('button', { class: 'btn small', type: 'button', onclick: () => (draft.options.push(''), markDirty(), draw(), answersEl.querySelectorAll('.qe-opt-input')[draft.options.length - 1]?.focus()) }, '＋ 加一个选项') : null,
-        h('span', { class: 'muted small' }, '分别标出正确答案和我的答案'),
+        h('span', { class: 'muted small' }, '标出正确答案；做错的题再标出我的答案'),
       ),
     );
   }
@@ -215,9 +216,12 @@ export function renderMistakeEdit({ store, go }, id = null) {
       return;
     }
     dirty = false;
-    if (total) return next(true);
+    if (total) {
+      saved.push(m);
+      return next(true);
+    }
     if (!again) {
-      toast(existing ? '已保存' : '已记录，明日开始安排重做');
+      toast(existing ? '已保存' : `已记录，${scheduleNote([m])}`);
       return go('#/mistakes');
     }
     // 接着记下一道: 题型留着, 别的清空
@@ -236,14 +240,14 @@ export function renderMistakeEdit({ store, go }, id = null) {
     fill(importNote, '请核对 AI 识别的内容；含图表的题目可添加照片。', problem ? h('strong', { class: 'qe-problem' }, ` 待补充：${problem}`) : null);
   }
 
-  // 导入的: 下一道 (saved: 这道存了还是跳过了); 没有了回错题集
-  function next(saved) {
+  // 导入的: 下一道 (kept: 这道存了还是跳过了); 没有了回错题集
+  function next(kept) {
     if (!queue.length) {
       dirty = false;
-      toast(saved ? '已记录，明日开始安排重做' : '已跳过');
+      toast(saved.length ? `已记录 ${saved.length} 道，${scheduleNote(saved)}` : '已跳过');
       return go('#/mistakes');
     }
-    toast(saved ? '已记录' : '已跳过');
+    toast(kept ? '已记录' : '已跳过');
     draft = queue.shift();
     dirty = true;
     fillInputs();

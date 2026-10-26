@@ -44,10 +44,31 @@ test('给 AI 的话: 写着格式、SAT 的题型, 自己认得出来', () => {
   for (const k of Object.values(KINDS).flat()) assert.ok(p.includes(k), k);
   assert.match(p, /```json/);
   assert.match(p, /不要用 LaTeX/);
+  // 没做过的练习题也要抄 (不然 AI 会说「没有错题」)
+  assert.match(p, /还没做过的练习题/);
+  assert.doesNotMatch(p, /我做错的题抄成/);
   // 里面的例子照着格式写, 自己读得出来 (但不当成错题: 见下面「粘贴的是给 AI 的话」)
   const example = findJson(p.slice(p.indexOf('```json')))[0];
   assert.equal(example.wengu, FORMAT);
   assert.equal(example.mistakes.length, 2);
+});
+
+test('还没做过的练习题: 没有我的答案也认得出来, 写完整了 (不算还差什么)', () => {
+  const practice = JSON.stringify({
+    wengu: FORMAT,
+    mistakes: [
+      { type: 'choice', question: 'What is the derivative of x^2?', options: ['x', '2x', 'x^2', '2'], answer: 'B', mine: '', note: '⚠ 答案是 AI 做的, 核对一下。幂函数求导: 指数乘下来, 指数减一。', kind: 'AP微积分' },
+      { type: 'input', question: 'f(x) = 3x + 1, f(2) = ?', answer: '7', mine: '', note: '代入 x = 2。' },
+    ],
+  });
+  const items = parseMistakeImport(practice, ids());
+  assert.deepEqual(
+    items.map((x) => [x.problem, x.mistake.mine, x.mistake.mineText]),
+    [
+      ['', -1, ''],
+      ['', -1, ''],
+    ],
+  );
 });
 
 test('AI 回的整段: 认出两道, 选择题、填空题都写完整了', () => {

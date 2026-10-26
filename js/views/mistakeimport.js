@@ -5,7 +5,7 @@
 import { h, fill, toast } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { putMedia, shrinkImage } from '../media.js';
-import { LETTERS, MAX_IMAGES, mistakeProblem, kindOf } from '../mistakes.js';
+import { LETTERS, MAX_IMAGES, mistakeProblem, kindOf, attempted, scheduleNote } from '../mistakes.js';
 import { aiPrompt, parseMistakeImport, findSame, ImportError } from '../mistakeimport.js';
 import { queueMistakes } from './mistakeedit.js';
 import { promptControls } from './aiprompt.js';
@@ -102,6 +102,7 @@ export function renderMistakeImport({ store, go }) {
         h('strong', {}, `第 ${i + 1} 道`),
         h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
         h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
+        attempted(m) ? null : h('span', { class: 'qi-tag' }, '未作答'),
       ),
       x.same ? h('p', { class: 'muted small' }, '错题集中已有此题，默认不加入') : null,
       m.passage ? h('div', { class: 'mi-passage' }, rich(m.passage)) : null,
@@ -176,7 +177,7 @@ export function renderMistakeImport({ store, go }) {
     }
     added = true;
     if (!later.length) {
-      toast(`已加入 ${ready.length} 道，明日开始安排重做`);
+      toast(`已加入 ${ready.length} 道，${scheduleNote(ready)}`);
       return go('#/mistakes');
     }
     queueMistakes(later);
@@ -223,7 +224,7 @@ export function renderMistakeImport({ store, go }) {
       },
       h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
       h('h1', {}, '拍照录入错题'),
-      h('p', { class: 'muted' }, '将题目照片发给 AI 识别，再把结果粘贴到这里，即可批量录入。'),
+      h('p', { class: 'muted' }, '将错题或练习题的照片发给 AI 识别，再把结果粘贴到这里，即可批量录入。'),
       h(
         'ol',
         { class: 'mi-steps' },
@@ -231,7 +232,7 @@ export function renderMistakeImport({ store, go }) {
           'li',
           {},
           h('strong', {}, '复制提示词'),
-          h('p', { class: 'muted small' }, '在 Claude、ChatGPT 等支持图片的 AI 中粘贴提示词，并发送题目照片。如照片中看不出答案，请注明「我选的是 C」「答案是 B」。'),
+          h('p', { class: 'muted small' }, '在 Claude、ChatGPT 等支持图片的 AI 中粘贴提示词，并发送题目照片。做错的题和未作答的练习题均可录入；如照片中看不出答案，请注明「我选的是 C」「答案是 B」。'),
           h('div', { class: 'row' }, ask.button),
           ask.details,
         ),

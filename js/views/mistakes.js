@@ -4,7 +4,7 @@
 import { h, fill, toast, menuButton, icon } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { DAY } from '../srs.js';
-import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel, kindOf, kindStats } from '../mistakes.js';
+import { dueMistakes, mistakeStatus, matchesSearch, answerLabel, mineLabel, kindOf, kindStats, attempted } from '../mistakes.js';
 
 const FILTER_KEY = 'wengu:mistakes-filter';
 
@@ -172,6 +172,8 @@ export function renderMistakes({ store }) {
         h('span', { class: `mk-status ${st}` }, statusText(m, now)),
         h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
         h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
+        // 还没做过的练习题 (没记我的答案, 也还没重做过)
+        attempted(m) || m.review?.right || m.review?.wrong ? null : h('span', { class: 'qi-tag' }, '未作答'),
         m.passage ? h('span', { class: 'qi-tag' }, '含材料') : null,
         m.images.length ? h('span', { class: 'qi-tag' }, `${m.images.length} 张图`) : null,
         m.review?.right || m.review?.wrong ? h('span', { class: 'muted small' }, `重做 ${m.review.right + m.review.wrong} 次，答对 ${m.review.right} 次`) : null,
@@ -220,7 +222,7 @@ export function renderMistakes({ store }) {
         'div',
         {},
         h('strong', {}, due.length ? `今日待重做 ${due.length} 道` : all.length ? '今日没有待重做的错题' : '暂无错题'),
-        h('div', { class: 'muted small' }, all.length ? `共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明日 ${tomorrow} 道` : ''}` : '记录做错的题目，按间隔重做；连续答对 3 次即为掌握'),
+        h('div', { class: 'muted small' }, all.length ? `共 ${all.length} 道 · 已掌握 ${mastered.length} 道${tomorrow ? ` · 明日 ${tomorrow} 道` : ''}` : '记录错题或练习题，按间隔重做；连续答对 3 次即为掌握'),
       ),
       h(
         'div',
