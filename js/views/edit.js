@@ -1,4 +1,4 @@
-// 新建 / 编辑卡片集, 包括从 Quizlet 粘贴导入。
+// 新建 / 编辑卡片集, 包括从 Quizlet 粘贴导入、拍照让 AI 做 (AI 回的粘贴进来, cardimport.js 认)。
 // 每张卡片: 词、解释 (能加粗、斜体、下划线、高亮), 解释那面能放图片, 两面都能录音。
 
 import { h, toast, fill } from '../dom.js';
@@ -6,6 +6,7 @@ import { makeSet, makeCard, makeFolder, FOLDER_PREFIX } from '../store.js';
 import { deckFolders } from '../cardfile.js';
 import { planOf, newSeed } from '../plan.js';
 import { parseCards, guessTermSep, guessCardSep } from '../parse.js';
+import { parseCardImport, aiCardPrompt } from '../cardimport.js';
 import { LANGS, guessLangOf } from '../speech.js';
 import { MARKS, toggleMark } from '../rich.js';
 import { putMedia, mediaURL, shrinkImage, cleanMedia } from '../media.js';
@@ -13,6 +14,7 @@ import { canRecord, record } from '../recorder.js';
 import { cardImage } from '../cardview.js';
 import { fileImportPanel } from './fileimport.js';
 import { diagramEditor } from './diagram.js';
+import { promptControls } from './aiprompt.js';
 
 const FORMATS = [
   ['bold', 'B', '加粗 (Ctrl+B)'],
@@ -494,7 +496,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
   const pasteEl = h('textarea', {
     class: 'input mono',
     rows: 6,
-    placeholder: '把 Quizlet 导出的文字粘贴到这里\n比如:\napple\t苹果\nbanana\t香蕉',
+    placeholder: '把 Quizlet 导出的文字、或者 AI 回的整段粘贴到这里\n比如:\napple\t苹果\nbanana\t香蕉',
     oninput: () => {
       if (!sepTouched) {
         pick(termSepGroup, guessTermSep(pasteEl.value));
@@ -518,11 +520,11 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       class: 'btn primary',
       disabled: true,
       onclick: () => {
-        const cards = currentImport();
+        const { cards = [], title = '' } = currentImport();
         if (!cards.length) return;
         pasteEl.value = '';
         preview();
-        addImported(cards);
+        addImported(cards, title);
       },
     },
     '加进来',
@@ -608,6 +610,9 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       go(inOne ? `#/folder/${encodeURIComponent(folders[0].id)}` : made.length === 1 ? `#/set/${encodeURIComponent(made[0].id)}` : '#/');
     },
   });
+  // 拍照让 AI 做: 复制给 AI 的话, 跟照片一起发过去, AI 回的粘贴到下面的框里
+  const ask = promptControls(aiCardPrompt(), { primary: false });
+  const sepGroupsEl = h('div', { class: 'sep-groups' }, termSepGroup.el, cardSepGroup.el);
   const importBox = h(
     'details',
     {
@@ -620,7 +625,15 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       ondragleave: fileImport.drop.dragleave,
       ondrop: fileImport.drop.drop,
     },
-    h('summary', {}, '导入 (Quizlet 的文字、Excel、CSV、Anki)'),
+    h('summary', {}, '导入 (Quizlet 的文字、Excel、CSV、Anki、拍照让 AI 做)'),
+    h(
+      'div',
+      { class: 'ai-cards' },
+      h('strong', {}, '📷 拍照让 AI 做'),
+      h('p', { class: 'muted small' }, '单词表、课本、笔记拍照, 跟这段话一起发给 Claude (或者 ChatGPT、豆包、Kimi……), 再把 AI 回的整段粘贴到下面的框里。只有词没有解释的, AI 会帮你写上意思。'),
+      ask.button,
+      ask.details,
+    ),
     fileImport.el,
     h(
       'p',
@@ -630,7 +643,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       h('a', { href: '#/quizlet' }, '别人的卡片集也想搬? 用「一键搬」书签 →'),
     ),
     pasteEl,
-    h('div', { class: 'sep-groups' }, termSepGroup.el, cardSepGroup.el),
+    sepGroupsEl,
     previewEl,
     importBtn,
   );
@@ -697,15 +710,23 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     for (const r of group.radios) r.checked = r.value === value;
   }
 
+  // AI 回的 (JSON、表格) 先认; 不像的照分隔方式拆。返回 { cards, title?, error?, ai }
   function currentImport() {
-    return parseCards(pasteEl.value, { termSep: termSepGroup.value(), cardSep: cardSepGroup.value() });
+    const ai = parseCardImport(pasteEl.value);
+    if (ai) return { ...ai, ai: true };
+    return { cards: parseCards(pasteEl.value, { termSep: termSepGroup.value(), cardSep: cardSepGroup.value() }) };
   }
 
   function preview() {
-    const cards = currentImport();
+    const { cards = [], title = '', error = '', ai = false } = currentImport();
     importBtn.disabled = cards.length === 0;
+    sepGroupsEl.hidden = ai; // AI 写的用不着选分隔方式
     if (!pasteEl.value.trim()) {
       previewEl.replaceChildren();
+      return;
+    }
+    if (error) {
+      previewEl.replaceChildren(h('p', { class: 'qe-problem' }, `⚠ ${error}`));
       return;
     }
     if (!cards.length) {
@@ -714,7 +735,7 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
     }
     const noDef = cards.filter((c) => !c.def).length;
     previewEl.replaceChildren(
-      h('p', {}, `认出 ${cards.length} 张卡片` + (noDef ? `, 其中 ${noDef} 张没有解释 (分隔方式可能不对)` : '') + '。前几张:'),
+      h('p', {}, (ai ? `AI 做的${title ? `「${title}」` : ''}: 认出 ${cards.length} 张卡片` : `认出 ${cards.length} 张卡片`) + (noDef ? `, 其中 ${noDef} 张没有解释${ai ? '' : ' (分隔方式可能不对)'}` : '') + '。前几张:'),
       h(
         'table',
         { class: 'preview-table' },

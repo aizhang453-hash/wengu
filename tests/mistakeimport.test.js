@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aiPrompt, parseMistakeImport, findJson, fixBackslashes, plainMath, choiceIndex, kindName, findSame, ImportError, FORMAT } from '../js/mistakeimport.js';
+import { aiPrompt, parseMistakeImport, choiceIndex, kindName, findSame, ImportError, FORMAT } from '../js/mistakeimport.js';
+import { findJson, fixBackslashes, plainMath } from '../js/aitext.js';
 import { KINDS, mistakeProblem } from '../js/mistakes.js';
 import { Store } from '../js/store.js';
 
