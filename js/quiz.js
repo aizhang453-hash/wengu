@@ -27,10 +27,14 @@ export const optionsOf = (q) => (q.type === 'tf' ? TF_OPTIONS : q.options);
 const mediaId = (v) => (typeof v === 'string' && /^m_[\w-]+$/.test(v) ? v : '');
 
 // 一个老的题目集 → 错题: 题目集的名字当题型, 判断题是「对 / 错」两个选项;
-// 多选题记第一个对的, 别的写在笔记里。id 跟着题目集和题目走, 几台设备各自变也合得上
+// 多选题记第一个对的, 别的写在笔记里。id 跟着题目集和题目走, 几台设备各自变也合得上。
+// 记的、改的时间用题目集的, 不用现在: 这台变完删掉了, 别的设备晚些才变, 同步时还是听删除的 (不然又回来了)
 export function quizToMistakes(set, now = Date.now()) {
   if (!set || typeof set !== 'object' || typeof set.id !== 'string' || !set.id) return [];
   const kind = String(set.title ?? '').trim().slice(0, MAX_KIND);
+  const time = (v) => (Number(v) > 0 ? Math.min(Number(v), now) : 0);
+  const createdAt = time(set.createdAt) || time(set.updatedAt) || now;
+  const updatedAt = time(set.updatedAt) || createdAt;
   return (Array.isArray(set.cards) ? set.cards : [])
     .filter((c) => c && typeof c === 'object' && typeof c.id === 'string' && c.id)
     .map((c) => {
@@ -38,6 +42,8 @@ export function quizToMistakes(set, now = Date.now()) {
       const image = mediaId(c.image);
       return cleanMistake({
         ...newMistake(`q_${set.id}_${c.id}`, now),
+        createdAt,
+        updatedAt,
         question: String(c.term ?? ''),
         images: image ? [image] : [],
         options: optionsOf(q).map(String),
