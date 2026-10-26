@@ -5676,6 +5676,81 @@ a.pick-row:hover {
   padding: 7px 12px;
 }
 
+.mk-tools-right {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 手机上: 题型、选择一行, 搜索一行 */
+@media (max-width: 560px) {
+  .mk-tools-right {
+    width: 100%;
+  }
+
+  .mk-tools-right .mk-kind-pick {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .mk-tools-right .mk-search {
+    order: 3;
+    flex: 1 1 100%;
+  }
+}
+
+/* 选好几道一起删: 已选几道、全选、删除 (往下翻也在上面) */
+.mk-select-bar {
+  position: sticky;
+  top: 53px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 6%);
+}
+
+.mk-select-count {
+  font-weight: 650;
+}
+
+.mk-list.selecting .mk-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.mk-list.selecting .mk-item:hover {
+  border-color: var(--muted);
+}
+
+.mk-item.picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.mk-pick {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .mk-list {
   display: flex;
   flex-direction: column;

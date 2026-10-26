@@ -592,9 +592,17 @@ export class Store {
   }
 
   deleteMistake(id) {
-    this.data.mistakes = this.data.mistakes.filter((m) => m.id !== id);
-    this.data.deleted[MISTAKE_PREFIX + id] = Date.now();
+    return this.deleteMistakes([id]);
+  }
+
+  // 一下删好几道 (错题集里选好的): 存一次; 记下删除时间, 同步时别的设备也删掉。返回删了几道
+  deleteMistakes(ids, now = Date.now()) {
+    const drop = new Set(ids);
+    const before = this.data.mistakes.length;
+    this.data.mistakes = this.data.mistakes.filter((m) => !drop.has(m.id));
+    for (const id of drop) this.data.deleted[MISTAKE_PREFIX + id] = now;
     this.save();
+    return before - this.data.mistakes.length;
   }
 
   // 重做了一道: 排下次哪天, 算进今天的打卡
