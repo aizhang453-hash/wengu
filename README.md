@@ -83,7 +83,7 @@
 
 ## 更新记录
 
-当前版本 **v1.44**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.44.1**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 

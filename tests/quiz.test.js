@@ -75,6 +75,18 @@ test('两台设备各自把同一个题目集变成错题: 合起来还是一份
   assert.equal(merged.sets.length, 0);
 });
 
+test('题目集变成的错题删掉以后, 另一台设备晚些才升级 (自己再变一次): 同步也不会回来', () => {
+  // 这台: 变成错题, 过了一会儿全删掉
+  const store = new Store(memoryStorage());
+  store.replaceData({ sets: [oldQuiz()] });
+  store.deleteMistakes(store.allMistakes().map((m) => m.id), Date.now() - 60_000);
+  // 那台: 还存着老的题目集, 现在才打开新版本 (变成错题的时间比上面删的晚)
+  const other = cleanData({ sets: [oldQuiz()] });
+  assert.equal(other.mistakes.length, 3);
+  assert.deepEqual(cleanData(mergeData(store.data, other)).mistakes, []);
+  assert.deepEqual(cleanData(mergeData(other, store.data)).mistakes, []);
+});
+
 test('老的题目集的分享链接: 读得出选项和对错 (打开时导入成错题)', async () => {
   const payload = { v: 1, t: '诗歌小测', d: '', l: ['auto', 'auto'], k: 'quiz', c: [['Which?', 'Simile', '', choice(['Simile', 'Metaphor'], [0])]] };
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

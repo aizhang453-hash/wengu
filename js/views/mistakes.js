@@ -31,6 +31,7 @@ export function renderMistakes({ store }) {
   // 选择: 勾好几道一起删 (只算现在列出来的: 换了筛选、搜索, 看不见的就不选了)
   let selecting = false;
   const selected = new Set();
+  const rows = new Map(); // id → { li, box }: 勾一道只改这一道, 不整个重画 (图片不用重新读)
 
   const listEl = h('ul', { class: 'mk-list' });
   const filters = [
@@ -59,7 +60,7 @@ export function renderMistakes({ store }) {
   );
   const search = h('input', { class: 'input mk-search', type: 'search', placeholder: '搜索错题', 'aria-label': '搜索错题', oninput: () => ((query = search.value), drawList()) });
   const kindPick = h('select', { class: 'input mk-kind-pick', 'aria-label': '按题型筛选', onchange: (e) => ((kind = e.target.value), drawList()) });
-  const selectBtn = h('button', { class: 'btn small', type: 'button', onclick: () => setSelecting(!selecting) }, '选择');
+  const selectBtn = h('button', { class: 'btn small mk-select-btn', type: 'button', onclick: () => setSelecting(!selecting) }, '选择');
   const toolsEl = h('div', { class: 'mk-tools' }, h('div', { class: 'chips' }, chips), h('div', { class: 'mk-tools-right' }, kindPick, search, selectBtn));
 
   // 选择时上面的一条: 已选几道、全选、删除、完成
@@ -79,10 +80,19 @@ export function renderMistakes({ store }) {
     drawList();
   }
 
+  function pick(id, on) {
+    if (on) selected.add(id);
+    else selected.delete(id);
+    const row = rows.get(id);
+    if (!row) return;
+    row.li.classList.toggle('picked', on);
+    row.box.checked = on;
+  }
+
   function toggleAll() {
     const every = shown.length && shown.every((m) => selected.has(m.id));
-    for (const m of shown) every ? selected.delete(m.id) : selected.add(m.id);
-    drawList();
+    for (const m of shown) pick(m.id, !every);
+    drawSelectBar();
   }
 
   function drawSelectBar() {
@@ -129,6 +139,7 @@ export function renderMistakes({ store }) {
     const visible = new Set(shown.map((m) => m.id));
     for (const id of [...selected]) if (!visible.has(id)) selected.delete(id);
     listEl.classList.toggle('selecting', selecting);
+    rows.clear();
     fill(
       listEl,
       shown.length
@@ -143,11 +154,11 @@ export function renderMistakes({ store }) {
     const mine = mineLabel(m);
     const picked = selected.has(m.id);
     const toggle = () => {
-      if (selected.has(m.id)) selected.delete(m.id);
-      else selected.add(m.id);
-      drawList();
+      pick(m.id, !selected.has(m.id));
+      drawSelectBar();
     };
-    return h(
+    const box = selecting ? h('input', { type: 'checkbox', class: 'mk-pick', checked: picked, 'aria-label': '选择这道错题', onchange: toggle }) : null;
+    const li = h(
       'li',
       {
         class: `mk-item${picked ? ' picked' : ''}`,
@@ -157,7 +168,7 @@ export function renderMistakes({ store }) {
       h(
         'div',
         { class: 'mk-item-head' },
-        selecting ? h('input', { type: 'checkbox', class: 'mk-pick', checked: picked, 'aria-label': '选择这道错题', onchange: toggle }) : null,
+        box,
         h('span', { class: `mk-status ${st}` }, statusText(m, now)),
         h('span', { class: `qi-tag mk-kind${m.kind ? '' : ' guess'}`, title: m.kind ? '题型' : '自动识别的题型，可在编辑中修改' }, kindOf(m)),
         h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
@@ -193,6 +204,8 @@ export function renderMistakes({ store }) {
             ),
           ),
     );
+    if (box) rows.set(m.id, { li, box });
+    return li;
   }
 
   // 上面的: 今天该重做几道、题型分布、题型的下拉 (删了题以后跟着变)

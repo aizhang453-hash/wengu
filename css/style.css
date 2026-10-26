@@ -22,6 +22,7 @@
   --shadow: 0 1px 2px rgb(31 29 26 / 4%), 0 2px 10px rgb(31 29 26 / 4%);
   --shadow-lift: 0 2px 4px rgb(31 29 26 / 5%), 0 8px 24px rgb(31 29 26 / 8%);
   --radius: 14px;
+  --topbar-h: 57px; /* 顶上一条的高度: 往下翻时停在它下面的 (测试的进度条、选错题的那条) 用 */
   --radius-sm: 10px;
   --font: system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
   --font-serif: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Source Han Serif SC', serif;
@@ -1896,7 +1897,7 @@ select.input {
 
 .exam-top {
   position: sticky;
-  top: 53px;
+  top: var(--topbar-h);
   z-index: 5;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -5685,7 +5686,7 @@ a.pick-row:hover {
   gap: 8px;
 }
 
-.btn.on {
+.mk-select-btn.on {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -5710,7 +5711,7 @@ a.pick-row:hover {
 /* 选好几道一起删: 已选几道、全选、删除 (往下翻也在上面) */
 .mk-select-bar {
   position: sticky;
-  top: 53px;
+  top: var(--topbar-h);
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
