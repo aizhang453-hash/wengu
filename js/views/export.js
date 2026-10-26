@@ -4,9 +4,9 @@ import { h, toast, download, openDialog } from '../dom.js';
 import { exportFile } from '../cardfile.js';
 
 const FORMATS = [
-  ['xlsx', 'Excel (.xlsx)', '一列词、一列解释, Excel、WPS、Numbers、Google 表格都能打开'],
-  ['csv', 'CSV (.csv)', '最通用的表格文字, 别的背单词软件 (Knowt、墨墨……) 多半能导入'],
-  ['anki', 'Anki (.txt)', '在 Anki 里点「文件 → 导入」选这个文件, 加粗、斜体、换行都保留'],
+  ['xlsx', 'Excel（.xlsx）', '词语与释义各一列，可用 Excel、WPS、Numbers 打开'],
+  ['csv', 'CSV（.csv）', '通用表格格式，适用于大多数记忆软件'],
+  ['anki', 'Anki（.txt）', '在 Anki 中通过「文件 › 导入」使用，保留格式'],
 ];
 
 export function openExportDialog(set) {
@@ -26,7 +26,7 @@ export function openExportDialog(set) {
               onclick: () => {
                 const { blob, filename } = exportFile(set, format);
                 download(filename, blob, blob.type);
-                toast(`存好了: ${filename}`);
+                toast(`已导出：${filename}`);
                 d.close();
               },
             },
@@ -35,7 +35,7 @@ export function openExportDialog(set) {
           ),
         ),
       ),
-      h('p', { class: 'muted small' }, '只有文字。', hasMedia ? '图片和录音带不过去; ' : '', '要原样搬到另一台设备 (连图片、录音、学习进度), 用首页的「导出备份」, 或者设置多设备同步。'),
+      h('p', { class: 'muted small' }, '仅导出文字', hasMedia ? '，不含图片和录音' : '', '。如需在设备间完整迁移，请使用「设置」中的备份或多设备同步。'),
     ],
   });
   return d;

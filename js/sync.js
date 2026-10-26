@@ -133,43 +133,43 @@ export class GitHubRepo {
         signal: globalThis.AbortSignal?.timeout?.(timeout),
       });
     } catch (e) {
-      if (e?.name === 'TimeoutError' || e?.name === 'AbortError') throw new SyncError('GitHub 太久没回应, 过一会儿自动再试', 'network');
-      throw new SyncError('连不上 GitHub, 看看网络', 'network');
+      if (e?.name === 'TimeoutError' || e?.name === 'AbortError') throw new SyncError('GitHub 太久未响应，稍后自动重试', 'network');
+      throw new SyncError('无法连接 GitHub，请检查网络', 'network');
     }
-    if (res.status === 401) throw new SyncError('密钥不对, 或者过期了', 'auth');
-    if (res.status === 429) throw new SyncError('GitHub 嫌传得太快了, 过几分钟自动接着传', 'rate');
+    if (res.status === 401) throw new SyncError('密钥无效或已过期', 'auth');
+    if (res.status === 429) throw new SyncError('请求过于频繁，几分钟后自动继续', 'rate');
     if (res.status === 403) {
-      if (res.headers.get('x-ratelimit-remaining') === '0') throw new SyncError('同步太频繁了, 过一会儿再试', 'rate');
+      if (res.headers.get('x-ratelimit-remaining') === '0') throw new SyncError('同步过于频繁，请稍后再试', 'rate');
       // 一下传太多 (secondary rate limit) 也是 403, 不是密钥的事
       const text = await res.text().catch(() => '');
-      if (/rate limit|abuse/i.test(text) || res.headers.get('retry-after')) throw new SyncError('GitHub 嫌传得太快了, 过几分钟自动接着传', 'rate');
-      throw new SyncError('密钥没有改这个仓库的权限 (建密钥时「内容」要选「读写」)', 'auth');
+      if (/rate limit|abuse/i.test(text) || res.headers.get('retry-after')) throw new SyncError('请求过于频繁，几分钟后自动继续', 'rate');
+      throw new SyncError('密钥没有该仓库的写入权限（Contents 需设为 Read and write）', 'auth');
     }
     if (res.status === 404) {
       if (method === 'GET') return null;
-      throw new SyncError('找不到这个仓库, 或者密钥没给这个仓库的权限', 'auth');
+      throw new SyncError('找不到该仓库，或密钥没有访问权限', 'auth');
     }
-    if (res.status === 409) throw new SyncError('别的设备刚同步过', 'conflict');
+    if (res.status === 409) throw new SyncError('其他设备刚刚同步过', 'conflict');
     if (res.status === 422) {
       // 文件的 sha 对不上、分支不是接着上一个的: 别的设备刚推过; 别的 422 是真出错了, 说清楚
       const text = await res.text().catch(() => '');
-      if (/sha|fast.?forward/i.test(text)) throw new SyncError('别的设备刚同步过', 'conflict');
+      if (/sha|fast.?forward/i.test(text)) throw new SyncError('其他设备刚刚同步过', 'conflict');
       let message = '';
       try {
         message = JSON.parse(text).message ?? '';
       } catch {
         // 没有就算了
       }
-      throw new SyncError(`GitHub 不接受 (${message || 422})`, 'other');
+      throw new SyncError(`GitHub 拒绝了请求（${message || 422}）`, 'other');
     }
-    if (!res.ok) throw new SyncError(`GitHub 出错了 (${res.status}), 过一会儿再试`, 'other');
+    if (!res.ok) throw new SyncError(`GitHub 出错（${res.status}），请稍后再试`, 'other');
     return res;
   }
 
   // 检查仓库能不能用: 找得到, 而且最好是私有的
   async check() {
     const res = await this.call('GET', '');
-    if (!res) throw new SyncError('找不到这个仓库, 或者密钥没给这个仓库的权限', 'auth');
+    if (!res) throw new SyncError('找不到该仓库，或密钥没有访问权限', 'auth');
     return res.json();
   }
 
@@ -177,7 +177,7 @@ export class GitHubRepo {
     const res = await this.call('GET', `/contents/${path}`);
     if (!res) return null;
     const meta = await res.json();
-    if (meta.type && meta.type !== 'file') throw new SyncError(`仓库里的 ${path} 不是文件`);
+    if (meta.type && meta.type !== 'file') throw new SyncError(`仓库中的 ${path} 不是文件`);
     if (meta.encoding === 'base64' && meta.content) return { sha: meta.sha, text: b64ToUtf8(meta.content) };
     // 超过 1MB 的, 接口不给内容, 要用 raw 再拿一次
     const raw = await this.call('GET', `/contents/${path}`, { accept: 'application/vnd.github.raw+json', timeout: 300_000 });
@@ -258,7 +258,7 @@ export class GitHubRepo {
     const commit = await (await this.call('GET', `/git/commits/${head}`)).json();
     if (!commit.parents?.length) return false;
     const fresh = await (await this.call('POST', '/git/commits', { body: { message, tree: commit.tree.sha, parents: [] } })).json();
-    if ((await headOf()) !== head) throw new SyncError('别的设备刚同步过', 'conflict');
+    if ((await headOf()) !== head) throw new SyncError('其他设备刚刚同步过', 'conflict');
     await this.call('PATCH', `/git/refs/heads/${branch}`, { body: { sha: fresh.sha, force: true } });
     return true;
   }
@@ -269,13 +269,13 @@ export class GitHubRepo {
   async commit(changes, message, expect = {}) {
     const branch = encodeURIComponent(await this.branch());
     const ref = await this.call('GET', `/git/ref/heads/${branch}`);
-    if (!ref) throw new SyncError('别的设备刚同步过', 'conflict');
+    if (!ref) throw new SyncError('其他设备刚刚同步过', 'conflict');
     const head = (await ref.json()).object.sha;
     const base = (await (await this.call('GET', `/git/commits/${head}`)).json()).tree.sha;
     for (const [path, sha] of Object.entries(expect)) {
       const dir = path.split('/').slice(0, -1).join('/');
       const now = (await this.tree(dir, base)).find((x) => x.path === path.split('/').pop())?.sha;
-      if (now !== sha) throw new SyncError('别的设备刚同步过', 'conflict');
+      if (now !== sha) throw new SyncError('其他设备刚刚同步过', 'conflict');
     }
     const tree = [];
     const shas = {};
@@ -421,14 +421,14 @@ export async function syncMedia({ store, repo, media = localMedia, progress = ()
     if (full) break;
     const w = where.get(id);
     if (w.file) {
-      progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
+      progress(`下载图片和录音 ${downloaded + 1}/${missing.length}`);
       const blob = await repo.readBlob(w.file);
       if (blob) await save(blob, id);
     } else byPack.set(w.pack, [...(byPack.get(w.pack) ?? []), id]);
   }
   for (const [pack, ids] of byPack) {
     if (full) break;
-    progress(`拿图片录音 ${downloaded + 1}/${missing.length}`);
+    progress(`下载图片和录音 ${downloaded + 1}/${missing.length}`);
     const blob = await repo.readBlob(`media/packs/${pack}.wgp`);
     if (!blob) continue;
     const want = new Set(ids);
@@ -452,7 +452,7 @@ export async function syncMedia({ store, repo, media = localMedia, progress = ()
       if (!batch.length) return;
       pack = await encodePack(batch);
     }
-    progress(`传图片录音 ${uploaded + batch.length}/${toSend.length}`);
+    progress(`上传图片和录音 ${uploaded + batch.length}/${toSend.length}`);
     const name = `p_${newId()}`;
     await repo.write(`media/packs/${name}.wgp`, bytesToB64(pack), undefined, `温故: 图片 / 录音 (${batch.length} 个)`);
     await addToIndex(repo, state, name, batch.map((x) => x.id));
@@ -536,7 +536,7 @@ async function cleanRemote({ repo, state, where, needed, now, progress, dangling
   };
   try {
     for (const name of repack) {
-      progress('整理仓库里的图片录音');
+      progress('整理仓库中的图片和录音');
       const blob = await repo.readBlob(`media/packs/${name}.wgp`);
       if (!blob) continue;
       const items = decodePack(new Uint8Array(await blob.arrayBuffer()));
@@ -560,7 +560,7 @@ async function cleanRemote({ repo, state, where, needed, now, progress, dangling
       ...orphans.filter((name) => ripe.has(`pack:${name}`)).map((name) => [`media/packs/${name}.wgp`, [`pack:${name}`]]),
     ];
     for (let i = 0; i < deletes.length; i += DELETES_PER_COMMIT) {
-      progress('清掉仓库里不用的图片录音');
+      progress('清理仓库中未使用的图片和录音');
       const chunk = deletes.slice(i, i + DELETES_PER_COMMIT);
       packs = { ...packs };
       for (const [, , pack] of chunk) if (pack) delete packs[pack];
@@ -588,7 +588,7 @@ export async function syncOnce({ store, repo, media = localMedia, onApplied = nu
       try {
         remoteData = cleanData(JSON.parse(remote.text));
       } catch {
-        throw new SyncError(`仓库里的 ${DATA_PATH} 坏了 (不是温故的数据)`);
+        throw new SyncError(`仓库中的 ${DATA_PATH} 已损坏（不是温故的数据）`);
       }
     }
     if (remoteData) {
@@ -680,9 +680,9 @@ export class SyncManager {
   // 别的设备正好推了: 再同步、再清 (最多三次)。返回 { squashed: 清了没有 (只有一个版本的不用清) }, 出错返回 { error }
   async cleanHistory() {
     const c = this.config;
-    if (!c) return { error: '没连着同步' };
+    if (!c) return { error: '未开启同步' };
     while (this.running) await this.running;
-    this.setStatus('syncing', '清理旧历史');
+    this.setStatus('syncing', '清理历史版本');
     this.running = (async () => {
       try {
         const repo = new GitHubRepo(c);
@@ -702,7 +702,7 @@ export class SyncManager {
         this.setStatus('ok');
         return { squashed };
       } catch (e) {
-        const message = e instanceof SyncError ? e.message : '清理出错了';
+        const message = e instanceof SyncError ? e.message : '清理失败';
         this.setStatus('error', message, e instanceof SyncError ? e.kind : 'other');
         return { error: message };
       } finally {
@@ -734,7 +734,7 @@ export class SyncManager {
         this.setStatus('ok');
         return result;
       } catch (e) {
-        this.setStatus('error', e instanceof SyncError ? e.message : '同步出错了', e instanceof SyncError ? e.kind : 'other');
+        this.setStatus('error', e instanceof SyncError ? e.message : '同步出错', e instanceof SyncError ? e.kind : 'other');
         return null;
       } finally {
         this.running = null;

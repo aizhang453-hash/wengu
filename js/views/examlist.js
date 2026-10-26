@@ -2,7 +2,7 @@
 // 打的勾存在这台设备上 (换了一天、换了考试就重新来); 按数据已经做完的 (今天的复习背完了) 自己打上勾。
 // 首页上面一条「明天考试 · 考前清单」, 温温也会提醒。
 
-import { h, fill, openDialog } from '../dom.js';
+import { h, fill, openDialog, icon } from '../dom.js';
 import { todayAll } from './plan.js';
 import { nearestExam } from '../plan.js';
 import { kindStats } from '../mistakes.js';
@@ -76,7 +76,7 @@ export function openExamList(store, { onClose = null } = {}) {
   const progress = h('p', { class: 'exam-progress' });
   const drawProgress = () => {
     const n = items.filter((i) => i.done || done.has(i.id)).length;
-    fill(progress, n === items.length ? (info.days ? '都准备好了! 早点睡, 明天加油!' : '都好了, 去考吧, 加油!') : `做完了 ${n} / ${items.length}`);
+    fill(progress, n === items.length ? '已全部完成' : `已完成 ${n} / ${items.length}`);
     progress.classList.toggle('all', n === items.length);
   };
   const row = (item) =>
@@ -99,7 +99,7 @@ export function openExamList(store, { onClose = null } = {}) {
         }),
         h('span', {}, item.text),
       ),
-      item.href ? h('a', { class: 'btn small', href: item.href }, '去做') : null,
+      item.href ? h('a', { class: 'btn small', href: item.href }, '前往') : null,
     );
   drawProgress();
   return openDialog({
@@ -120,15 +120,15 @@ export function examBanner(store) {
   const sub = h('span', { class: 'muted small' });
   const draw = () => {
     const p = examProgress(info);
-    sub.textContent = p.done === p.total ? '考前清单都做完了 ✓' : `考前清单: 做完了 ${p.done} / ${p.total}`;
+    sub.textContent = p.done === p.total ? '考前清单已完成' : `考前清单：已完成 ${p.done} / ${p.total}`;
   };
   draw();
   const el = h(
     'div',
     { class: 'exam-banner' },
-    h('span', { class: 'exam-banner-icon', 'aria-hidden': 'true' }, '📝'),
-    h('div', {}, h('strong', {}, info.days ? `明天考试${info.title ? ` (${info.title})` : ''}` : `今天考试, 加油!`), sub),
-    h('button', { class: 'btn primary small', type: 'button', onclick: () => openExamList(store) }, '打开清单'),
+    h('span', { class: 'exam-banner-icon', 'aria-hidden': 'true' }, icon('calendar', 22)),
+    h('div', {}, h('strong', {}, info.days ? `明日考试${info.title ? `（${info.title}）` : ''}` : `今日考试${info.title ? `（${info.title}）` : ''}`), sub),
+    h('button', { class: 'btn primary small', type: 'button', onclick: () => openExamList(store) }, '查看清单'),
   );
   el.redraw = draw;
   return el;

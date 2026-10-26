@@ -18,7 +18,7 @@ export async function openShareDialog(set) {
   const d = openDialog({
     title: '分享卡片集',
     body: [
-      h('p', {}, `把这条链接发给别人 (或者发到自己的手机), 点开就能把「${set.title || '未命名卡片集'}」导入成自己的卡片集。`),
+      h('p', {}, `打开此链接即可导入「${set.title || '未命名卡片集'}」。`),
       input,
       h(
         'div',
@@ -30,22 +30,22 @@ export async function openShareDialog(set) {
             onclick: async () => {
               try {
                 await navigator.clipboard.writeText(url);
-                toast('链接复制好了');
+                toast('链接已复制');
               } catch {
                 input.select();
-                toast('按 Ctrl+C 复制');
+                toast('请按 Ctrl+C 复制');
               }
             },
           },
           '复制链接',
         ),
         navigator.share
-          ? h('button', { class: 'btn', onclick: () => navigator.share({ title: set.title || '温故卡片集', url }).catch(() => {}) }, '分享到……')
+          ? h('button', { class: 'btn', onclick: () => navigator.share({ title: set.title || '温故卡片集', url }).catch(() => {}) }, '分享')
           : null,
       ),
-      qr ? h('div', { class: 'qr-box' }, qr, h('p', { class: 'small' }, '也可以用手机扫这个二维码')) : h('p', { class: 'muted small' }, '卡片多, 链接太长, 做不成二维码; 复制链接发过去就行。'),
-      hasMedia ? h('p', { class: 'muted small' }, '链接里只有文字, 你自己加的图片和录音带不过去 (太大了)。要连图片一起给, 用首页的「导出备份」。') : null,
-      url.length > 8000 ? h('p', { class: 'muted small' }, '链接比较长, 有的聊天软件会截断; 截断了就用「导出备份」。') : null,
+      qr ? h('div', { class: 'qr-box' }, qr, h('p', { class: 'small' }, '也可用手机扫描二维码')) : h('p', { class: 'muted small' }, '链接过长，无法生成二维码，请复制链接。'),
+      hasMedia ? h('p', { class: 'muted small' }, '链接仅包含文字，不含自行添加的图片和录音；如需完整迁移，请使用「设置 › 备份」。') : null,
+      url.length > 8000 ? h('p', { class: 'muted small' }, '链接较长，部分聊天软件可能截断。') : null,
     ],
   });
   input.focus();
