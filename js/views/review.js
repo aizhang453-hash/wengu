@@ -29,7 +29,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   let learnable; // 能学新词的: 定了计划的; 只复习一个卡片集 / 文件夹时, 没定计划也能「再学几个」(文件夹照里面的顺序)
   function resolve() {
     scope = setId ? store.getSet(setId) : null;
-    sets = setId ? store.setsOf(setId) : store.allSets();
+    sets = setId ? store.setsOf(setId) : store.dailySets();
     groups = !setId ? store.plannedFolders() : scope?.virtual && scope.plan?.on ? [scope] : [];
     learnable = setId ? (scope?.virtual ? [scope] : sets) : [...groups, ...plannedSets(sets)];
   }
@@ -429,7 +429,7 @@ export function renderReview({ store }, setId = null, { practice: startWith = nu
   function finish({ quiet = false } = {}) {
     resolve();
     held = todayOf().held; // 做完以后按现在的算 (复习到上限了, 剩下的都超了)
-    const tomorrow = dueTomorrow(sets) + held; // 超过上限的明天再来
+    const tomorrow = dueTomorrow(sets.filter((s) => store.isDaily(s))) + held; // 超过上限的明天再来; 不是每天背的不算
     const backBtn = h('a', { class: 'btn primary', href: back }, `返回${backText}`);
     const heldNote = held ? h('p', {}, `另有 ${held} 张已到期，超出每日上限（${store.reviewCap} 张），已顺延；也可现在继续复习。`) : null;
     if (total === 0) {

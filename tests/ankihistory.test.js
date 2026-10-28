@@ -99,4 +99,10 @@ test('接上 Anki 的进度: 排好复习、记进复习记录; 这里已经复�
   assert.equal(stats[c.id], undefined);
   assert.deepEqual(historyOf(store.data.revlog, a.id).map((r) => r.rating), [3, 4]);
   assert.equal(historyOf(store.data.revlog, b.id).length, 3); // Anki 的 2 次 + 这里的 1 次
+  // 接上了进度的卡片集定上每日计划, 跟在 Anki 里一样每天接着复习; 没接上的不动
+  assert.equal(store.getSet(set.id).plan.on, true);
+  assert.ok(store.isDaily(store.getSet(set.id)));
+  const plain = store.putSet(makeSet({ cards: [makeCard('x', 'y')] }));
+  assert.equal(store.importReviews(plain.id, [[plain.cards[0].id, []]]), 0);
+  assert.equal(store.getSet(plain.id).plan?.on ?? false, false);
 });

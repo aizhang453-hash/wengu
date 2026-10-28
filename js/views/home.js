@@ -1,4 +1,4 @@
-// 首页「今日」: 今天要做的 (新词、复习、错题, 连续学习几天)、各卡片集今天的份, 下面是所有卡片集和文件夹。
+// 首页「今日」: 今天要做的 (新词、复习、错题, 连续学习几天)、各卡片集今天的份 (只有定了计划的), 下面是所有卡片集和文件夹。
 // 备份、同步、复习的设置都在设置页 (settings.js)
 
 import { examBanner } from './examlist.js';
@@ -28,7 +28,7 @@ function todayCard(store, sets, go) {
   const week = lastDays(store.data.activity, 7);
 
   const stat = (n, label, cls, href) => h(n ? 'a' : 'div', { class: `today-stat ${cls}${n ? '' : ' zero'}`, href: n ? href : null }, h('span', { class: 'today-num' }, num(n)), h('span', { class: 'today-label' }, label));
-  const tomorrow = dueTomorrow(sets);
+  const tomorrow = dueTomorrow(store.dailySets());
   const doneText = reviewedToday(sets) || sets.some((s) => newToday(s).learned) ? '今日任务已完成' : '今日没有待复习的内容';
 
   return h(

@@ -175,7 +175,7 @@ export function situation(store, now = Date.now()) {
     mistakes: dueMistakes(data.mistakes, now).length,
     leeches: countLeeches(sets),
     examDays: nearestExam([...data.sets, ...data.folders], now)?.days ?? null,
-    tomorrow: dueTomorrow(sets, now) + q.held,
+    tomorrow: dueTomorrow(store.dailySets(), now) + q.held,
     xp,
     stage: g.stage,
     progress: g.progress,
