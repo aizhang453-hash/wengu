@@ -198,3 +198,33 @@ test('各卡片集今天那份: 先一起排好每天的上限再分, 加起来�
   assert.deepEqual([sa.reviews.length, sa.held], [6, 0]);
   assert.deepEqual(shareOf(today, [a, b], now).held, 4);
 });
+
+test('每天背的只有定了计划的卡片集 (或者在定了计划的文件夹里): 别的学过也不排进今天、不算积压', () => {
+  const store = new Store(memoryStorage());
+  const studied = (title) => {
+    const cards = cardsOf(3);
+    return store.putSet(makeSet({ title, cards, stats: Object.fromEntries(cards.map((c) => [c.id, learned(now - 10 * DAY, 3, now - DAY)])) }));
+  };
+  const unit = studied('课上的'); // 单词卡里翻过, 都到日子了, 但没定计划
+  const vocab = studied('单词书');
+  store.setPlan(vocab.id, { on: true });
+  const inFolder = studied('文件夹里的');
+  const folder = store.putFolder({ ...makeFolder('SAT'), setIds: [inFolder.id] });
+  assert.deepEqual(
+    store.dailySets().map((s) => s.title).sort(),
+    ['单词书'],
+  );
+  store.setPlan('folder:' + folder.id, { on: true });
+  assert.deepEqual(
+    store.dailySets().map((s) => s.title).sort(),
+    ['单词书', '文件夹里的'],
+  );
+  assert.equal(store.isDaily(store.getSet(unit.id)), false);
+  const today = todayQueue(store.dailySets(), { now, cap: 100 });
+  assert.equal(today.reviews.length, 6);
+  assert.ok(today.reviews.every((x) => x.set.id !== unit.id));
+  assert.deepEqual(shareOf(today, [store.getSet(unit.id)], now), { reviews: [], fresh: [], held: 0 });
+  // 都学过了的也能加进来 (没有新词, 只复习)
+  store.setPlan(unit.id, { on: true });
+  assert.equal(todayQueue(store.dailySets(), { now, cap: 100 }).reviews.length, 9);
+});

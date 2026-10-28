@@ -1,5 +1,6 @@
 // 每天的计划: 卡片集太大, 不可能一下背完, 所以每个卡片集自己定每天学几个新词 (还没背过的卡片),
 // 或者填考试日期, 自动算每天几个、考前留几天只复习。今天的复习 = 到日子的卡片 + 各卡片集今天的新词。
+// 只有定了计划的卡片集 (或者在定了计划的文件夹里) 每天背 (store.dailySets); 别的 (课上的、随手建的) 随时学, 不排进今天的复习
 //   set.plan = { on, perDay, exam: 'YYYY-MM-DD' 或 '', rest: 考前几天只复习, order: 'set' 按卡片集里的顺序 | 'random', seed, at }
 //   (没定过计划是 null; at 是改计划的时间, 同步时听后改的)
 // 文件夹也能定计划 (像 Anki 在大牌组上定每天几个): 新词照文件夹里卡片集的顺序一个一个出 (folder.plan, 用合起来的卡片集算)。
@@ -163,17 +164,20 @@ export function todayQueue(sets, { now = Date.now(), cap = DEFAULT_REVIEW_CAP, r
       fresh.push({ set: home, card, fresh: true });
     }
   }
-  return { reviews: [...again, ...due.slice(0, room)], fresh, held: Math.max(0, due.length - room) };
+  return { reviews: [...again, ...due.slice(0, room)], fresh, held: Math.max(0, due.length - room), pool: new Set(sets.map((s) => s.id)) };
 }
 
 // 今天要背的里面, 某几个卡片集的那份 (首页的表、卡片集页、只背一个卡片集时都一样: 先所有卡片集一起排好每天的上限,
-// 再看这几个各占几张); held 是这几个卡片集到日子了、超过上限没排上的
+// 再看这几个各占几张); held 是这几个卡片集到日子了、超过上限没排上的 (不是每天背的卡片集不算)
 export function shareOf(today, sets, now = Date.now()) {
   const ids = new Set(sets.map((s) => s.id));
   const reviews = today.reviews.filter((x) => ids.has(x.set.id));
   const fresh = today.fresh.filter((x) => ids.has(x.set.id));
   let due = 0;
-  for (const set of sets) for (const card of set.cards) if (isDue(set.stats[card.id], now)) due++;
+  for (const set of sets) {
+    if (today.pool && !today.pool.has(set.id)) continue;
+    for (const card of set.cards) if (isDue(set.stats[card.id], now)) due++;
+  }
   return { reviews, fresh, held: Math.max(0, due - reviews.length) };
 }
 

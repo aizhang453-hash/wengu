@@ -50,7 +50,7 @@ export function renderStats({ store, go }, id = null) {
       sets.some((s) => s.cards.length)
         ? [
             todaySection(store, sets, log, now, review),
-            forecastSection(sets, now),
+            forecastSection(sets.filter((s) => store.isDaily(s)), now), // 只有每天背的才排复习
             calendarSection(sets, log, now),
             retentionSection(store, sets, log, now, redraw),
             timeSection(sets, log, now),

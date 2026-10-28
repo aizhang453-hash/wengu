@@ -247,7 +247,7 @@ export function renderSet({ store, go }, id) {
   function drawTop() {
     fill(
       progressEl,
-      progressLine(set),
+      progressLine(set, store.isDaily(set)),
       inFolders.length ? [' · ', inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, f.name || '未命名文件夹')])] : null,
     );
     fill(planBox, total ? planPanel({ store, go }, set) : null);
@@ -274,12 +274,13 @@ export function renderSet({ store, go }, id) {
   };
 }
 
-function progressLine(set) {
+// daily: 每天背的 (定了计划的) 才说「复习中」, 别的说学过几张
+function progressLine(set, daily) {
   const total = set.cards.length;
   const parts = [`${num(total)} 张卡片`];
   const scheduled = set.cards.filter((c) => set.stats[c.id]?.due > 0).length;
   const mastered = Object.values(set.learn).filter((l) => l === 2).length;
-  if (scheduled) parts.push(`复习中 ${num(scheduled)}`);
+  if (scheduled) parts.push(`${daily ? '复习中' : '已学'} ${num(scheduled)}`);
   if (mastered) parts.push(`已掌握 ${num(mastered)}`);
   if (set.known.length) parts.push(`单词卡已会 ${num(set.known.length)}`);
   const paused = set.cards.filter((c) => isSuspended(set.stats[c.id])).length;

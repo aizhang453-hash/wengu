@@ -31,7 +31,7 @@ export function todayText(reviews, fresh) {
 
 // 一句话说计划走到哪了 (info 是 newToday 算的): 「每日 15 个 · 今日 3/15 · 剩余 1,467 个 · 距考试 131 天」
 export function planLine(info, plan) {
-  if (!info.left) return info.learned ? `今日已学 ${info.learned} 个新词，新词已全部学完` : '新词已全部学完';
+  if (!info.left) return info.learned ? `今日已学 ${info.learned} 个新词，新词已全部学完` : '新词已全部学完，按间隔复习';
   const parts = [];
   if (info.mode === 'rest') {
     parts.push(info.daysLeft === 0 ? '今日考试，暂停新词' : `距考试 ${info.daysLeft} 天，仅复习`);
@@ -49,7 +49,7 @@ export function planLine(info, plan) {
 // 今天要背的: 所有卡片集一起排 (每天的上限、最可能忘的先来、定了计划的卡片集和文件夹的新词)。
 // cap 换成 Infinity 就是不管上限
 export function todayAll(store, { cap = store.reviewCap } = {}) {
-  const all = store.allSets();
+  const all = store.dailySets(); // 只有每天背的 (定了计划的) 卡片集
   return todayQueue(all, { cap, reviewed: reviewedToday(all), groups: store.plannedFolders() });
 }
 
@@ -88,13 +88,32 @@ export function planPanel({ store, go }, set) {
     h(
       'div',
       { class: 'plan-text' },
-      h('strong', {}, '每日新词'),
-      h('div', { class: 'plan-desc' }, info.on ? planLine(info, plan) : info.left ? `尚有 ${num(info.left)} 张未学。设置计划后，每天按量安排新词。` : '全部卡片均已学习。'),
+      h('strong', {}, '每日学习'),
+      h(
+        'div',
+        { class: 'plan-desc' },
+        info.on ? planLine(info, plan) : info.left ? `尚有 ${num(info.left)} 张未学。设置计划后，每天安排新词，并按间隔复习。` : '未加入每日复习，可随时学习。加入后，学过的卡片按间隔安排复习。',
+      ),
     ),
     h(
       'div',
       { class: 'row' },
-      info.on || info.left ? h('button', { class: 'btn', type: 'button', onclick: () => openPlanDialog({ store, set, onSaved: redraw }) }, info.on ? '调整计划' : '设置计划') : null,
+      info.on || info.left
+        ? h('button', { class: 'btn', type: 'button', onclick: () => openPlanDialog({ store, set, onSaved: redraw }) }, info.on ? '调整计划' : '设置计划')
+        : h(
+            'button',
+            {
+              class: 'btn',
+              type: 'button',
+              onclick: () => {
+                // 都学过了, 没有新词可定: 直接加进每天的复习
+                store.setPlan(set.id, { on: true });
+                toast('已加入每日复习');
+                redraw();
+              },
+            },
+            '加入每日复习',
+          ),
       startBtn ?? (info.on ? h('span', { class: 'done-chip' }, '今日已完成') : null),
     ),
   );
@@ -176,14 +195,14 @@ export function openPlanDialog({ store, set, onSaved }) {
     if (mode === 'exam' && examTime(p.exam) < examTime(today())) return toast('考试日期已过');
     store.setPlan(set.id, p);
     d.close();
-    toast(plan.on ? '计划已更新' : '计划已设置，新词将出现在今日复习中');
+    toast(plan.on ? '计划已更新' : '计划已设置，新词与复习将出现在「今日」中');
     onSaved?.();
   }
 
   const d = openDialog({
-    title: '每日新词计划',
+    title: '每日学习计划',
     body: [
-      h('p', { class: 'muted small' }, `「${set.title || '未命名卡片集'}」尚有 ${num(newToday(set).left)} 张未学。新词与到期复习一起出现在今日复习中。`),
+      h('p', { class: 'muted small' }, `「${set.title || '未命名卡片集'}」尚有 ${num(newToday(set).left)} 张未学。设置计划后，新词与到期复习每天出现在「今日」中；未设置计划的卡片集可随时学习，不安排每日复习。`),
       h('div', { class: 'ask-label' }, '每日数量'),
       chips(
         [
@@ -220,7 +239,7 @@ export function openPlanDialog({ store, set, onSaved }) {
               onclick: () => {
                 store.setPlan(set.id, { on: false });
                 d.close();
-                toast('已停用计划，到期复习不受影响');
+                toast('已停用计划，该卡片集不再出现在「今日」中');
                 onSaved?.();
               },
             },

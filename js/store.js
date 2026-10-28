@@ -3,7 +3,7 @@ import { cleanDiagram } from './diagram.js';
 import { quizToMistakes } from './quiz.js';
 import { cleanMistake, firstReview, reviewAfter, mergeMistake, attempted, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
 import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
-import { cleanPlan, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
+import { cleanPlan, planOf, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
 import { cleanPet, mergePet, bankDays } from './pet.js';
 import { cleanArcade, mergeArcade, addScore } from './arcade.js';
@@ -476,6 +476,18 @@ export class Store {
     return this.data.folders.filter((f) => f.plan?.on && f.setIds.length).map((f) => this.folderSet(f.id));
   }
 
+  // 每天背的: 定了每日计划的卡片集, 或者在定了计划的文件夹里 (合起来的看文件夹自己的计划)。
+  // 今日的新词、复习、每天的上限、明天几张只算这些; 别的卡片集随时学, 不排进每天的复习
+  isDaily(set) {
+    if (!set) return false;
+    if (set.plan?.on) return true;
+    return !set.virtual && this.foldersOf(set.id).some((f) => f.plan?.on);
+  }
+
+  dailySets() {
+    return this.allSets().filter((s) => this.isDaily(s));
+  }
+
   // 这张卡片的进度该记到哪个卡片集 (合起来学的时候是卡片原来的卡片集)
   ownerOf(setId, cardId) {
     const set = this.data.sets.find((s) => s.id === setId);
@@ -806,7 +818,7 @@ export class Store {
 
   // 从 Anki 搬来的复习记录: entries = [[卡片 id, [{ at, rating }], 在 Anki 里暂停了]]。按一遍 FSRS 接着 Anki 的进度排
   // (到期日子错开, 一起导入的不挤在同一天), 也记进复习记录。这里已经复习过的卡片不动排期。
-  // Anki 里暂停了的这里也暂停。返回接上了几张
+  // Anki 里暂停了的这里也暂停。接上了的卡片集定上每日计划 (像在 Anki 里一样每天接着复习)。返回接上了几张
   importReviews(setId, entries, now = Date.now()) {
     const set = this.data.sets.find((s) => s.id === setId);
     if (!set) return 0;
@@ -832,6 +844,7 @@ export class Store {
       }
     }
     this.counts = null;
+    if (n && !set.plan?.on) set.plan = cleanPlan({ ...planOf(set), on: true, at: now });
     if (changed) this.save();
     return n;
   }
