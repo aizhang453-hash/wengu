@@ -113,6 +113,29 @@ export function dialogOpen() {
   return Boolean(document.querySelector('dialog[open]'));
 }
 
+// iPhone / iPad 弹出键盘时, 网页不会变矮, 键盘直接盖在下半截上, 弹窗底下的「保存」会被挡住。
+// 键盘出来时记下还看得到的那块 (visualViewport), 弹窗挪到那里、太高就变矮 (样子在 css 的 html.keyboard-open)。
+// 电脑和安卓手机上看得到的高度不变, 什么都不改
+export function fitDialogsToKeyboard(win = window) {
+  const vv = win.visualViewport;
+  if (!vv) return;
+  const root = win.document.documentElement;
+  const update = () => {
+    const open = keyboardCovers(win.innerHeight, vv.height, vv.scale);
+    root.classList.toggle('keyboard-open', open);
+    if (!open) return;
+    root.style.setProperty('--vv-top', `${vv.offsetTop}px`);
+    root.style.setProperty('--vv-h', `${vv.height}px`);
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+}
+
+// 看得到的部分比整页矮了一大截, 又不是两指放大了 → 键盘出来了
+export function keyboardCovers(pageHeight, visibleHeight, scale = 1) {
+  return Math.abs(scale - 1) < 0.01 && pageHeight - visibleHeight > 80;
+}
+
 // 一行开关: 左边字, 右边开关
 export function switchRow({ label, desc = null, checked = false, disabled = false, onchange }) {
   const input = h('input', {

@@ -4,6 +4,7 @@
 // 格式: 'z' + base64url(压缩过的 JSON), 浏览器不能压缩时 'j' + base64url(JSON)
 
 import { cleanQuestion, newQuestion } from './quiz.js';
+import { siteBase } from './platform.js';
 
 function toB64url(bytes) {
   let bin = '';
@@ -67,6 +68,6 @@ export async function decodeShare(text) {
   }
 }
 
-export function shareUrl(code, base = `${location.origin}${location.pathname}`) {
+export function shareUrl(code, base = siteBase()) {
   return `${base}#/share/${code}`;
 }

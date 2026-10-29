@@ -71,6 +71,24 @@
 - 多设备同步：在「设置 › 同步与备份」中按步骤连接个人 GitHub 私有仓库；其他设备可扫码接入。修改会自动合并，不会互相覆盖。
 - 备份：导出包含图片与录音的备份文件；恢复时与现有数据合并。
 
+## iPhone / iPad App
+
+温故也可以装成 iPhone / iPad 上的 App（`ios/` 文件夹；同一个 App 支持 iPhone 和 iPad）。目前没有上架 App Store，需要用 Mac 上的 Xcode 装到自己的设备上：
+
+1. 在 Mac 上打开 `ios/Wengu.xcodeproj`。
+2. Xcode 菜单 › Settings › Accounts 中登录自己的 Apple ID。
+3. 左侧选中项目 Wengu › Signing & Capabilities，Team 选择自己的账号（Personal Team）。如提示 Bundle Identifier 不可用，在末尾加几个字母即可。
+4. 用数据线连接 iPhone / iPad，在设备的「设置 › 隐私与安全性 › 开发者模式」中打开并重启。
+5. Xcode 顶部选择自己的设备，点击 ▶ 运行。首次运行需在设备的「设置 › 通用 › VPN 与设备管理」中信任该开发者。
+
+注意：
+
+- **App 与浏览器中的卡片分开保存。** 要在 App 中使用已有卡片，请在电脑的「设置 › 同步与备份」中显示二维码，用 iPhone / iPad 的相机扫描，在打开的网页中点击「在 App 中连接」；也可以用备份文件恢复。
+- 删除 App 会同时删除 App 中的卡片，请开启多设备同步或定期备份。
+- 使用免费 Apple ID 安装的 App 7 天后无法打开，用 Xcode 重新运行一次即可（卡片不会丢失）。加入付费的 Apple 开发者计划后为一年。
+- 网站更新后，App 需要用 Xcode 重新运行一次才会更新。
+- 别人发来的分享链接会在浏览器中打开，点击「在 App 中导入」即可导入到 App。
+
 ## 常见问题
 
 **数据保存在哪里？**
@@ -119,6 +137,7 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/arcade.js` 游戏厅
   - `js/speech.js` 朗读；`js/recorder.js` 录音；`js/sound.js`、`js/unlock.js` 音效；`js/dict.js` 词典；`js/rich.js` 文字格式；`js/cardview.js` 卡片显示；`js/diagram.js` 标注图；`js/search.js` 搜索；`js/print.js` 打印；`js/share.js` 分享链接；`js/quizlet.js` 书签；`js/qr.js`（`js/vendor/qrcode.js`：MIT）二维码；`js/pet.js` 温温；`js/examlist.js` 考前清单
 - `sw.js`、`manifest.webmanifest`：离线使用与添加到主屏幕
+- `ios/`：iPhone / iPad App。App 本身只是一个网页框（`WebViewController.swift`），编译时 `copy-web.sh` 按 `sw.js` 的清单把网页文件复制进 App；网页通过 `js/platform.js` 判断是否在 App 中。`make-icon.swift` 生成 App 图标
 - `tests/`：测试；`docs/screenshots/`：说明中的截图
 
 </details>

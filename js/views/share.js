@@ -8,6 +8,7 @@ import { quizToMistakes } from '../quiz.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { rich } from '../cardview.js';
 import { normalizeLang } from '../speech.js';
+import { onIosWeb, appLink } from '../platform.js';
 
 export async function openShareDialog(set) {
   const code = await encodeShare(set);
@@ -111,6 +112,8 @@ export function renderShareImport({ store, go }, code) {
       data.description ? h('p', { class: 'description' }, data.description) : null,
       h('p', { class: 'muted' }, `${data.from === 'quizlet' ? '来自 Quizlet' : '他人分享'} · ${data.cards.length} ${unit}${withImages ? ` · ${withImages} 张图片` : ''}`),
       h('div', { class: 'row' }, btn, h('a', { class: 'btn', href: '#/' }, '取消')),
+      // 别人发来的链接只会在浏览器里打开; 装了 App 的, 从这里导入到 App
+      onIosWeb() ? h('p', { class: 'muted small' }, '在 iPhone / iPad 上装了温故 App？', h('a', { href: appLink(`#/share/${code}`) }, '在 App 中导入')) : null,
       h('h2', {}, '预览'),
       h(
         'ul',

@@ -716,6 +716,44 @@ a.today-stat:hover .today-label {
   margin-top: 18px;
 }
 
+/* App 里第一次打开: 怎么把网页版的卡片搬过来 */
+.welcome-move {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.welcome-move-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.welcome-move ol {
+  margin: 10px 0 0;
+  padding-left: 1.4em;
+  font-size: 0.92rem;
+}
+
+.welcome-move li {
+  margin: 6px 0;
+  line-height: 1.7;
+}
+
+.welcome-move .row {
+  margin-top: 14px;
+}
+
+/* ---- iPhone / iPad App 里 (ios/ 给 <html> 加上 in-app) ---- */
+/* 点按时不闪浏览器的灰色方块, 改成按下时变淡一点, 像 App 的按钮。
+   单词卡本身不变淡 (按着要滑); 游戏里也不变 (一直按着的键会发灰) */
+html.in-app {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.in-app body:not(.in-game) :is(a, button, summary, [role='button']):not(:disabled, .flashcard):active {
+  opacity: 0.6;
+}
+
 .howto {
   margin-top: 18px;
   color: var(--muted);
@@ -766,7 +804,7 @@ a.today-stat:hover .today-label {
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); /* fit: 宽屏上不空出没用的格子, 几个入口铺满一行 */
   gap: 10px;
   margin: 18px 0;
 }
@@ -2656,6 +2694,17 @@ kbd {
   gap: 8px;
   padding: 12px 20px 16px;
   border-top: 1px solid var(--border);
+}
+
+/* iPhone / iPad 弹出键盘时 (dom.js fitDialogsToKeyboard): 弹窗挪到键盘上面看得到的地方,
+   太高就变矮, 中间的内容滚动, 底下的按钮不被键盘挡住 */
+html.keyboard-open .dialog {
+  margin: calc(var(--vv-top) + 8px) auto auto;
+  max-height: calc(var(--vv-h) - 16px);
+}
+
+html.keyboard-open .dialog-inner {
+  max-height: calc(var(--vv-h) - 16px);
 }
 
 .spacer {

@@ -2,9 +2,10 @@
 
 import { h, toast } from '../dom.js';
 import { bookmarkletCode } from '../quizlet.js';
+import { inApp, siteBase } from '../platform.js';
 
 export function renderQuizlet() {
-  const code = bookmarkletCode(`${location.origin}${location.pathname}`);
+  const code = bookmarkletCode(siteBase());
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
@@ -23,6 +24,8 @@ export function renderQuizlet() {
     h('a', { class: 'back', href: '#/' }, '← 首页'),
     h('h1', {}, 'Quizlet 一键导入'),
     h('p', {}, '添加一个书签后，在 Quizlet 卡片集页面点击该书签，即可将词语、释义和图片导入温故。'),
+    // 书签只能装在浏览器里, 点了打开的是网页版的导入页 (那里有「在 App 中导入」)
+    inApp() ? h('p', { class: 'muted small' }, '书签需添加到浏览器中。点击书签后会打开网页版的导入页，再点「在 App 中导入」即可导入到 App。') : null,
     h('h2', {}, '电脑（Chrome、Edge、Firefox、Safari）'),
     h(
       'ol',

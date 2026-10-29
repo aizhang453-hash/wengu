@@ -7,6 +7,7 @@ import { openCapDialog, openRetentionDialog, percent, dateText } from './plan.js
 import { openOptimizeDialog } from './optimize.js';
 import { reviewCount } from '../revlog.js';
 import { loadConfig } from '../sync.js';
+import { inApp } from '../platform.js';
 
 const num = (n) => n.toLocaleString('zh-CN');
 
@@ -68,7 +69,7 @@ export function renderSettings({ store, go, syncer, pet = null }) {
         row('多设备同步', '通过 GitHub 私有仓库在电脑和手机间同步', syncText, h('a', { class: 'btn small', href: '#/sync' }, config ? '管理' : '开启')),
         row(
           '备份',
-          '数据保存在本浏览器中；更换设备或清除浏览器数据前请先导出。恢复时与现有数据合并',
+          inApp() ? '数据保存在本 App 中，删除 App 会一并删除；更换设备或删除 App 前请先导出。恢复时与现有数据合并' : '数据保存在本浏览器中；更换设备或清除浏览器数据前请先导出。恢复时与现有数据合并',
           null,
           h(
             'button',
