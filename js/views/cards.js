@@ -582,7 +582,8 @@ export function renderCards({ store }, id) {
       { class: 'card-bar' },
       h('label', { class: 'track-toggle' }, h('span', {}, '跟踪进度'), trackSwitch),
       center,
-      h('div', { class: 'cc-tools' }, undoBtn, shuffleBtn, playBtn, settingsBtn, fullBtn),
+      // iPhone 上的浏览器和 iPhone / iPad 的 App 里不能让网页全屏, 那里不放全屏按钮
+      h('div', { class: 'cc-tools' }, undoBtn, shuffleBtn, playBtn, settingsBtn, document.fullscreenEnabled ? fullBtn : null),
     ),
   );
 

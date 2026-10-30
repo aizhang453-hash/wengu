@@ -2,6 +2,7 @@
 
 import { h, openDialog } from './dom.js';
 import { rich, cardImage } from './cardview.js';
+import { inApp } from './platform.js';
 
 export function printNode(node) {
   document.getElementById('print-area')?.remove(); // 上一次的还没清掉 (连着点了两次)
@@ -18,7 +19,8 @@ export function printNode(node) {
   const imgs = [...area.querySelectorAll('img')];
   Promise.race([Promise.all(imgs.map((img) => (img.complete && img.src ? null : new Promise((r) => img.addEventListener('load', r, { once: true }))))), new Promise((r) => setTimeout(r, 1500))]).then(() => {
     window.print();
-    setTimeout(done, 1000); // 有的浏览器不发 afterprint
+    // 有的浏览器不发 afterprint。App 里打印窗口不会挡住网页, 关掉打印窗口时 App 会发 afterprint
+    if (!inApp()) setTimeout(done, 1000);
   });
 }
 

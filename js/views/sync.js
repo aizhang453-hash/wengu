@@ -3,6 +3,7 @@
 import { h, fill, toast } from '../dom.js';
 import { loadConfig, saveConfig, parseRepo, GitHubRepo, SyncError, expiryFromDate, knownExpiry, expiryInfo } from '../sync.js';
 import { qrSvg } from '../qr.js';
+import { siteBase, onIosWeb, appLink } from '../platform.js';
 
 const API_OVERRIDE = 'wengu:sync-api'; // 只给测试用 (换成假的 GitHub)
 
@@ -248,7 +249,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
-    const link = `${location.origin}${location.pathname}#/sync/connect/${payload}`;
+    const link = `${siteBase()}#/sync/connect/${payload}`;
     qrBox.hidden = !qrBox.hidden;
     fill(
       qrBox,
@@ -451,6 +452,8 @@ function renderConnectLink({ go, syncer }, data) {
       h('p', {}, `本设备将与 ${r.owner}/${r.repo} 同步，现有数据会合并，不会丢失。`),
       h('div', { class: 'row center' }, btn, h('a', { class: 'btn', href: '#/' }, '取消')),
       msg,
+      // 手机相机扫码只会打开网页版; 装了 App 的, 从这里让 App 连接
+      onIosWeb() ? h('p', { class: 'muted small' }, '在 iPhone / iPad 上装了温故 App？', h('a', { href: appLink(`#/sync/connect/${data}`) }, '在 App 中连接')) : null,
     ),
   };
 }

@@ -9,6 +9,7 @@ import { planLine, todayAll, openCapDialog } from './plan.js';
 import { FOLDER_PREFIX, COLLAPSED_KEY } from '../store.js';
 import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 import { dueMistakes } from '../mistakes.js';
+import { inApp } from '../platform.js';
 
 const WEEKDAYS = '日一二三四五六';
 const num = (n) => n.toLocaleString('zh-CN');
@@ -250,5 +251,23 @@ function welcome() {
     h('p', { class: 'welcome-title' }, '温故而知新'),
     h('p', { class: 'muted' }, '新建卡片集，或从 Quizlet、Excel、Anki 导入；也可以拍照，让 AI 生成卡片。'),
     h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/new' }, '新建卡片集'), h('a', { class: 'btn', href: '#/import' }, '导入')),
+    // App 里的卡片和网页版分开存: 装好 App 第一次打开是空的, 教怎么搬过来 (连上同步以后卡片自己会来, 就不用说了)
+    inApp() && !loadConfig() ? moveFromWeb() : null,
+  );
+}
+
+function moveFromWeb() {
+  return h(
+    'div',
+    { class: 'welcome-move' },
+    h('p', { class: 'welcome-move-title' }, '已在网页版使用过温故？'),
+    h('p', { class: 'muted small' }, 'App 与网页版的卡片分开保存，可以用以下方式搬到 App：'),
+    h(
+      'ol',
+      { class: 'steps' },
+      h('li', {}, h('strong', {}, '多设备同步'), '：在电脑上打开温故网页版，进入「设置 › 多设备同步」，点击「在手机上连接」；用本机相机扫描二维码，在打开的网页中点击「在 App 中连接」。网页版尚未开启同步的，请先在网页版开启。'),
+      h('li', {}, h('strong', {}, '备份文件'), '：在网页版「设置」中导出备份，再在本 App 的「设置」中恢复。'),
+    ),
+    h('div', { class: 'row' }, h('a', { class: 'btn small', href: '#/sync' }, '同步设置'), h('a', { class: 'btn small', href: '#/settings' }, '恢复备份')),
   );
 }

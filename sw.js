@@ -47,6 +47,7 @@ const FILES = [
   'js/pindmd.js',
   'js/pinsound.js',
   'js/plan.js',
+  'js/platform.js',
   'js/print.js',
   'js/qr.js',
   'js/questions.js',

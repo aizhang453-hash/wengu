@@ -28,7 +28,8 @@
 
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
-import { h, toast, icon, dialogOpen } from './dom.js';
+import { inApp, watchModals } from './platform.js';
+import { h, toast, icon, dialogOpen, fitDialogsToKeyboard } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
@@ -298,6 +299,12 @@ navigator.storage?.persist?.().catch(() => {});
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// iPhone / iPad App 里: 弹窗时让 App 把状态栏那条也调暗
+if (inApp()) watchModals();
+
+// 手机键盘出来时, 弹窗挪到键盘上面
+fitDialogsToKeyboard();
 
 // 没有卡片用的图片、录音 (比如编辑时加了又没保存、别的设备删了卡片集), 过一会儿删掉;
 // 已经没有了的卡片集在浏览器里另外记的东西 (背到哪了、学哪些……) 也删掉
