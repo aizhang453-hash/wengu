@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, makeSet, makeCard, makeFolder, cleanData } from '../js/store.js';
+import { newMistake } from '../js/mistakes.js';
 
 // 假的 localStorage
 function memoryStorage() {
@@ -95,7 +96,7 @@ test('备份导出再导入: 新的加进来, 两边都有的合在一起 (后�
   to.putSet({ ...structuredClone(shared), title: '这边后来改的' });
   to.putSet({ ...sampleSet(), title: '只在这边' });
   const result = to.importBackup(backup);
-  assert.deepEqual(result, { added: 1, replaced: 1 });
+  assert.deepEqual(result, { added: 1, replaced: 1, mistakes: 0 });
   assert.deepEqual(to.allSets().map((s) => s.title).sort(), ['只在备份里', '只在这边', '这边后来改的'].sort());
 });
 
@@ -124,7 +125,15 @@ test('用备份恢复删掉的卡片集: 恢复了的同步以后还在; 备份�
 test('备份文件不对: 读不了的抛错, 没有卡片集的什么也不加', () => {
   const store = new Store(memoryStorage());
   assert.throws(() => store.importBackup('不是 JSON'));
-  assert.deepEqual(store.importBackup('{"hello": 1}'), { added: 0, replaced: 0 });
+  assert.deepEqual(store.importBackup('{"hello": 1}'), { added: 0, replaced: 0, mistakes: 0 });
+});
+
+test('只有错题的备份: 恢复时说恢复了几道错题 (不说「没有卡片集」)', () => {
+  const from = new Store(memoryStorage());
+  from.putMistake({ ...newMistake('m1'), question: '1 + 1 = ?', type: 'input', answer: '2' });
+  const to = new Store(memoryStorage());
+  assert.deepEqual(to.importBackup(from.exportBackup()), { added: 0, replaced: 0, mistakes: 1 });
+  assert.equal(to.getMistake('m1').question, '1 + 1 = ?');
 });
 
 test('缺字段的老数据补齐, 乱七八糟的丢掉', () => {
@@ -274,9 +283,11 @@ test('翻卡自评才排下次复习; 别的答法只算次数和打卡; 存了�
   assert.deepEqual([after.right, after.wrong, after.due], [1, 0, before.due]);
 
   // 只做过选择题、打字的卡片不排进复习
-  const plum = store.putSet(sampleSet()).cards[0];
-  store.recordAnswer(store.allSets()[0].id, plum.id, true, { now: noon });
-  assert.equal(store.allSets()[0].stats[plum.id].due, undefined);
+  // (用 putSet 给的 id: 两个卡片集同一毫秒建的, allSets 的先后分不出来)
+  const other = store.putSet(sampleSet());
+  const plum = other.cards[0];
+  store.recordAnswer(other.id, plum.id, true, { now: noon });
+  assert.equal(store.getSet(other.id).stats[plum.id].due, undefined);
 });
 
 test('存不进去 (空间满了): 不抛错, 告诉 onSaveError; 编辑保存 (putSet) 才抛错', () => {

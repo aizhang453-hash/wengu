@@ -99,3 +99,19 @@ test('卡片一张一张合: 一边新加的、另一边后来改了别的, 都�
   const m = merge({ sets: [pc], deleted: { 'card:c': T + 15 } }, { sets: [ipad] });
   assert.ok(m.sets[0].cards.some((c) => c.term === 'cherry'));
 });
+
+test('一边删了卡片, 另一边 (没同步) 后来改了标题、别的卡片: 删掉的不回来; 那边删了以后又改过这张的留下', () => {
+  const base = set({ id: 's', cards: [card('a', 'apple'), card('b', 'banana'), card('c', 'cherry')], updatedAt: T });
+  // 电脑上先删了 b、c
+  const pc = { ...base, cards: [card('a', 'apple')], updatedAt: T + 10 };
+  // 平板 (还没同步) 后来改了标题, 又改了 c (不知道电脑删了)
+  const ipad = { ...base, title: '平板改的', cards: [card('a', 'apple'), card('b', 'banana'), { ...card('c', 'CHERRY'), edited: T + 50 }], updatedAt: T + 50 };
+  for (const [x, y] of [
+    [pc, ipad],
+    [ipad, pc],
+  ]) {
+    const m = merge({ sets: [x], deleted: x === pc ? { 'card:b': T + 10, 'card:c': T + 10 } : {} }, { sets: [y], deleted: y === pc ? { 'card:b': T + 10, 'card:c': T + 10 } : {} });
+    assert.equal(m.sets[0].title, '平板改的');
+    assert.deepEqual(m.sets[0].cards.map((c) => c.term), ['apple', 'CHERRY']); // b 删了; c 平板删了以后又改过, 留下
+  }
+});

@@ -102,11 +102,15 @@ export function parseNumber(text) {
   return /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i.test(t) ? Number(t) : null;
 }
 
-// 对的答案可以写好几个, 用逗号、分号或者「或」隔开
+// 对的答案可以写好几个, 用逗号、分号或者「或」隔开。
+// 「或」挨着的都是汉字 (「或许」「或者」「苹果或香蕉」) 是词的一部分, 不拆; 旁边有空格、数字、字母的 (「3 或 6/8」「x=2或x=3」) 才拆
+const HAN = /\p{Script=Han}/u;
 export function answerChoices(text) {
-  return String(text ?? '')
-    .split(/[,，;；或]/)
-    .map((s) => s.trim())
+  const s = String(text ?? '');
+  const split = s.replace(/或/g, (m, i) => ((s[i - 1] && !HAN.test(s[i - 1])) || (s[i + 1] && !HAN.test(s[i + 1])) ? ',' : m));
+  return split
+    .split(/[,，;；]/)
+    .map((x) => x.trim())
     .filter(Boolean);
 }
 

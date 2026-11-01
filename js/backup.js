@@ -21,7 +21,7 @@ export async function exportBackup(store) {
   return new Blob(parts, { type: 'application/json' });
 }
 
-// 先把图片、录音放回去, 再导入卡片集。返回 { added, replaced }
+// 先把图片、录音放回去, 再导入卡片集。返回 { added, replaced, mistakes }
 export async function importBackup(store, text) {
   const raw = JSON.parse(text);
   if (raw && raw.media && typeof raw.media === 'object') {
