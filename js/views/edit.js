@@ -765,16 +765,13 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       rows[0]?.termEl.focus();
       return;
     }
-    const set = {
-      ...draft,
-      title: titleInput.value.trim() || '未命名卡片集',
-      description: descInput.value.trim(),
-      termLang: termLang.value,
-      defLang: defLang.value,
-      cards,
-    };
-    // 进度在别的页面 (单词卡、学习) 也会变, 以存着的为准
+    const fields = { title: titleInput.value.trim(), description: descInput.value.trim(), termLang: termLang.value, defLang: defLang.value };
     const latest = store.getSet(draft.id);
+    // 编辑的时候别的设备 (同步来的)、别的标签页也改了这个卡片集: 只存这里改了的, 别的照存着的
+    // (那边新加的卡片不会被当成这里删了, 这里没动的卡片、标题用那边改过的)
+    if (latest) for (const key of Object.keys(fields)) if (fields[key] === draft[key]) fields[key] = latest[key];
+    const set = { ...draft, ...fields, title: fields.title || '未命名卡片集', cards: latest ? withTheirs(draft.cards, cards, latest.cards) : cards };
+    // 进度在别的页面 (单词卡、学习) 也会变, 以存着的为准
     if (latest) {
       for (const key of ['known', 'starred', 'learn', 'stats', 'best', 'plan']) set[key] = latest[key];
     }
@@ -861,6 +858,23 @@ export function renderEdit({ store, go }, id, { openImport = false } = {}) {
       player?.pause();
     },
   };
+}
+
+// 保存时的卡片: opened 打开编辑页时的, mine 这里现在的, theirs 现在存着的 (编辑的时候可能同步来了别的设备改的)。
+// 这里没动过的卡片用存着的 (那边改了字、删了也照那边的); 那边新加的接在后面; 这里改了、加了、删了的照这里的
+export function withTheirs(opened, mine, theirs) {
+  const text = (c) => JSON.stringify([c.term.trim(), c.def.trim(), c.image || '', c.termAudio || '', c.defAudio || '']);
+  const before = new Map(opened.map((c) => [c.id, c]));
+  const now = new Map(theirs.map((c) => [c.id, c]));
+  const ids = new Set(mine.map((c) => c.id));
+  const out = [];
+  for (const c of mine) {
+    const o = before.get(c.id);
+    if (!o || text(o) !== text(c)) out.push(c);
+    else if (now.has(c.id)) out.push({ ...c, ...now.get(c.id) });
+  }
+  for (const c of theirs) if (!before.has(c.id) && !ids.has(c.id)) out.push(c);
+  return out;
 }
 
 function autoGrow(el) {

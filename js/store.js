@@ -1020,7 +1020,7 @@ export class Store {
   }
 
   // 备份里的卡片集加进来; 同一个卡片集 (id 一样) 用备份里的替换。
-  // 返回 { added, replaced }
+  // 返回 { added 加了几个卡片集, replaced 合了几个, mistakes 备份里几道错题 }
   // 备份里的算刚改过的 (同步时听备份的, 不会被别的设备的旧内容、删除记录又盖掉; 删掉了的也恢复回来)。
   // 一起存: 存不下就全不要, 抛错 (error.size)
   importBackup(text, now = Date.now()) {
@@ -1077,6 +1077,6 @@ export class Store {
       } else this.data.mistakes[i] = cleanMistake(mergeMistake(this.data.mistakes[i], m));
     }
     this.save();
-    return { added, replaced };
+    return { added, replaced, mistakes: incoming.mistakes.length };
   }
 }

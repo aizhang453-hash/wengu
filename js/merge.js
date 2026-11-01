@@ -60,16 +60,20 @@ function withFlags(main, from) {
   return out;
 }
 
-// 卡片一张一张合: 两边都有的听后改的那张 (edited); 只有另一边有的, 是新加的 / 后来改过的 (有 edited, 不是删了以后的) 就留下, 接在后面
+// 卡片一张一张合: 两边都有的听后改的那张 (edited); 只有另一边有的, 是新加的 / 后来改过的 (有 edited, 不是删了以后的) 就留下, 接在后面。
+// 一边删了的卡片, 另一边没再改过就不要 (另一边后来改了标题、别的卡片, 也不会把删掉的带回来)
 function mergeCards(content, other, deleted) {
   const theirs = new Map(other.cards.map((c) => [c.id, c]));
   const mine = new Set(content.cards.map((c) => c.id));
-  const cards = content.cards.map((c) => {
-    const o = theirs.get(c.id);
-    return o && (o.edited ?? 0) > (c.edited ?? 0) ? o : c;
-  });
+  const alive = (c) => !(deleted[`card:${c.id}`] >= (c.edited ?? 0));
+  const cards = content.cards
+    .map((c) => {
+      const o = theirs.get(c.id);
+      return o && (o.edited ?? 0) > (c.edited ?? 0) ? o : c;
+    })
+    .filter(alive);
   for (const c of other.cards) {
-    if (mine.has(c.id) || !(c.edited > 0) || (deleted[`card:${c.id}`] ?? 0) >= c.edited) continue;
+    if (mine.has(c.id) || !(c.edited > 0) || !alive(c)) continue;
     cards.push(c);
   }
   return cards;

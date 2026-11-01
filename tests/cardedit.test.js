@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, makeCard, FOLDER_PREFIX } from '../js/store.js';
 import { makeQuestion, refreshQuestion } from '../js/questions.js';
 import { mergeData } from '../js/merge.js';
+import { withTheirs } from '../js/views/edit.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -68,4 +69,18 @@ test('题目跟着改过的卡片换字 (选择题对的选项、判断题)', ()
   cards[2].term = 'Peach';
   refreshQuestion(w);
   assert.deepEqual([w.prompt, w.answer], ['桃', 'Peach']);
+});
+
+test('编辑页保存: 编辑的时候同步来了别的设备的改动 —— 那边新加的卡片不会被当成这里删了, 这里没动的用那边改过的', () => {
+  const c = (id, term, extra = {}) => ({ id, term, def: `${term}的意思`, image: '', termAudio: '', defAudio: '', ...extra });
+  const opened = [c('a', 'apple'), c('b', 'banana'), c('x', 'xray')];
+  // 这里: 改了 a, 删了 x, 加了 n
+  const mine = [c('a', 'APPLE'), c('b', 'banana'), c('n', 'new')];
+  // 那边 (同步来的): 改了 b, 加了 t
+  const theirs = [c('a', 'apple'), c('b', 'BANANA', { edited: 5 }), c('x', 'xray'), c('t', 'theirs', { edited: 5 })];
+  assert.deepEqual(withTheirs(opened, mine, theirs).map((x) => x.term), ['APPLE', 'BANANA', 'new', 'theirs']);
+  // 那边删了、这里没动的: 不要了; 那边删了、这里改过的: 留下
+  assert.deepEqual(withTheirs(opened, [c('a', 'apple'), c('b', 'BAN'), c('x', 'xray')], [c('x', 'xray')]).map((x) => x.term), ['BAN', 'xray']);
+  // 没有别的改动: 跟这里的一样
+  assert.deepEqual(withTheirs(opened, mine, opened), mine);
 });

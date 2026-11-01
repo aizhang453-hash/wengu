@@ -201,3 +201,16 @@ test('老数据没有错题集: 照常', () => {
   assert.deepEqual(cleanData({ sets: [] }).mistakes, []);
   assert.deepEqual(mergeData(cleanData({}), { sets: [], folders: [] }).mistakes, []);
 });
+
+test('填空题: 答案里的「或」挨着汉字的是词的一部分 (或许、或者), 不当成「几个答案都对」拆开', () => {
+  assert.deepEqual(answerChoices('或许'), ['或许']);
+  assert.deepEqual(answerChoices('或者'), ['或者']);
+  assert.deepEqual(answerChoices('苹果或香蕉'), ['苹果或香蕉']);
+  assert.deepEqual(answerChoices('或'), ['或']);
+  assert.deepEqual(answerChoices('3或4'), ['3', '4']);
+  assert.deepEqual(answerChoices('x=2或x=3'), ['x=2', 'x=3']);
+  assert.deepEqual(answerChoices('苹果 或 香蕉'), ['苹果', '香蕉']);
+  assert.equal(checkInput('或许', '或许'), true);
+  assert.equal(checkInput('许', '或许'), false);
+  assert.equal(checkInput('4', '3或4'), true);
+});

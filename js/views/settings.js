@@ -36,9 +36,10 @@ export function renderSettings({ store, go, syncer, pet = null }) {
       if (!file) return;
       // 跟现在的合在一起 (后改的为准), 不会把这里后来改的、背的退回去
       try {
-        const { added, replaced } = await importBackup(store, await file.text());
-        if (added + replaced === 0) return toast('备份中没有卡片集');
-        toast(`已从备份恢复 ${added + replaced} 个卡片集`);
+        const { added, replaced, mistakes } = await importBackup(store, await file.text());
+        if (added + replaced + mistakes === 0) return toast('备份中没有卡片集和错题');
+        const what = [added + replaced ? `${added + replaced} 个卡片集` : '', mistakes ? `${mistakes} 道错题` : ''].filter(Boolean);
+        toast(`已从备份恢复 ${what.join('、')}`);
         go('#/');
       } catch (e) {
         toast(e?.size ? `存储空间不足（备份约 ${(e.size / 1e6).toFixed(1)} MB），未导入任何内容` : '无法读取该文件，请选择温故导出的备份');

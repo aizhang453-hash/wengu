@@ -52,6 +52,11 @@ export function hintOf(text) {
     .join('');
 }
 
+// 撤销单词卡上标的「会 / 不会」(at 是标的时间) 时, 这张最后一次背的还是不是那一次。
+// 不是 (今日复习、别的标签页后来又背过, 或者这一轮是好几天前背到一半的) 就不能把复习进度退回去, 不然后来背的也没了。
+// (记下的时间可能往后挪过, 最多一分钟, 见 store.freeTime)
+export const answeredLast = (stat, at) => !at || (stat?.at >= at && stat.at <= at + 60_000);
+
 export function renderCards({ store }, id) {
   const set = store.getSet(id);
   const base = set ? `#/set/${encodeURIComponent(set.id)}` : '#/';
@@ -215,9 +220,11 @@ export function renderCards({ store }, id) {
     if (!prefs.track) return prev();
     if (history.length === 0) return;
     const last = history.pop();
-    if (last.at) store.untouchActivity(last.at);
+    // 标了以后这张又背过: 只退回上一张, 复习进度不动
+    const latest = answeredLast(store.ownerOf(set.id, last.id)?.stats[last.id], last.at);
+    if (last.at && latest) store.untouchActivity(last.at);
     store.setKnown(set.id, last.id, last.wasKnown);
-    if ('stat' in last) store.restoreStat(set.id, last.id, last.stat, last.code);
+    if ('stat' in last && latest) store.restoreStat(set.id, last.id, last.stat, last.code);
     if (!finished) index = Math.max(0, index - 1);
     finished = false;
     flipped = false;
