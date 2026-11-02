@@ -246,12 +246,12 @@ function endYear(c, life, entry, rand, natural = true) {
 
 const deathLine = (cause) =>
   ({
-    old: '你在一个安静的午后睡着了，没有再醒来。',
-    ill: '你的身体终于撑不住了。你走了。',
-    sudden: '一场突如其来的病，带走了你。',
-    overwork: '你在一次加班后倒下了，再也没有起来。',
-    accident: '一场意外，让一切停在了这里。',
-  })[cause] ?? '你走了。';
+    old: '你在睡梦中去世了。',
+    ill: '你病逝了。',
+    sudden: '你突发疾病去世了。',
+    overwork: '你加班时猝死了。',
+    accident: '你死于一场意外。',
+  })[cause] ?? '你去世了。';
 
 // 过一年。正等着选路口、已经走了的时候不动, 返回 null
 export function advance(life, profile = emptyProfile(), rand = Math.random) {
@@ -313,9 +313,9 @@ export function runUntilStop(life, profile, rand, choosePick = null, limit = 200
 
 // ---- 走了以后 ----
 
-const HIGH = { str: '身体底子好', kno: '学识出众', soc: '人缘极好', mny: '家底殷实' };
-const LOW = { str: '体魄欠佳', kno: '书读得少了些', soc: '朋友不多', mny: '手头总是紧' };
-const ADVICE = { str: '下一稿，记得早睡，多走动。', kno: '下一稿，多读几本书。', soc: '下一稿，多交几个朋友。', mny: '下一稿，学着攒点钱。' };
+const HIGH = { str: '身体好', kno: '学问好', soc: '人缘好', mny: '有钱' };
+const LOW = { str: '身体差', kno: '书读得少', soc: '朋友少', mny: '缺钱' };
+const ADVICE = { str: '下一稿多锻炼。', kno: '下一稿多读书。', soc: '下一稿多交朋友。', mny: '下一稿多攒钱。' };
 
 export function ending(life, profile = emptyProfile()) {
   const c = context(life, profile, () => 0.5, null);

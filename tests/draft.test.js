@@ -32,7 +32,9 @@ function simulate(n, seed = 1) {
     for (const x of life.choices) (seen.choices.add(x.id), seen.options.add(`${x.id}:${x.opt}`));
     seen.endings.add(r.ending.key);
     seen.origins.add(life.origin);
-    if (life.wishAt !== null) seen.wishes.add(life.wish);
+    // 心愿: 不管这一稿挑的是哪个, 走的时候满足了就算碰得到 (活到一百岁太少见, 只看挑了它的稿会时有时无)
+    const c = { age: life.age, has: (f) => Object.hasOwn(life.flags, f), since: (f) => (Object.hasOwn(life.flags, f) ? life.age - life.flags[f] : -1) };
+    for (const w of WISHES) if (w.done(c)) seen.wishes.add(w.key);
     lives.push({ life, r });
   }
   return { lives, seen, profile };
@@ -50,7 +52,7 @@ test('开局: 出身、性格、心愿各给三个不重复的; 属性 = 出身 
   assert.deepEqual(life.stats, { str: 3, kno: 9, soc: 3, mny: 4 });
   assert.equal(life.run, 1);
   assert.equal(life.age, 0);
-  assert.match(life.years[0].lines[0].t, /书比家具多/);
+  assert.match(life.years[0].lines[0].t, /翻了三天字典/);
   assert.equal(newLife({ origin: 'sea', trait: 'bold', wish: 'book' }, { ...emptyProfile(), runs: 4 }).run, 5);
   assert.ok(newLife({ origin: 'sea', trait: 'bold', wish: 'book' }).flags.sea === 0, '出身带的标记');
   assert.throws(() => newLife({ origin: 'nope', trait: 'bold', wish: 'book' }));
@@ -158,7 +160,7 @@ test('结局、分数、评语: 照着规则来', () => {
   const end = ending(life);
   assert.equal(end.key, 'hundred');
   assert.equal(score(life, end), 101 + 10 * 2 + 9 * 2 + 5 + 3 + 80 + end.pts);
-  assert.equal(comment(life), '学识出众，手头总是紧。心愿「活到一百岁」已了。下一稿，学着攒点钱。');
+  assert.equal(comment(life), '学问好，缺钱。心愿「活到一百岁」已了。下一稿多攒钱。');
   life.wishAt = null;
   assert.match(comment(life), /心愿「活到一百岁」未了。下一稿，好好锻炼，少操点心。$/);
   Object.assign(life, { age: 35, flags: {}, dead: { age: 35, cause: 'overwork', text: '' } });
