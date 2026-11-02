@@ -29,7 +29,7 @@
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
-| **更多** | 文件夹、搜索、考前清单、深色模式；学习游戏、游戏厅（3D 弹珠台）、学习陪伴「温温」 |
+| **更多** | 文件夹、搜索、考前清单、深色模式；学习游戏、游戏厅（3D 弹珠台、文字人生模拟「人生草稿」）、学习陪伴「温温」 |
 
 ## 使用说明
 
@@ -102,7 +102,7 @@
 
 ## 更新记录
 
-当前版本 **v1.47.1**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.48**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -126,7 +126,7 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
   - `edit.js` 编辑卡片集、`fileimport.js` 文件导入、`export.js` 导出、`cardedit.js` 卡片快速编辑、`aiprompt.js` 提示词按钮
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
   - `mistakes.js` 错题集、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
-  - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`：游戏厅
+  - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
   - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
@@ -134,7 +134,7 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/mistakes.js` 错题；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
-  - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/arcade.js` 游戏厅
+  - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
   - `js/speech.js` 朗读；`js/recorder.js` 录音；`js/sound.js`、`js/unlock.js` 音效；`js/dict.js` 词典；`js/rich.js` 文字格式；`js/cardview.js` 卡片显示；`js/diagram.js` 标注图；`js/search.js` 搜索；`js/print.js` 打印；`js/share.js` 分享链接；`js/quizlet.js` 书签；`js/qr.js`（`js/vendor/qrcode.js`：MIT）二维码；`js/pet.js` 温温；`js/examlist.js` 考前清单
 - `sw.js`、`manifest.webmanifest`：离线使用与添加到主屏幕
 - `ios/`：iPhone / iPad App。App 本身只是一个网页框（`WebViewController.swift`），编译时 `copy-web.sh` 按 `sw.js` 的清单把网页文件复制进 App；网页通过 `js/platform.js` 判断是否在 App 中。`make-icon.swift` 生成 App 图标
