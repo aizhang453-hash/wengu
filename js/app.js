@@ -4,7 +4,7 @@
 //   #/import              新建卡片集, 打开「导入」
 //   #/search/<字>         搜索
 //   #/games               学习游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
-//   #/arcade              游戏厅 (学累了玩的), #/arcade/pinball 弹珠台
+//   #/arcade              游戏厅 (学累了玩的), #/arcade/pinball 弹珠台, #/arcade/draft 人生草稿
 //   #/mistakes            错题集 (#/mistakes/new 记一道, #/mistakes/import 拍照让 AI 记, #/mistakes/<id>/edit 改,
 //                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道)
 //   #/share/<..>          打开别人分享的卡片集
@@ -54,6 +54,7 @@ import { renderQuizlet } from './views/quizlet.js';
 import { renderGames } from './views/gamehub.js';
 import { renderArcade } from './views/arcade.js';
 import { renderPinball } from './views/pinball.js';
+import { renderDraft } from './views/draft.js';
 import { renderMistakes } from './views/mistakes.js';
 import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
@@ -126,7 +127,7 @@ function parse(hash) {
   if (parts[0] === 'import') return { page: 'edit', id: null, openImport: true };
   if (parts[0] === 'search') return { page: 'search', query: parts.slice(1).join('/') };
   if (parts[0] === 'games') return { page: 'games', game: parts[1] ?? null };
-  if (parts[0] === 'arcade') return parts[1] === 'pinball' ? { page: 'pinball' } : { page: 'arcade' };
+  if (parts[0] === 'arcade') return parts[1] === 'pinball' ? { page: 'pinball' } : parts[1] === 'draft' ? { page: 'draft' } : { page: 'arcade' };
   if (parts[0] === 'mistakes') {
     if (!parts[1]) return { page: 'mistakes' };
     if (parts[1] === 'new') return { page: 'mistake-edit', mistake: null };
@@ -202,6 +203,7 @@ function render() {
   else if (route.page === 'games') view = renderGames(ctx, route.game);
   else if (route.page === 'arcade') view = renderArcade(ctx);
   else if (route.page === 'pinball') view = renderPinball(ctx);
+  else if (route.page === 'draft') view = renderDraft(ctx);
   else if (route.page === 'mistakes') view = renderMistakes(ctx);
   else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake);
   else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
