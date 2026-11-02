@@ -1,8 +1,9 @@
 // 游戏厅「人生草稿」: 开局、一年一年过、路口、结局和打分、批注 (前稿解锁、以前的稿选过的路), 玩到一半存回来,
-// 批注怎么存、怎么合 (同步、备份), 内容本身对不对得上 (名字不重复、每件事、每个路口、每个结局都碰得到)
+// 批注怎么存、怎么合 (同步、备份), 越玩越强 (结局解锁稀有开局、性格传给下一稿),
+// 内容本身对不对得上 (名字不重复、每件事、每个路口、每个结局、每个稀有开局都碰得到)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { STATS, MAX, emptyProfile, offers, newLife, advance, choose, runUntilStop, finish, ending, score, comment, noteFor, restoreLife, newlyUnlocked, originOf, choiceOf, ORIGINS, TRAITS, WISHES, CHOICES, ENDINGS } from '../js/draft.js';
+import { STATS, MAX, emptyProfile, offers, newLife, advance, choose, runUntilStop, finish, ending, score, comment, noteFor, restoreLife, newlyUnlocked, isOpen, heirOf, traitsOf, withHeir, originOf, traitOf, choiceOf, ORIGINS, TRAITS, WISHES, CHOICES, ENDINGS } from '../js/draft.js';
 import { EVENTS } from '../js/draftdata.js';
 import { cleanArcade, cleanDraftProgress, mergeDraftProgress, addScore, progressOf, bestOf, ARCADE } from '../js/arcade.js';
 import { Store, cleanData } from '../js/store.js';
@@ -16,18 +17,20 @@ function memoryStorage() {
   return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) };
 }
 
-// 一口气写很多稿 (批注一稿一稿攒着), 看看都发生了什么
+// 一口气写很多稿 (批注一稿一稿攒着; 开局随便挑, 一半的稿把一个性格传下去), 看看都发生了什么
 function simulate(n, seed = 1) {
   const rand = seeded(seed);
+  const any = (list) => list[Math.floor(rand() * list.length)];
   let profile = emptyProfile();
-  const seen = { events: new Set(), choices: new Set(), options: new Set(), endings: new Set(), wishes: new Set(), origins: new Set() };
+  const seen = { events: new Set(), choices: new Set(), options: new Set(), endings: new Set(), wishes: new Set(), origins: new Set(), traits: new Set() };
   const lives = [];
   for (let i = 0; i < n; i++) {
     const o = offers(profile, rand);
-    const life = newLife({ origin: o.origins[0], trait: o.traits[0], wish: o.wishes[0] }, profile, rand);
+    const life = newLife({ origin: any(o.origins), trait: any(o.traits), wish: any(o.wishes), heir: heirOf(profile) }, profile, rand);
     runUntilStop(life, profile, rand, randomPick(rand));
     const r = finish(life, profile, 1000 + i);
-    profile = r.profile;
+    profile = rand() < 0.5 ? withHeir(r.profile, any(traitsOf(life)), 1000 + i) : r.profile;
+    for (const t of traitsOf(life)) seen.traits.add(t);
     for (const id of Object.keys(life.done)) seen.events.add(id);
     for (const x of life.choices) (seen.choices.add(x.id), seen.options.add(`${x.id}:${x.opt}`));
     seen.endings.add(r.ending.key);
@@ -47,6 +50,7 @@ test('开局: 出身、性格、心愿各给三个不重复的; 属性 = 出身 
   for (const list of [o.origins, o.traits, o.wishes]) {
     assert.equal(list.length, 3);
     assert.equal(new Set(list).size, 3);
+    assert.ok(list.every((k) => !(originOf(k) ?? traitOf(k))?.rare), '没解锁时不给稀有的');
   }
   const life = newLife({ origin: 'books', trait: 'curious', wish: 'book' });
   assert.deepEqual(life.stats, { str: 3, kno: 9, soc: 3, mny: 4 });
@@ -58,14 +62,65 @@ test('开局: 出身、性格、心愿各给三个不重复的; 属性 = 出身 
   assert.throws(() => newLife({ origin: 'nope', trait: 'bold', wish: 'book' }));
 });
 
-test('「似曾相识」的出身写满 3 稿才出现; 写完第 3 稿时算新解锁', () => {
+test('「似曾相识」的出身写满 3 稿才出现, 出现时是第四张 (稀有); 写完第 3 稿时算新解锁', () => {
   const rand = seeded(5);
   for (let i = 0; i < 200; i++) assert.ok(!offers({ ...emptyProfile(), runs: 2 }, rand).origins.includes('again'));
-  let found = false;
-  for (let i = 0; i < 200 && !found; i++) found = offers({ ...emptyProfile(), runs: 3 }, rand).origins.includes('again');
-  assert.ok(found);
+  for (let i = 0; i < 50; i++) {
+    const o = offers({ ...emptyProfile(), runs: 3 }, rand).origins;
+    assert.equal(o.length, 4);
+    assert.equal(o[3], 'again');
+  }
   assert.deepEqual(newlyUnlocked({ ...emptyProfile(), runs: 2 }, { ...emptyProfile(), runs: 3 }).map((x) => x.key), ['again']);
   assert.deepEqual(newlyUnlocked({ ...emptyProfile(), runs: 3 }, { ...emptyProfile(), runs: 4 }), []);
+});
+
+test('越玩越强: 拿到结局解锁稀有的性格、出身, 开局时多给一张稀有的', () => {
+  const rand = seeded(8);
+  const before = emptyProfile();
+  const after = { ...emptyProfile(), endings: ['scholar', 'tycoon'] };
+  assert.deepEqual(newlyUnlocked(before, after).map((x) => x.key).sort(), ['boss', 'memory']);
+  assert.ok(isOpen(traitOf('memory'), after) && !isOpen(traitOf('memory'), before));
+  for (let i = 0; i < 50; i++) {
+    const o = offers(after, rand);
+    assert.equal(o.traits.length, 4);
+    assert.equal(o.traits[3], 'memory');
+    assert.equal(o.origins[3], 'boss');
+    assert.equal(o.wishes.length, 3, '心愿没有稀有的');
+  }
+  // 解锁了好几个: 第四张在里面随机
+  const many = { ...emptyProfile(), endings: ['scholar', 'iron', 'friends'] };
+  const got = new Set();
+  for (let i = 0; i < 100; i++) got.add(offers(many, rand).traits[3]);
+  assert.deepEqual([...got].sort(), ['memory', 'mighty', 'outgoing']);
+  // 稀有的开局确实更强
+  assert.equal(newLife({ origin: 'county', trait: 'memory', wish: 'book' }).stats.kno, 4 + 4);
+});
+
+test('传给下一稿: 下一稿开局带上传下来的性格 (属性、本事都算), 开局不再给它; 写完一稿就用掉了', () => {
+  const p = withHeir(emptyProfile(), 'careful', 50);
+  assert.equal(heirOf(p), 'careful');
+  assert.equal(heirOf(withHeir(p, '', 60)), null);
+  assert.equal(heirOf(withHeir(p, 'nope', 60)), null, '不认识的性格不算');
+  const rand = seeded(13);
+  for (let i = 0; i < 100; i++) assert.ok(!offers(p, rand).traits.includes('careful'));
+  const life = newLife({ origin: 'county', trait: 'chatty', wish: 'shop', heir: 'memory' }, p, rand);
+  assert.equal(life.heir, 'memory');
+  assert.deepEqual(life.stats, { str: 4, kno: 8, soc: 6, mny: 4 });
+  assert.deepEqual(traitsOf(life), ['chatty', 'memory']);
+  assert.equal(newLife({ origin: 'county', trait: 'chatty', wish: 'shop', heir: 'chatty' }).heir, null, '跟自己挑的一样就不重复算');
+  runUntilStop(life, p, rand, randomPick(rand));
+  const r = finish(life, p, 99);
+  assert.deepEqual(r.profile.heir, { key: '', at: 99 });
+  assert.equal(heirOf(r.profile), null);
+  // 传下来的性格的本事也算: 心细的不出意外, 惜命的不会累死, 长寿的活得更久
+  const lives = (heir, n, seed) => {
+    const rnd = seeded(seed);
+    return Array.from({ length: n }, () => runUntilStop(newLife({ origin: 'county', trait: 'chatty', wish: 'shop', heir }, emptyProfile(), rnd), emptyProfile(), rnd, randomPick(rnd)));
+  };
+  assert.ok(lives('careful', 400, 3).every((l) => !l.done.accident));
+  assert.ok(lives('cherish', 400, 4).every((l) => l.dead.cause !== 'overwork'));
+  const median = (ls) => ls.map((l) => l.age).sort((a, b) => a - b)[Math.floor(ls.length / 2)];
+  assert.ok(median(lives('longevity', 600, 5)) >= median(lives(null, 600, 5)) + 3);
 });
 
 test('一年一年过: 每年都有字, 属性一直在 0–20, 等着选路口时不往下过, 120 岁以前一定走完', () => {
@@ -123,6 +178,11 @@ test('内容: 名字不重复, 存进批注的名字都合规', () => {
   }
   assert.equal(ENDINGS.at(-1).test({}), true, '最后一个结局谁都能拿');
   for (const w of WISHES) assert.ok(w.hint, w.key);
+  for (const x of [...ORIGINS, ...TRAITS].filter((y) => y.rare)) {
+    assert.ok(x.lock, `${x.key} 没写解锁条件`);
+    assert.ok(x.needs ? ENDINGS.some((e) => e.key === x.needs) : x.runs > 0, `${x.key} 的解锁条件对不上`);
+    if (x.needs) assert.match(x.lock, new RegExp(ENDINGS.find((e) => e.key === x.needs).name), `${x.key} 写的结局名对不上`);
+  }
 });
 
 test('内容: 每件事、每个路口、每个选项、每个结局、每个心愿都碰得到', () => {
@@ -133,6 +193,7 @@ test('内容: 每件事、每个路口、每个选项、每个结局、每个心
   assert.deepEqual(missing(ENDINGS.map((e) => e.key), sim.seen.endings), []);
   assert.deepEqual(missing(WISHES.map((w) => w.key), sim.seen.wishes), []);
   assert.deepEqual(missing(ORIGINS.map((o) => o.key), sim.seen.origins), []);
+  assert.deepEqual(missing(TRAITS.map((t) => t.key), sim.seen.traits), [], '稀有的性格也都解锁过、用过');
 });
 
 test('前稿: 以前创业赔光过, 30 岁的路口才有「先做副业试试」', () => {
@@ -203,12 +264,14 @@ test('玩到一半存起来: 存成 JSON 再读回来接着写; 存坏了、内�
   assert.equal(restoreLife(null), null);
   assert.equal(restoreLife({ v: 2 }), null);
   assert.equal(restoreLife({ ...life, origin: 'mars' }), null);
+  assert.equal(restoreLife({ ...life, heir: 'mars' }), null);
+  assert.equal(restoreLife({ ...life, heir: undefined }).heir, null, '旧版本存的没有 heir');
   assert.equal(restoreLife({ ...life, stats: { str: 'x' } }), null);
   assert.equal(restoreLife({ ...life, pending: { id: 'gone', opts: ['a'] } }).pending, null);
   assert.deepEqual(restoreLife({ ...life, pending: { id: 'hobby', opts: ['art', 'gone'] } }).pending, { id: 'hobby', opts: ['art'] });
 });
 
-test('批注怎么存: 乱的去掉, 合的时候几稿取大的、结局记号合起来、批注取后写的', () => {
+test('批注怎么存: 乱的去掉, 合的时候几稿取大的、结局记号合起来、批注和传下去的性格取后写的', () => {
   assert.equal(cleanDraftProgress(null), null);
   assert.equal(cleanDraftProgress({}), null);
   const clean = cleanDraftProgress({
@@ -217,8 +280,15 @@ test('批注怎么存: 乱的去掉, 合的时候几稿取大的、结局记号�
     marks: ['m:bankrupt', 'wish:shop', '<script>'],
     notes: { 'hobby:art': { run: 2, age: 70, end: 'young', at: 10 }, 'bad key': { run: 1, age: 1, end: 'x', at: 1 }, 'career:stay': { run: 1, age: 80, end: 'BAD', at: 5 } },
     last: { age: 70, end: 'young', at: 10 },
+    heir: { key: 'memory', at: 11 },
   });
-  assert.deepEqual(clean, { runs: 3, endings: ['young', 'hundred'], marks: ['m:bankrupt', 'wish:shop'], notes: { 'hobby:art': { run: 2, age: 70, end: 'young', at: 10 } }, last: { age: 70, end: 'young', at: 10 } });
+  assert.deepEqual(clean, { runs: 3, endings: ['young', 'hundred'], marks: ['m:bankrupt', 'wish:shop'], notes: { 'hobby:art': { run: 2, age: 70, end: 'young', at: 10 } }, last: { age: 70, end: 'young', at: 10 }, heir: { key: 'memory', at: 11 } });
+  assert.equal(cleanDraftProgress({ runs: 1, heir: { key: 'Bad', at: 1 } }).heir, null);
+  assert.deepEqual(cleanDraftProgress({ heir: { key: '', at: 5 } }).heir, { key: '', at: 5 }, '「不传了」也要记着, 同步时盖过旧的');
+  // 传下去的性格: 后写的算 (一台设备用掉了, 另一台设备旧的不会又冒出来)
+  const x = mergeDraftProgress({ ...emptyProfile(), runs: 1, heir: { key: 'memory', at: 1 } }, { ...emptyProfile(), runs: 2, heir: { key: '', at: 2 } });
+  assert.deepEqual(x.heir, { key: '', at: 2 });
+  assert.deepEqual(mergeDraftProgress({ ...emptyProfile(), runs: 1, heir: { key: 'memory', at: 3 } }, { ...emptyProfile(), runs: 2, heir: null }).heir, { key: 'memory', at: 3 });
   const a = { runs: 2, endings: ['young'], marks: ['m:a'], notes: { 'x:y': { run: 1, age: 30, end: 'young', at: 1 } }, last: { age: 30, end: 'young', at: 1 } };
   const b = { runs: 5, endings: ['hundred'], marks: ['m:b'], notes: { 'x:y': { run: 5, age: 100, end: 'hundred', at: 9 }, 'p:q': { run: 4, age: 80, end: 'peaceful', at: 8 } }, last: { age: 100, end: 'hundred', at: 9 } };
   const m = mergeDraftProgress(a, b);
@@ -268,10 +338,11 @@ test('成绩和批注记进游戏厅: 跟着同步、备份合起来, 弹珠台�
   assert.equal(progressOf(addScore(null, 'draft', 0, 1, { runs: 1, endings: ['young'], marks: [], notes: {}, last: null }).arcade, 'draft').runs, 1);
 });
 
-test('出身的属性加起来差不多, 都在 13–19 之间', () => {
+test('出身的属性加起来差不多: 普通的 13–19, 稀有的更高一点 (15–23)', () => {
   for (const o of ORIGINS) {
     const sum = Object.values(o.stats).reduce((s, v) => s + v, 0);
-    assert.ok(sum >= 13 && sum <= 19, `${o.key} ${sum}`);
+    if (o.rare) assert.ok(sum >= 15 && sum <= 23, `${o.key} ${sum}`);
+    else assert.ok(sum >= 13 && sum <= 19, `${o.key} ${sum}`);
     assert.equal(originOf(o.key), o);
   }
 });

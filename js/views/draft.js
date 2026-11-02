@@ -1,13 +1,13 @@
 // 游戏厅「人生草稿」的页面: 规则在 ../draft.js, 内容在 ../draftdata.js, 批注怎么存在 ../arcade.js
 //   开局页: 写过几稿、见过几个结局、最高分; 开始新的一稿 / 接着写上次没写完的; 结局图鉴
-//   挑出身、性格、心愿 (各给三个) → 一年一年往下过: 「下一年」或者「自动」, 到了路口停下来选;
+//   挑出身、性格、心愿 (各给三个, 解锁了稀有的再多一个; 上一稿传下来的性格自动带上) → 一年一年往下过: 「下一年」或者「自动」, 到了路口停下来选;
 //     选项下面写着以前的稿选这条路后来怎么样 (批注), 要以前的稿走过才出现的选项标着「前稿」
-//   走了: 结局、享年、评语、分数 (记进游戏厅的成绩, 批注跟着同步), 这一稿走过的路口
+//   走了: 结局、享年、评语、分数 (记进游戏厅的成绩, 批注跟着同步), 新解锁的稀有开局, 挑一个性格传给下一稿, 这一稿走过的路口
 //   写到一半的存在这个浏览器里 (wengu:draft-run), 关了页面下次接着写; 不同步
 //   键盘: 空格 / 回车 下一年, 数字键选路口上的选项
 
 import { h, fill, openDialog } from '../dom.js';
-import { STATS, MAX, offers, newLife, advance, choose, finish, noteFor, restoreLife, newlyUnlocked, originOf, traitOf, wishOf, endingOf, choiceOf, ENDINGS, WISHES } from '../draft.js';
+import { STATS, MAX, offers, newLife, advance, choose, finish, noteFor, restoreLife, newlyUnlocked, isOpen, heirOf, traitsOf, withHeir, originOf, traitOf, wishOf, endingOf, choiceOf, ORIGINS, TRAITS, ENDINGS, WISHES } from '../draft.js';
 import { progressOf, bestOf, TOP_N } from '../arcade.js';
 
 const RUN_KEY = 'wengu:draft-run';
@@ -74,6 +74,7 @@ export function renderDraft({ store }) {
         tally('最高分', best ? best.toLocaleString('en-US') : '—', ''),
       ),
       last ? h('p', { class: 'muted small draft-last' }, `上一稿：活到 ${p.last.age} 岁 ·「${last.name}」`) : null,
+      heirOf(p) ? h('p', { class: 'small draft-last' }, `传给下一稿的性格：「${traitOf(heirOf(p)).name}」`) : null,
       h(
         'div',
         { class: 'row draft-actions' },
@@ -85,6 +86,7 @@ export function renderDraft({ store }) {
           : h('button', { class: 'btn primary', type: 'button', onclick: () => setup() }, `开始第 ${p.runs + 1} 稿`),
         h('button', { class: 'btn', type: 'button', onclick: () => gallery() }, '结局图鉴'),
       ),
+      h('p', { class: 'muted small' }, `稀有开局：已解锁 ${rares().filter((x) => isOpen(x, p)).length} / ${rares().length}`),
       h(
         'div',
         { class: 'draft-how' },
@@ -95,12 +97,15 @@ export function renderDraft({ store }) {
           h('li', {}, '一稿就是一辈子：挑一个出身、一种性格和一个心愿，然后一年一年过下去。'),
           h('li', {}, '走到人生路口时自己选。选项下面的批注，记着以前的稿选这条路后来怎么样。'),
           h('li', {}, '有些路要以前的稿走过才会出现，标着「前稿」。'),
+          h('li', {}, '越玩越强：拿到某些结局会解锁稀有的出身和性格，开局时多给一张；每写完一稿，可以挑一个性格传给下一稿。'),
           h('li', {}, '走完一生，按年纪、学识、人缘、家底、体魄、心愿和结局打分。'),
         ),
       ),
     );
     root.querySelector('.btn.primary')?.focus({ preventScroll: true });
   }
+
+  const rares = () => [...ORIGINS, ...TRAITS].filter((x) => x.rare);
 
   function tally(label, value, unit) {
     return h('div', { class: 'draft-tile' }, h('span', { class: 'muted small' }, label), h('span', {}, h('b', {}, value), unit ? ` ${unit}` : ''));
@@ -115,7 +120,8 @@ export function renderDraft({ store }) {
     saveRun(null);
     const p = profile();
     picks = offers(p);
-    chosen = { origin: null, trait: null, wish: null };
+    const heir = heirOf(p);
+    chosen = { origin: null, trait: null, wish: null, heir };
     const start = h('button', { class: 'btn primary', type: 'button', disabled: true, onclick: () => begin() }, '落笔');
     const group = (title, field, keys, of, extra) =>
       h(
@@ -140,7 +146,7 @@ export function renderDraft({ store }) {
                   start.disabled = !(chosen.origin && chosen.trait && chosen.wish);
                 },
               },
-              h('strong', {}, x.name),
+              h('strong', {}, x.name, x.rare ? h('em', { class: 'draft-tag' }, '稀有') : null),
               x.desc ? h('span', { class: 'draft-pick-desc' }, x.desc) : null,
               extra ? h('span', { class: 'draft-pick-meta' }, extra(x)) : null,
             );
@@ -154,7 +160,8 @@ export function renderDraft({ store }) {
       h('h1', {}, `第 ${p.runs + 1} 稿`),
       h('p', { class: 'muted' }, '挑一个出身、一种性格和一个心愿。'),
       group('出身', 'origin', picks.origins, originOf, (o) => STATS.map(([k, name]) => `${name} ${o.stats[k]}`).join(' · ')),
-      group('性格', 'trait', picks.traits, traitOf, (t) => statLine(t.stats)),
+      heir ? h('p', { class: 'draft-heir' }, '上一稿传下来的性格：', h('strong', {}, `「${traitOf(heir).name}」`), `（${[statLine(traitOf(heir).stats), traitOf(heir).desc.replace(/。$/, '')].filter(Boolean).join('；')}），这一稿自动带上。`) : null,
+      group(heir ? '再挑一个性格' : '性格', 'trait', picks.traits, traitOf, (t) => statLine(t.stats)),
       group('心愿', 'wish', picks.wishes, wishOf, (w) => `怎么达成：${w.hint}`),
       h('div', { class: 'row draft-start' }, start, h('span', { class: 'muted small' }, '心愿了了加 80 分。')),
     );
@@ -162,7 +169,7 @@ export function renderDraft({ store }) {
   }
 
   function begin() {
-    life = newLife(chosen, profile());
+    life = newLife(chosen, profile()); // chosen.heir: 传下来的性格
     saveRun(life);
     play();
   }
@@ -174,7 +181,6 @@ export function renderDraft({ store }) {
     stopAuto();
     if (life.dead && !result) settle();
     const o = originOf(life.origin);
-    const t = traitOf(life.trait);
     const stats = STATS.map(([k, name]) => {
       const num = h('b', {}, '');
       const bar = h('i', {});
@@ -200,7 +206,7 @@ export function renderDraft({ store }) {
       h(
         'div',
         { class: 'draft-top' },
-        h('div', { class: 'draft-head' }, h('span', { class: 'draft-run' }, `第 ${life.run} 稿 · `, els.age), h('span', { class: 'muted small' }, `${o.name} · ${t.name}`)),
+        h('div', { class: 'draft-head' }, h('span', { class: 'draft-run' }, `第 ${life.run} 稿 · `, els.age), h('span', { class: 'muted small' }, [o.name, ...traitsOf(life).map((k) => traitOf(k).name)].join(' · '))),
         h('div', { class: 'draft-stats' }, stats.map((s) => s.el)),
         els.wish,
       ),
@@ -357,7 +363,8 @@ export function renderDraft({ store }) {
         r.best ? h('span', { class: 'draft-new' }, '新纪录') : r.rank ? h('span', { class: 'muted small' }, ` · 第 ${r.rank} 名（前 ${TOP_N} 名记着）`) : null,
       ),
       h('p', { class: 'muted small' }, life.wishAt !== null ? `心愿「${w.name}」在 ${life.wishAt} 岁达成，加 80 分。` : `心愿「${w.name}」没能达成。`, r.ending.pts ? `结局加 ${r.ending.pts} 分。` : ''),
-      r.unlocked.length ? h('p', { class: 'draft-unlock' }, `新解锁：${r.unlocked.map((x) => `「${x.name}」`).join('')}，下一稿开局时可能出现。`) : null,
+      r.unlocked.length ? h('p', { class: 'draft-unlock' }, `新解锁稀有开局：${r.unlocked.map((x) => `「${x.name}」`).join('')}。以后开局时会多给一张稀有卡。`) : null,
+      heirPicker(),
       life.choices.length
         ? h(
             'details',
@@ -382,6 +389,39 @@ export function renderDraft({ store }) {
         h('a', { class: 'btn', href: '#/arcade' }, '回游戏厅'),
       ),
     );
+  }
+
+  // 结局页上: 挑这一稿的一个性格传给下一稿 (再点一下取消)
+  function heirPicker() {
+    const box = h('div', { class: 'draft-heir-pick' });
+    const draw = () => {
+      const cur = heirOf(profile());
+      fill(
+        box,
+        h('p', { class: 'small' }, '传给下一稿：挑一个性格，下一稿开局自动带上。'),
+        h(
+          'div',
+          { class: 'row' },
+          traitsOf(life).map((k) =>
+            h(
+              'button',
+              {
+                class: `btn${cur === k ? ' on' : ''}`,
+                type: 'button',
+                'aria-pressed': String(cur === k),
+                onclick: () => {
+                  store.recordArcade('draft', 0, Date.now(), withHeir(profile(), cur === k ? '' : k));
+                  draw();
+                },
+              },
+              cur === k ? `✓ 已传「${traitOf(k).name}」` : `传「${traitOf(k).name}」`,
+            ),
+          ),
+        ),
+      );
+    };
+    draw();
+    return box;
   }
 
   // ---- 结局图鉴 ----
@@ -409,6 +449,16 @@ export function renderDraft({ store }) {
           'ul',
           { class: 'draft-wishes' },
           WISHES.map((w) => h('li', { class: wishes.has(w.key) ? 'seen' : null }, wishes.has(w.key) ? '✓ ' : '', w.name)),
+        ),
+        h('h3', {}, `稀有开局 · 解锁了 ${rares().filter((x) => isOpen(x, p)).length} / ${rares().length}`),
+        h(
+          'ul',
+          { class: 'draft-endings' },
+          rares().map((x) =>
+            isOpen(x, p)
+              ? h('li', { class: 'seen' }, h('strong', {}, `${ORIGINS.includes(x) ? '出身' : '性格'}「${x.name}」`), h('span', { class: 'small' }, ORIGINS.includes(x) ? x.desc : `${statLine(x.stats)}。${x.desc}`))
+              : h('li', {}, h('strong', {}, `${ORIGINS.includes(x) ? '出身' : '性格'}「？？？」`), h('span', { class: 'muted small' }, `解锁条件：${x.lock}`)),
+          ),
         ),
       ),
     });

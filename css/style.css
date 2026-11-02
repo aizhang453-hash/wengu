@@ -8295,6 +8295,38 @@ body.has-pet main {
   margin: 16px 0 0;
 }
 
+/* 传给下一稿 */
+.draft-heir {
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 0.92rem;
+}
+
+.draft-heir-pick {
+  max-width: 34em;
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.draft-heir-pick p {
+  margin: 0 0 8px;
+}
+
+.draft-heir-pick .row {
+  justify-content: center;
+}
+
+.draft-heir-pick .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* 结局图鉴 */
 .draft-gallery h3 {
   margin: 8px 0;

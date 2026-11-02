@@ -3,6 +3,7 @@
 //      if(c), text, fx 属性变化, set [标记], mark 记号 (以后的稿能看见), k 种类, do(c) }
 //   每年: fixed 的都发生, p 的各掷一次, 再从剩下的里按权重挑一件
 // 路口: { id, age, to, if(c), text 问的话, options: [{ key, text, hint, new 前稿解锁的, if(c), fx, set, do(c) }] }
+// 出身、性格: rare 稀有的 (解锁以后开局时多给一张), needs 要拿到过哪个结局才解锁, runs 要写满几稿才解锁, lock 没解锁时怎么说
 // c 能用的见 draft.js 的 context: c.age / c.str c.kno c.soc c.mny / c.has('标记') c.since('标记') c.flag() c.add({}) c.log() c.chance() c.pick() c.seen('end:结局')……
 // 用到的标记 (大概): 上学 kinder primary middle high vocational work college (专业 normal cs med arts plain) repeat;
 // 工作 job teacher doctor coder artist office civil worker craftsman fisher expat bigcity; 家 dating married single kid cat dog grandkid;
@@ -32,16 +33,11 @@ export const ORIGINS = [
   { key: 'hill', name: '山里人家', desc: '村子在山里，出门要走很远的路。', stats: { str: 7, kno: 2, soc: 4, mny: 1 }, flags: ['hill'], birth: '你出生在山里。接生的老奶奶说你嗓门大。' },
   { key: 'grandma', name: '奶奶带大', desc: '爸妈在外地打工，一年回来一次。', stats: { str: 5, kno: 3, soc: 3, mny: 2 }, flags: ['grandma'], birth: '你出生没多久，爸妈就去外地打工了。奶奶带着你。' },
   { key: 'yard', name: '大院子弟', desc: '院里小孩多，从小不缺玩伴。', stats: { str: 5, kno: 4, soc: 6, mny: 4 }, birth: '你出生了。满月那天，院里的小孩都跑来看你。' },
-  {
-    key: 'again',
-    name: '似曾相识',
-    desc: '总觉得这一切好像经历过。',
-    stats: { str: 4, kno: 5, soc: 4, mny: 3 },
-    flags: ['deja'],
-    unlock: (u) => u.runs >= 3,
-    lock: '写满 3 稿后出现',
-    birth: '你出生了。你有种感觉：又来了。',
-  },
+  // 稀有的
+  { key: 'again', name: '似曾相识', desc: '总觉得这一切好像经历过。', stats: { str: 4, kno: 5, soc: 4, mny: 3 }, flags: ['deja'], rare: true, runs: 3, lock: '写满 3 稿', birth: '你出生了。你有种感觉：又来了。' },
+  { key: 'teachers', name: '教师之家', desc: '爸妈都是老师。', stats: { str: 4, kno: 7, soc: 5, mny: 4 }, rare: true, needs: 'teacher', lock: '拿到结局「桃李满天下」', birth: '你出生了。你爸妈都是中学老师。' },
+  { key: 'doctors', name: '医生家庭', desc: '爸妈都是医生。', stats: { str: 6, kno: 7, soc: 3, mny: 5 }, rare: true, needs: 'doctor', lock: '拿到结局「悬壶济世」', birth: '你出生在你妈上班的医院。' },
+  { key: 'boss', name: '老板家', desc: '家里开公司。', stats: { str: 4, kno: 4, soc: 4, mny: 11 }, flags: ['richkid'], rare: true, needs: 'tycoon', lock: '拿到结局「富甲一方」', birth: '你出生了。你爸的公司放了一天假。' },
 ];
 
 // ---- 性格 ----
@@ -55,6 +51,15 @@ export const TRAITS = [
   { key: 'careful', name: '心细', desc: '做事小心。不容易出意外。', stats: { kno: 1 } },
   { key: 'lazy', name: '懒', desc: '能躺着就不坐着。不容易累垮。', stats: { str: -1, soc: 1 } },
   { key: 'artsy', name: '文艺', desc: '喜欢写写画画。', stats: { kno: 1, soc: 1 } },
+  // 稀有的
+  { key: 'memory', name: '过目不忘', desc: '书看一遍就记住。', stats: { kno: 4 }, rare: true, needs: 'scholar', lock: '拿到结局「学富五车」' },
+  { key: 'mighty', name: '天生神力', desc: '力气比别人大。', stats: { str: 4 }, rare: true, needs: 'iron', lock: '拿到结局「铁打的身子」' },
+  { key: 'outgoing', name: '自来熟', desc: '跟谁都能处成朋友。', stats: { soc: 4 }, rare: true, needs: 'friends', lock: '拿到结局「朋友遍天下」' },
+  { key: 'lucky', name: '财运好', desc: '天生会挣钱。', stats: { mny: 4 }, rare: true, needs: 'shop', lock: '拿到结局「街角小店」' },
+  { key: 'longevity', name: '长寿', desc: '家里老人都活得久。老得慢，活得长。', stats: { str: 2 }, rare: true, needs: 'hundred', lock: '拿到结局「百岁人瑞」' },
+  { key: 'grit', name: '不服输', desc: '摔倒了就爬起来。创业更容易成。', stats: { kno: 1, soc: 1 }, rare: true, needs: 'bankrupt', lock: '拿到结局「从头再来」' },
+  { key: 'cherish', name: '惜命', desc: '知道身体最重要。不会累死。', stats: { str: 2 }, rare: true, needs: 'overwork', lock: '拿到结局「劳碌命」' },
+  { key: 'mature', name: '早熟', desc: '比同龄人懂事早。', stats: { kno: 2, soc: 2 }, rare: true, needs: 'young', lock: '拿到结局「英年早逝」' },
 ];
 
 // ---- 心愿 ---- hint: 没了的时候评语里给的建议
@@ -109,11 +114,11 @@ export const EVENTS = [
     from: 3,
     fixed: true,
     set: ['kinder'],
-    do: (c) => (c.trait === 'chatty' ? (c.log('你上幼儿园了，第一天就交了五个朋友。'), c.add({ soc: 1 })) : c.log('你上幼儿园了，第一天哭了一上午。')),
+    do: (c) => (c.is('chatty') ? (c.log('你上幼儿园了，第一天就交了五个朋友。'), c.add({ soc: 1 })) : c.log('你上幼儿园了，第一天哭了一上午。')),
   },
   { id: 'wall', from: 3, to: 6, text: '你在墙上画画，画得还挺像。', fx: { kno: 1 } },
   { id: 'cartoon', from: 3, to: 6, text: '你每天守着电视看动画片。' },
-  { id: 'clock', from: 4, to: 8, if: (c) => c.trait === 'curious', text: '你把家里的闹钟拆了，装回去多了三个零件。', fx: { kno: 1 } },
+  { id: 'clock', from: 4, to: 8, if: (c) => c.is('curious'), text: '你把家里的闹钟拆了，装回去多了三个零件。', fx: { kno: 1 } },
   { id: 'lost', from: 4, to: 6, text: '你在菜市场走丢了，被卖鱼的阿姨领回了家。', fx: { soc: 1 } },
   { id: 'dogchase', from: 3, to: 6, text: '你被邻居家的狗追了半条街。', fx: { str: 1 } },
   { id: 'minedad', from: 4, to: 8, if: (c) => c.has('mine'), text: '你爸下班回来满脸煤灰，你没认出来。' },
@@ -133,9 +138,9 @@ export const EVENTS = [
   { id: 'monitor', from: 8, to: 11, if: (c) => c.soc >= 6, text: '你当上了班长。', fx: { soc: 1 } },
   { id: 'copy', from: 8, to: 12, text: '你抄同桌的作业被发现，两个人一起罚站。', fx: { soc: 1 } },
   { id: 'bestie', from: 7, to: 12, w: 2, if: (c) => !c.has('bestie'), set: ['bestie'], text: '你和同一条街的一个小孩成了好朋友。', fx: { soc: 1 } },
-  { id: 'arm', from: 7, to: 12, if: (c) => c.trait !== 'careful', text: '你从单杠上摔下来，胳膊骨折了。', fx: { str: -1, soc: 1 } },
+  { id: 'arm', from: 7, to: 12, if: (c) => !c.is('careful'), text: '你从单杠上摔下来，胳膊骨折了。', fx: { str: -1, soc: 1 } },
   { id: 'essay', from: 7, to: 12, text: '你的作文拿了全校三等奖。', fx: { kno: 1 } },
-  { id: 'piggy', from: 7, to: 12, if: (c) => c.trait === 'frugal', text: '你攒了一年零花钱，有三百块。', fx: { mny: 1 } },
+  { id: 'piggy', from: 7, to: 12, if: (c) => c.is('frugal'), text: '你攒了一年零花钱，有三百块。', fx: { mny: 1 } },
   { id: 'arcade', from: 9, to: 12, text: '你偷偷去游戏厅，被你爸抓了回来。', fx: { soc: 1 } },
   { id: 'glasses', from: 9, to: 14, if: (c) => c.kno >= 7, text: '你近视了，戴上了眼镜。', fx: { kno: 1, str: -1 } },
   { id: 'seasick', from: 8, to: 12, if: (c) => c.has('sea'), text: '你第一次跟大人出海，吐了一路。', fx: { str: 1 } },
@@ -165,8 +170,8 @@ export const EVENTS = [
   { id: 'novels', from: 13, to: 16, if: inSchool, text: '你上课看小说，被老师没收了。', fx: { kno: 1 } },
   { id: 'slip', from: 13, to: 17, if: inSchool, text: '月考你掉到了班级中游，被你妈说了一顿。', fx: { kno: 1 } },
   { id: 'hoops', from: 13, to: 17, if: (c) => inSchool(c) && c.str >= 6, text: '你进了校篮球队。', fx: { str: 2, soc: 1 } },
-  { id: 'netcafe', from: 13, to: 17, if: (c) => inSchool(c) && c.trait !== 'careful', text: '你通宵去网吧，第二天上课睡着了。', fx: { kno: -1, soc: 1 } },
-  { id: 'diary', from: 13, to: 16, if: (c) => c.trait === 'artsy', text: '你开始写日记。', fx: { kno: 1 } },
+  { id: 'netcafe', from: 13, to: 17, if: (c) => inSchool(c) && !c.is('careful'), text: '你通宵去网吧，第二天上课睡着了。', fx: { kno: -1, soc: 1 } },
+  { id: 'diary', from: 13, to: 16, if: (c) => c.is('artsy'), text: '你开始写日记。', fx: { kno: 1 } },
   {
     id: 'move',
     from: 13,
@@ -174,13 +179,13 @@ export const EVENTS = [
     if: (c) => c.has('bestie'),
     text: '你最好的朋友搬去了别的城市。',
     do: (c) => {
-      if (c.trait !== 'careful' && c.chance(0.5)) {
+      if (!c.is('careful') && c.chance(0.5)) {
         c.log('后来你们慢慢断了联系。');
         c.unflag('bestie');
       }
     },
   },
-  { id: 'fight', from: 13, to: 17, if: (c) => c.trait === 'stubborn', text: '你跟人打了一架，被叫了家长。', fx: { str: 1, soc: -1 } },
+  { id: 'fight', from: 13, to: 17, if: (c) => c.is('stubborn'), text: '你跟人打了一架，被叫了家长。', fx: { str: 1, soc: -1 } },
   { id: 'phone', from: 13, to: 16, text: '你有了第一部手机。', fx: { soc: 1 } },
   { id: 'olymp', from: 14, to: 17, if: (c) => inSchool(c) && c.kno >= 10, text: '你进了竞赛班。', fx: { kno: 2 } },
   { id: 'flu', from: 13, to: 17, if: inSchool, text: '你病了一周没去上课，落下了不少功课。', fx: { kno: -1 } },
@@ -255,10 +260,10 @@ export const EVENTS = [
   // 大学
   { id: 'dorm', from: 19, to: 20, if: (c) => c.has('college') && !c.did('dorm'), text: '你上大学了，第一晚和室友聊到凌晨三点。', fx: { soc: 1 } },
   { id: 'club', from: 19, to: 22, if: (c) => c.has('college'), text: '你加入了一个社团，主要参加聚餐。', fx: { soc: 1 } },
-  { id: 'cram', from: 19, to: 23, if: (c) => c.has('college') && (c.trait === 'lazy' || c.trait === 'bold'), text: '你一学期没怎么上课，期末熬了三个通宵。', fx: { kno: -1, str: -1 } },
+  { id: 'cram', from: 19, to: 23, if: (c) => c.has('college') && (c.is('lazy') || c.is('bold')), text: '你一学期没怎么上课，期末熬了三个通宵。', fx: { kno: -1, str: -1 } },
   { id: 'scholar', from: 19, to: 23, if: (c) => c.has('college') && c.kno >= 11, text: '你拿了奖学金，请室友吃了一顿火锅。', fx: { mny: 1, soc: 1 } },
   { id: 'library', from: 19, to: 23, w: 2, if: (c) => c.has('college') && !c.has('dating') && c.soc >= 5, set: ['dating'], text: '你在图书馆认识了一个人，你们在一起了。' },
-  { id: 'split', from: 21, to: 23, if: (c) => c.has('college') && c.has('dating') && c.trait !== 'stubborn', text: '毕业时，你们分手了。', fx: { soc: -1 }, do: (c) => c.unflag('dating') },
+  { id: 'split', from: 21, to: 23, if: (c) => c.has('college') && c.has('dating') && !c.is('stubborn'), text: '毕业时，你们分手了。', fx: { soc: -1 }, do: (c) => c.unflag('dating') },
   { id: 'intern', from: 21, to: 23, if: (c) => c.has('college'), text: '你找了份实习，每天通勤三个小时。', fx: { mny: 1, str: -1 } },
   { id: 'hello', from: 19, to: 22, if: (c) => c.has('cs'), text: '你写出了第一个程序。', fx: { kno: 1 } },
   { id: 'semicolon', from: 20, to: 23, if: (c) => c.has('cs'), text: '你找了一晚上 bug，最后发现少了个分号。', fx: { kno: 1, str: -1 } },
@@ -313,7 +318,7 @@ export const EVENTS = [
     if: (c) => (c.has('coder') || c.has('office') || c.has('boss') || c.has('doctor')) && c.count('ot') < 6,
     do: (c) => {
       c.log(c.pick(['你连续加班了一个月。', '你周末也在加班。', '你加班到凌晨一点。']));
-      c.add({ mny: 1, str: c.trait === 'lazy' ? -1 : -2 });
+      c.add({ mny: 1, str: c.is('lazy') || c.is('cherish') ? -1 : -2 });
       c.inc('ot');
     },
   },
@@ -323,7 +328,7 @@ export const EVENTS = [
     to: 59,
     once: false,
     w: 1.5,
-    if: (c) => c.count('ot') >= 4 && c.str <= 3 && c.trait !== 'lazy',
+    if: (c) => c.count('ot') >= 4 && c.str <= 3 && !c.is('lazy') && !c.is('cherish'),
     do: (c) => {
       if (c.chance(0.35)) c.die('overwork');
       else (c.log('你在公司晕倒了，被送进医院。'), c.add({ str: 1 }), c.inc('ot', -1));
@@ -444,7 +449,7 @@ export const EVENTS = [
     fixed: true,
     if: (c) => c.has('startup') && c.since('startup') >= 3 && !c.has('boss') && !c.has('bankrupt'),
     do: (c) => {
-      const p = 0.2 + (c.kno + c.soc) / 60 + (c.trait === 'bold' ? 0.1 : 0);
+      const p = 0.2 + (c.kno + c.soc) / 60 + (c.is('bold') ? 0.1 : 0) + (c.is('grit') ? 0.25 : 0);
       if (c.chance(p)) {
         c.flag('boss');
         c.log('你的公司拿到了投资。', 'milestone');
@@ -507,7 +512,7 @@ export const EVENTS = [
     from: 18,
     to: 70,
     p: 0.003,
-    if: (c) => c.trait !== 'careful',
+    if: (c) => !c.is('careful'),
     do: (c) => {
       if (c.chance(0.3)) c.die('accident');
       else (c.log('你出了车祸，在医院躺了三个月。'), c.add({ str: -2 }));
@@ -545,7 +550,7 @@ export const EVENTS = [
     to: 75,
     p: 0.02,
     do: (c) => {
-      if (c.trait === 'careful') c.log('你接到一个诈骗电话，听了两句就挂了。');
+      if (c.is('careful')) c.log('你接到一个诈骗电话，听了两句就挂了。');
       else if (c.seen('m:scammed')) c.log('你接到一个诈骗电话。这套话你好像在哪听过，挂了。', 'deja');
       else (c.log('你接到一个电话，说你的快递出了问题。你被骗了一笔钱。'), c.add({ mny: -3 }), c.mark('m:scammed'));
     },
@@ -560,8 +565,8 @@ export const EVENTS = [
     id: 'divorce',
     from: 33,
     to: 55,
-    p: 0.012,
-    if: (c) => c.has('married') && c.soc <= 9,
+    p: 0.02,
+    if: (c) => c.has('married') && c.soc <= 12,
     text: '你离婚了。',
     fx: { soc: -1 },
     do: (c) => (c.unflag('married'), c.flag('divorced')),
@@ -619,7 +624,7 @@ export const EVENTS = [
     from: 25,
     to: 60,
     p: 0.03,
-    if: (c) => c.has('bestie') && c.trait !== 'careful',
+    if: (c) => c.has('bestie') && !c.is('careful'),
     text: '你和老朋友渐渐不联系了。',
     fx: { soc: -1 },
     do: (c) => c.unflag('bestie'),
@@ -645,7 +650,7 @@ export const EVENTS = [
   { id: 'balcony', from: 40, to: 60, text: '你在阳台上养花，养死了三盆。' },
   { id: 'renovate', from: 39, to: 55, if: (c) => c.has('house'), text: '家里装修了三个月。', fx: { mny: -1 } },
   { id: 'teacherhuh', from: 38, to: 50, if: inUnit, text: '单位新来的年轻人都叫你「老师」。' },
-  { id: 'insure', from: 40, to: 50, if: (c) => c.trait === 'careful' || c.trait === 'frugal', text: '你给全家买了保险。', fx: { mny: -1 } },
+  { id: 'insure', from: 40, to: 50, if: (c) => c.is('careful') || c.is('frugal'), text: '你给全家买了保险。', fx: { mny: -1 } },
   { id: 'parentstrip', from: 40, to: 55, if: (c) => c.mny >= 8, text: '你带爸妈出国旅游了一趟。', fx: { mny: -2, soc: 1 } },
   { id: 'kidmeal', from: 42, to: 55, if: (c) => c.has('kid') && c.since('kid') >= 10, text: '孩子给你做了顿饭，很咸，你全吃了。', fx: { soc: 1 } },
   { id: 'sabbatical', from: 42, to: 58, if: (c) => c.count('ot') >= 2, text: '你做了个小手术，住院休息了几天。', fx: { str: 1 } },
@@ -712,7 +717,7 @@ export const EVENTS = [
   { id: 'video', from: 60, to: 85, if: (c) => c.has('kid'), text: '你学会了视频通话，天天给孩子打。', fx: { soc: 1 } },
   { id: 'chess', from: 60, to: 90, text: '你每天去公园下象棋。', fx: { kno: 1 } },
   { id: 'keys', from: 65, to: 95, text: '你开始忘事，经常找不到钥匙。', fx: { kno: -1 } },
-  { id: 'fall', from: 65, to: 95, if: (c) => c.trait !== 'careful', text: '你在浴室摔了一跤，躺了两个月。', fx: { str: -2 } },
+  { id: 'fall', from: 65, to: 95, if: (c) => !c.is('careful'), text: '你在浴室摔了一跤，躺了两个月。', fx: { str: -2 } },
   { id: 'funerals', from: 70, to: 95, text: '你的老朋友一个个走了。', fx: { soc: -1 } },
   { id: 'calligraphy', from: 60, to: 85, text: '你上了老年大学的书法班。', fx: { kno: 1 } },
   { id: 'garden', from: 60, to: 85, text: '你在小区空地上种了菜。', fx: { soc: 1, str: 1 } },
@@ -790,12 +795,12 @@ export const CHOICES = [
         text: '拼一把，考高中',
         hint: '学识越高越稳',
         do: (c) => {
-          if (c.chance(0.25 + c.kno * 0.06 + (c.trait === 'stubborn' ? 0.1 : 0))) (c.flag('high'), c.add({ kno: 1 }), c.log('你考上了高中。'));
+          if (c.chance(0.25 + c.kno * 0.06 + (c.is('stubborn') ? 0.1 : 0))) (c.flag('high'), c.add({ kno: 1 }), c.log('你考上了高中。'));
           else (c.flag('vocational'), c.log('你差几分没考上，去了职校。'));
         },
       },
       { key: 'craft', text: '读职校，学门手艺', set: ['vocational'], fx: { str: 1 }, do: (c) => c.log(`你去职校学了${c.pick(['汽修', '烹饪', '电工'])}。`) },
-      { key: 'work', text: '不读了，出去挣钱', if: (c) => c.trait === 'bold' || c.mny <= 3 || c.has('sea'), set: ['work'], fx: { mny: 1, kno: -1 }, do: (c) => c.log('你不上学了，出去打工。') },
+      { key: 'work', text: '不读了，出去挣钱', if: (c) => c.is('bold') || c.mny <= 3 || c.has('sea'), set: ['work'], fx: { mny: 1, kno: -1 }, do: (c) => c.log('你不上学了，出去打工。') },
     ],
   },
   {
@@ -947,9 +952,9 @@ export const CHOICES = [
     if: (c) => job(c) && !c.has('civil') && !c.has('teacher') && !c.has('doctor') && !c.has('fisher') && !c.has('shop'),
     text: '工作好几年了，你有点干腻了。',
     options: [
-      { key: 'startup', text: '辞职创业', hint: '有风险', if: (c) => c.trait === 'bold' || c.mny >= 6 || c.has('coder'), set: ['startup'], fx: { mny: -3 }, do: (c) => c.log('你辞职和朋友一起创业了。') },
+      { key: 'startup', text: '辞职创业', hint: '有风险', if: (c) => c.is('bold') || c.mny >= 6 || c.has('coder'), set: ['startup'], fx: { mny: -3 }, do: (c) => c.log('你辞职和朋友一起创业了。') },
       { key: 'side', text: '先做副业试试', new: true, if: (c) => c.seen('m:bankrupt'), set: ['side'], do: (c) => c.log('上一稿创业赔光了。这次你先下班后做副业。', 'deja') },
-      { key: 'shop', text: '辞职开一家小店', if: (c) => c.mny >= 6 || (c.mny >= 4 && c.trait === 'bold'), set: ['shop'], fx: { mny: -3 }, do: (c) => (c.unflag('coder', 'office', 'worker', 'artist'), c.log('你辞职开了一家小店。')) },
+      { key: 'shop', text: '辞职开一家小店', if: (c) => c.mny >= 6 || (c.mny >= 4 && c.is('bold')), set: ['shop'], fx: { mny: -3 }, do: (c) => (c.unflag('coder', 'office', 'worker', 'artist'), c.log('你辞职开了一家小店。')) },
       { key: 'stay', text: '稳稳当当干下去', fx: { mny: 1 }, do: (c) => c.log('你决定继续干下去。') },
       { key: 'hop', text: '跳槽涨工资', fx: { mny: 2, soc: -1 }, do: (c) => c.log('你跳槽了，工资涨了三成。') },
     ],

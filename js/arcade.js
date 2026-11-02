@@ -1,8 +1,9 @@
 // 游戏厅: 学累了玩一会儿的正经游戏 (不是拿卡片集玩的那种)。现在有弹珠台「星际远航」和文字人生模拟「人生草稿」。
 // 成绩: data.arcade = { pinball: { top: [{ score, at }] 最高的 5 次, progress }, 'pinball-classic': { top }, draft: { top, progress } }; 同步、备份时两边的合起来
 //   弹珠台的 progress: 养成的进度 { xp: { 队员: 经验 }, bosses: 一共渡过几场危机, landings: 着陆几次 }, 两边的取大的
-//   人生草稿的 progress: 批注 { runs 写完几稿, endings [见过的结局], marks [记号], notes { '路口:选项': { run, age, end, at } }, last { age, end, at } }
-//     几稿取大的, 结局、记号合在一起, 批注和上一稿各取后写的
+//   人生草稿的 progress: 批注 { runs 写完几稿, endings [见过的结局], marks [记号], notes { '路口:选项': { run, age, end, at } }, last { age, end, at },
+//     heir 传给下一稿的性格 { key ('' 是没传), at } }
+//     几稿取大的, 结局、记号合在一起, 批注、上一稿、传下去的性格各取后写的
 
 export const ARCADE = [
   { key: 'pinball', name: '星际远航 · 弹珠台', hint: '3D 太空弹珠台: 带殖民方舟穿过四个星系找新家园, 做任务、打危机, 队员会升级', href: '#/arcade/pinball' },
@@ -49,7 +50,7 @@ const NAME = /^[a-z][a-z0-9-]{0,31}$/; // 结局、路口、选项的名字
 const MARK = /^[a-z][a-z0-9:-]{0,47}$/; // 记号: 'm:bankrupt'、'wish:shop'
 const NOTE = /^[a-z][a-z0-9-]{0,31}:[a-z][a-z0-9-]{0,31}$/;
 
-export const emptyDraft = () => ({ runs: 0, endings: [], marks: [], notes: {}, last: null });
+export const emptyDraft = () => ({ runs: 0, endings: [], marks: [], notes: {}, last: null, heir: null });
 
 function cleanRecord(r) {
   if (!r || typeof r !== 'object' || !(Number(r.at) > 0) || typeof r.end !== 'string' || !NAME.test(r.end)) return null;
@@ -64,8 +65,10 @@ export function cleanDraftProgress(raw) {
     const r = NOTE.test(k) ? cleanRecord(v) : null;
     if (r) notes[k] = { run: count(v.run), ...r };
   }
-  const out = { runs: count(raw.runs), endings: names(raw.endings, NAME), marks: names(raw.marks, MARK), notes, last: cleanRecord(raw.last) };
-  return out.runs || out.endings.length || out.marks.length || Object.keys(notes).length ? out : null;
+  const h = raw.heir;
+  const heir = h && typeof h === 'object' && Number(h.at) > 0 && typeof h.key === 'string' && (h.key === '' || NAME.test(h.key)) ? { key: h.key, at: Number(h.at) } : null;
+  const out = { runs: count(raw.runs), endings: names(raw.endings, NAME), marks: names(raw.marks, MARK), notes, last: cleanRecord(raw.last), heir };
+  return out.runs || out.endings.length || out.marks.length || Object.keys(notes).length || heir ? out : null;
 }
 
 export function mergeDraftProgress(a, b) {
@@ -73,8 +76,8 @@ export function mergeDraftProgress(a, b) {
   if (!b) return a;
   const notes = { ...a.notes };
   for (const [k, v] of Object.entries(b.notes)) if (!notes[k] || v.at > notes[k].at) notes[k] = v;
-  const last = !a.last || (b.last && b.last.at > a.last.at) ? b.last : a.last;
-  return { runs: Math.max(a.runs, b.runs), endings: [...new Set([...a.endings, ...b.endings])], marks: [...new Set([...a.marks, ...b.marks])], notes, last };
+  const newer = (x, y) => (!x || (y && y.at > x.at) ? y : x) ?? null;
+  return { runs: Math.max(a.runs, b.runs), endings: [...new Set([...a.endings, ...b.endings])], marks: [...new Set([...a.marks, ...b.marks])], notes, last: newer(a.last, b.last), heir: newer(a.heir, b.heir) };
 }
 
 // 各个游戏的 progress 怎么清、怎么合 (没写的按弹珠台的)

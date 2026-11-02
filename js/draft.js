@@ -1,14 +1,16 @@
 // 游戏厅「人生草稿」的规则: 一稿就是一辈子。开局挑出身、性格、心愿, 每年遇到些事, 到了路口自己选; 走了以后算结局、打分、写评语。
 // 写过的稿留下「批注」(data.arcade.draft.progress, 怎么存、怎么合在 ../arcade.js): 下一稿走到同一个路口, 能看见以前选这条路的结局;
 // 有些路要前面的稿走过才会出现 (温故而知新)。
+// 越玩越强: 拿到某些结局会解锁稀有的出身、性格 (开局时在三张之外多给一张); 写完一稿可以挑一个性格传给下一稿 (下一稿有两个性格)。
 // 内容 (出身、性格、心愿、每年的事、路口、结局) 在 ./draftdata.js, 这里只管怎么跑。没有 DOM, 测试直接跑。
 //
 // 一稿 (life) 是能直接存成 JSON 的对象 (玩到一半关了页面, 下次接着写):
-//   { v, run 第几稿, origin, trait, wish, age, stats { str 体魄, kno 学识, soc 人缘, mny 家底 }, peak 最高到过多少,
+//   { v, run 第几稿, origin, trait, heir 上一稿传下来的性格 | null, wish, age, stats { str 体魄, kno 学识, soc 人缘, mny 家底 }, peak 最高到过多少,
 //     flags { 标记: 哪年标上的 }, n { 计数 }, done { 发生过的事: 哪年 }, marks [这稿新留下的、以后的稿能看见的记号],
 //     years [{ age, base 这年开始时的属性, lines [{ t 字, k 种类 }], delta }], choices [{ id, opt, age }],
 //     pending 正等着选的路口 { id, opts [能选的] } | null, wishAt 心愿哪年了的 | null, dead { age, cause, text } | null }
-// 批注 (profile): { runs 写完几稿, endings [见过的结局], marks [记号], notes { '路口:选项': { run, age, end, at } }, last { age, end, at } }
+// 批注 (profile): { runs 写完几稿, endings [见过的结局], marks [记号], notes { '路口:选项': { run, age, end, at } }, last { age, end, at },
+//   heir 传给下一稿的性格 { key ('' 是没传), at } }
 
 import { ORIGINS, TRAITS, WISHES, EVENTS, CHOICES, ENDINGS, FILLERS } from './draftdata.js';
 import { emptyDraft } from './arcade.js';
@@ -20,7 +22,7 @@ export const STATS = [
   ['mny', '家底'],
 ];
 export const MAX = 20;
-export const OFFER = 3; // 出身、性格、心愿各给几个挑
+export const OFFER = 3; // 出身、性格、心愿各给几个挑 (解锁了稀有的再多一个)
 
 export const emptyProfile = emptyDraft;
 
@@ -38,17 +40,29 @@ export function seenIn(profile, key) {
   return profile.marks.includes(key);
 }
 
-// 开局给挑的: 解锁了的里面随机挑几个 (解锁条件看 profile)
-function offer(list, profile, rand) {
-  const open = list.filter((x) => !x.unlock || x.unlock({ runs: profile.runs, seen: (k) => seenIn(profile, k) }));
-  const bag = [...open];
-  const out = [];
-  while (out.length < OFFER && bag.length) out.push(bag.splice(Math.floor(rand() * bag.length), 1)[0].key);
-  return out;
+// 稀有的出身、性格解锁了没有: needs 要拿到过的结局, runs 要写满几稿
+export function isOpen(x, profile) {
+  if (x.needs && !profile.endings.includes(x.needs)) return false;
+  if (x.runs && profile.runs < x.runs) return false;
+  return true;
+}
+
+export const heirOf = (profile) => (profile.heir?.key && traitOf(profile.heir.key) ? profile.heir.key : null);
+
+// 开局给挑的: 普通的随机挑三个, 解锁了稀有的再随机多给一个。skip: 不给的 (传下来的性格不再给)
+function offer(list, profile, rand, skip = null) {
+  const draw = (pool, n) => {
+    const bag = [...pool];
+    const out = [];
+    while (out.length < n && bag.length) out.push(bag.splice(Math.floor(rand() * bag.length), 1)[0].key);
+    return out;
+  };
+  const usable = list.filter((x) => x.key !== skip && isOpen(x, profile));
+  return [...draw(usable.filter((x) => !x.rare), OFFER), ...draw(usable.filter((x) => x.rare), 1)];
 }
 
 export function offers(profile = emptyProfile(), rand = Math.random) {
-  return { origins: offer(ORIGINS, profile, rand), traits: offer(TRAITS, profile, rand), wishes: offer(WISHES, profile, rand) };
+  return { origins: offer(ORIGINS, profile, rand), traits: offer(TRAITS, profile, rand, heirOf(profile)), wishes: offer(WISHES, profile, rand) };
 }
 
 // 内容里的事、选项拿到的 c: 读属性、标记, 改属性、写一句话、掷骰子
@@ -79,7 +93,7 @@ function context(life, profile, rand, entry) {
       return life.dead;
     },
     origin: life.origin,
-    trait: life.trait,
+    is: (t) => life.trait === t || life.heir === t, // 有没有这个性格 (自己挑的或者传下来的)
     wish: life.wish,
     runs: profile.runs,
     last: profile.last,
@@ -121,17 +135,20 @@ function context(life, profile, rand, entry) {
   return c;
 }
 
-export function newLife({ origin, trait, wish }, profile = emptyProfile(), rand = Math.random) {
+// heir: 上一稿传下来的性格 (跟自己挑的一样时不算)
+export function newLife({ origin, trait, wish, heir = null }, profile = emptyProfile(), rand = Math.random) {
   const o = originOf(origin);
   const t = traitOf(trait);
   if (!o || !t || !wishOf(wish)) throw new Error('出身、性格、心愿要先选好');
+  const h = heir && heir !== trait ? traitOf(heir) : null;
   const stats = { str: 0, kno: 0, soc: 0, mny: 0 };
-  for (const k of Object.keys(stats)) stats[k] = clamp((o.stats[k] ?? 0) + (t.stats?.[k] ?? 0));
+  for (const k of Object.keys(stats)) stats[k] = clamp((o.stats[k] ?? 0) + (t.stats?.[k] ?? 0) + (h?.stats?.[k] ?? 0));
   const life = {
     v: 1,
     run: profile.runs + 1,
     origin,
     trait,
+    heir: h?.key ?? null,
     wish,
     age: 0,
     stats,
@@ -146,7 +163,7 @@ export function newLife({ origin, trait, wish }, profile = emptyProfile(), rand 
     wishAt: null,
     dead: null,
   };
-  for (const f of [...(o.flags ?? []), ...(t.flags ?? [])]) life.flags[f] = 0;
+  for (const f of [...(o.flags ?? []), ...(t.flags ?? []), ...(h?.flags ?? [])]) life.flags[f] = 0;
   const entry = { age: 0, base: { ...stats }, lines: [], delta: {} };
   const c = context(life, profile, rand, entry);
   c.log(typeof o.birth === 'function' ? o.birth(c) : o.birth);
@@ -196,7 +213,8 @@ function aging(c, life) {
   if (life.age < 45) return;
   let p = (life.age - 40) / 120;
   if (c.has('exercise')) p *= 0.6;
-  if (life.trait === 'sunny') p *= 0.75;
+  if (c.is('sunny')) p *= 0.75;
+  if (c.is('longevity')) p *= 0.5;
   if (c.chance(p)) c.add({ str: -1 });
 }
 
@@ -209,7 +227,7 @@ function mortality(c, life, rand, natural) {
   }
   if (!natural || life.age < 50) return;
   const health = Math.max(0.5, Math.min(1.5, 1.5 - life.stats.str * 0.05));
-  const p = 0.003 * 1.1 ** (life.age - 50) * health;
+  const p = 0.003 * 1.1 ** (life.age - 50) * health * (c.is('longevity') ? 0.6 : 1);
   if (rand() < p || life.age >= 120) c.die(life.age >= 85 ? 'old' : 'sudden');
 }
 
@@ -353,6 +371,7 @@ export function finish(life, profile = emptyProfile(), at = Date.now()) {
     marks: [...new Set([...profile.marks, ...marks])],
     notes,
     last: { age: life.age, end: end.key, at },
+    heir: { key: '', at }, // 传下来的用掉了; 结局页上可以再挑一个传下去
   };
   return {
     ending: end,
@@ -366,9 +385,14 @@ export function finish(life, profile = emptyProfile(), at = Date.now()) {
 
 // 这一稿写完新解锁的出身、性格 (before / after: 写完前后的批注)
 export function newlyUnlocked(before, after) {
-  const open = (x, p) => !x.unlock || x.unlock({ runs: p.runs, seen: (k) => seenIn(p, k) });
-  return [...ORIGINS, ...TRAITS].filter((x) => x.unlock && !open(x, before) && open(x, after));
+  return [...ORIGINS, ...TRAITS].filter((x) => x.rare && !isOpen(x, before) && isOpen(x, after));
 }
+
+// 这一稿的性格 (自己挑的, 再加上传下来的)
+export const traitsOf = (life) => [life.trait, life.heir].filter(Boolean);
+
+// 把一个性格传给下一稿 (key 为 '' 是不传了)
+export const withHeir = (profile, key, at = Date.now()) => ({ ...profile, heir: { key, at } });
 
 // 路口上每个选项旁边的批注: 以前的稿选过这个, 后来怎么样了
 export function noteFor(profile, choiceId, key) {
@@ -382,9 +406,10 @@ export function noteFor(profile, choiceId, key) {
 export function restoreLife(raw) {
   if (!raw || typeof raw !== 'object' || raw.v !== 1) return null;
   if (!originOf(raw.origin) || !traitOf(raw.trait) || !wishOf(raw.wish)) return null;
+  if (raw.heir && !traitOf(raw.heir)) return null;
   if (!Array.isArray(raw.years) || !raw.years.length || !raw.stats || !raw.peak) return null;
   for (const [k] of STATS) if (!Number.isFinite(raw.stats[k]) || !Number.isFinite(raw.peak[k])) return null;
-  const life = { flags: {}, n: {}, done: {}, marks: [], choices: [], wishAt: null, dead: null, ...raw };
+  const life = { flags: {}, n: {}, done: {}, marks: [], choices: [], wishAt: null, dead: null, ...raw, heir: raw.heir ?? null };
   if (life.pending) {
     const ch = choiceOf(life.pending.id);
     const opts = (life.pending.opts ?? []).filter((k) => ch?.options.some((o) => o.key === k));
