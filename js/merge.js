@@ -14,7 +14,7 @@
 //   小乌龟温温                        长大的进度取多的, 解锁的装扮合起来, 名字和装扮听后改的
 //   游戏厅的成绩                      两边的合起来, 留最高的 5 次
 
-import { mergeMistake, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
+import { mergeMistake, mergeQset, PREFIX as MISTAKE_PREFIX, QSET_PREFIX } from './mistakes.js';
 import { mergeLogs, subtractLogs } from './revlog.js';
 import { cleanPet, mergePet } from './pet.js';
 import { cleanArcade, mergeArcade } from './arcade.js';
@@ -134,6 +134,7 @@ export function mergeData(local, remote) {
     version: 1,
     sets: mergeList(local.sets, remote.sets ?? [], mergeSet, deleted),
     folders: mergeList(local.folders ?? [], remote.folders ?? [], mergeFolder, deleted, 'folder:'),
+    qsets: mergeList(local.qsets ?? [], remote.qsets ?? [], mergeQset, deleted, QSET_PREFIX),
     mistakes: mergeList(local.mistakes ?? [], remote.mistakes ?? [], mergeMistake, deleted, MISTAKE_PREFIX),
     activity,
     deleted,

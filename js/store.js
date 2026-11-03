@@ -1,7 +1,7 @@
 import { schedule, replay, dayKey, useParameters, isLapse, cleanRetention, startOfDay, daysLater, DAY, DEFAULT_RETENTION } from './srs.js';
 import { cleanDiagram } from './diagram.js';
 import { quizToMistakes } from './quiz.js';
-import { cleanMistake, firstReview, reviewAfter, mergeMistake, attempted, PREFIX as MISTAKE_PREFIX } from './mistakes.js';
+import { cleanMistake, firstReview, reviewAfter, mergeMistake, attempted, PREFIX as MISTAKE_PREFIX, cleanQset, mergeQset, newQset, autoGroup, autoQsetId, QSET_PREFIX } from './mistakes.js';
 import { cleanLog, mergeLogs, addReview, addReviews, dropReview, fullHistory, historyOf, subtractLogs, recentLog, pack, unpack, encodeReview, GOOD, AGAIN } from './revlog.js';
 import { cleanPlan, planOf, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js';
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
@@ -22,8 +22,8 @@ export function newId() {
 }
 
 // activity: { 'YYYY-MM-DD': 那天答了几题 } (连续打卡用)
-// deleted: { 卡片集 id 或 'folder:文件夹 id' 或 'mistake:错题 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
-// mistakes: 错题集 (mistakes.js)
+// deleted: { 卡片集 id 或 'folder:文件夹 id' 或 'mistake:错题 id' 或 'qset:题目集 id': 删掉的时间 }  同步时告诉别的设备这个删掉了
+// mistakes: 错题集的题 (mistakes.js), 每道题在一个题目集里 (m.set); qsets: 题目集 [{ id, title, createdAt, updatedAt }]
 // revlog: 每一次翻卡自评的记录 (revlog.js), 以后按自己的记录优化复习排法用
 //   (v1.16 存在 log 里的混着选择题、游戏的答案, 不要了)
 // undone: 撤销了的复习记录 (跟 revlog 一样存), 同步时别从另一台设备又合回来; 留 120 天
@@ -32,7 +32,7 @@ export function newId() {
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null };
+  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -220,6 +220,26 @@ function cleanFolder(raw, setIds) {
   };
 }
 
+// 没放进题目集的题 (v1.49 以前记的、旧版本同步来的), 题目集已经没了的: 按 autoGroup 放进自动建的题目集。
+// 自动建的题目集 id 按名字算, 几台设备各自分出来的是同一个。被删过的题目集里又有了题 (别的设备后加的): 题目集也回来
+function placeLoose(data) {
+  const byId = new Map(data.qsets.map((q) => [q.id, q]));
+  for (const m of data.mistakes) {
+    if (byId.has(m.set)) continue;
+    const title = autoGroup(m);
+    const id = autoQsetId(title);
+    const q = byId.get(id);
+    if (q) q.createdAt = Math.min(q.createdAt, m.createdAt);
+    else {
+      const gone = data.deleted[QSET_PREFIX + id];
+      const made = { id, title, createdAt: m.createdAt, updatedAt: gone ? Math.max(m.createdAt, gone + 1) : m.createdAt };
+      byId.set(id, made);
+      data.qsets.push(made);
+    }
+    m.set = id;
+  }
+}
+
 export function cleanData(raw) {
   const data = emptyData();
   const quizSets = []; // 老的题目集: 下面变成错题
@@ -271,6 +291,16 @@ export function cleanData(raw) {
     }
     data.deleted[quiz.id] = Math.max(data.deleted[quiz.id] ?? 0, now);
   }
+  if (raw && Array.isArray(raw.qsets)) {
+    const ids = new Set();
+    for (const q of raw.qsets) {
+      const clean = cleanQset(q);
+      if (!clean || ids.has(clean.id)) continue;
+      ids.add(clean.id);
+      data.qsets.push(clean);
+    }
+  }
+  placeLoose(data);
   if (raw && Array.isArray(raw.folders)) {
     const ids = new Set(data.sets.map((s) => s.id));
     for (const f of raw.folders) {
@@ -580,11 +610,20 @@ export class Store {
     return this.data.mistakes.find((m) => m.id === id) ?? null;
   }
 
-  // 新记的: 做错的明天开始排进复习, 还没做过的今天就排上; 改题目不动重做记录
+  // 新记的: 做错的明天开始排进复习, 还没做过的今天就排上; 改题目不动重做记录。
+  // 题目集写的不对 (没写、已经没了) 的按题型放 (跟 placeLoose 一样); 题目集算刚动过 (排到前面)
   putMistake(mistake, now = Date.now()) {
     const clean = cleanMistake({ ...mistake, updatedAt: now });
     const i = this.data.mistakes.findIndex((m) => m.id === clean.id);
     const prev = this.data.mistakes[i];
+    if (!this.getQset(clean.set)) {
+      const title = autoGroup(clean);
+      clean.set = autoQsetId(title);
+      if (!this.getQset(clean.set)) this.data.qsets.push(newQset(clean.set, title, now));
+    }
+    const qset = this.getQset(clean.set);
+    const qsetBefore = { ...qset };
+    qset.updatedAt = Math.max(qset.updatedAt, now);
     if (i === -1) {
       clean.createdAt = now;
       clean.review ??= firstReview(now, !attempted(clean));
@@ -598,6 +637,7 @@ export class Store {
       // 存不下: 退回去
       if (i === -1) this.data.mistakes.pop();
       else this.data.mistakes[i] = prev;
+      Object.assign(qset, qsetBefore);
       throw new Error('存不下了');
     }
     return clean;
@@ -625,6 +665,60 @@ export class Store {
     this.touchActivity(now);
     this.save();
     return m.review;
+  }
+
+  // ---- 题目集 ----
+  // 最近动过的 (改名、加题、移进题) 在前面
+  allQsets() {
+    return [...this.data.qsets].sort((a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title));
+  }
+
+  getQset(id) {
+    return this.data.qsets.find((q) => q.id === id) ?? null;
+  }
+
+  mistakesIn(id) {
+    return this.allMistakes().filter((m) => m.set === id);
+  }
+
+  addQset(title, now = Date.now()) {
+    const q = newQset(newId(), title, now);
+    this.data.qsets.push(q);
+    this.save();
+    return q;
+  }
+
+  renameQset(id, title, now = Date.now()) {
+    const q = this.getQset(id);
+    if (!q) return null;
+    Object.assign(q, cleanQset({ ...q, title, updatedAt: now }));
+    this.save();
+    return q;
+  }
+
+  // 删题目集连里面的题一起删 (都记下删除时间, 同步时别的设备也删掉)。返回删了几道题
+  deleteQset(id, now = Date.now()) {
+    const ids = this.data.mistakes.filter((m) => m.set === id).map((m) => m.id);
+    this.data.qsets = this.data.qsets.filter((q) => q.id !== id);
+    this.data.deleted[QSET_PREFIX + id] = now;
+    return this.deleteMistakes(ids, now);
+  }
+
+  // 几道题挪到另一个题目集: 题算改过了 (同步时听这边的), 题目集算刚动过。返回挪了几道
+  moveMistakes(ids, toId, now = Date.now()) {
+    const q = this.getQset(toId);
+    if (!q) return 0;
+    const pick = new Set(ids);
+    let n = 0;
+    for (const m of this.data.mistakes) {
+      if (!pick.has(m.id) || m.set === toId) continue;
+      m.set = toId;
+      m.updatedAt = Math.max(m.updatedAt + 1, now);
+      n++;
+    }
+    if (n) q.updatedAt = Math.max(q.updatedAt, now);
+    this.save();
+    return n;
   }
 
   // ---- 文件夹 ----
@@ -1069,6 +1163,13 @@ export class Store {
     this.data.pet = mergePet(this.data.pet, incoming.pet);
     this.data.arcade = mergeArcade(this.data.arcade, incoming.arcade);
     this.applyParameters({ recompute: true });
+    for (const q of incoming.qsets) {
+      const i = this.data.qsets.findIndex((x) => x.id === q.id);
+      if (i === -1) {
+        revive(QSET_PREFIX + q.id, q);
+        this.data.qsets.push(q);
+      } else this.data.qsets[i] = mergeQset(this.data.qsets[i], q);
+    }
     for (const m of incoming.mistakes) {
       const i = this.data.mistakes.findIndex((x) => x.id === m.id);
       if (i === -1) {

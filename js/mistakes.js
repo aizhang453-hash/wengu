@@ -1,5 +1,7 @@
-// 错题集: 做错的题、还没做过的练习题 (比如 SAT、老师给的练习) 记下来, 以后重做。每道题:
-//   { id, type: 'choice' | 'input',
+// 错题集: 做错的题、还没做过的练习题 (比如 SAT、老师给的练习) 记下来, 以后重做。
+// 题按「题目集」放 (像卡片集一样, 比如「AP微积分」「Il Postino 电影题」): data.qsets = [{ id, title, createdAt, updatedAt }]。
+// 每道题:
+//   { id, set 在哪个题目集 (题目集的 id), type: 'choice' | 'input',
 //     passage   文章 / 材料 (可以没有)      question  题目
 //     options   选项 (选择题, A B C D……)    correct   对的是第几个 (-1 是还没选)
 //     mine      当时选错的是第几个 (-1 是没记, 或者还没做过)
@@ -21,12 +23,15 @@ export const MASTER_STREAK = 3;
 export const PREFIX = 'mistake:'; // 删除记录里的 id 前缀 (同步时用)
 export const MAX_IMAGES = 6;
 export const MAX_KIND = 20;
+export const QSET_PREFIX = 'qset:'; // 删除记录里题目集 id 的前缀
+export const MAX_QSET_TITLE = 60;
+export const UNSORTED = '未分类';
 
 const str = (v) => (typeof v === 'string' ? v : '');
 const index = (v, n) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) < n ? Number(v) : -1);
 
-export function newMistake(id, now = Date.now()) {
-  return { id, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', kind: '', review: null, createdAt: now, updatedAt: now };
+export function newMistake(id, now = Date.now(), set = '') {
+  return { id, set, type: 'choice', passage: '', question: '', images: [], options: ['', '', '', ''], correct: -1, mine: -1, answer: '', mineText: '', note: '', kind: '', review: null, createdAt: now, updatedAt: now };
 }
 
 function cleanReview(r) {
@@ -44,6 +49,7 @@ export function cleanMistake(raw) {
   const options = (Array.isArray(raw.options) ? raw.options : []).slice(0, MAX_OPTIONS).map((o) => (o == null || typeof o === 'object' ? '' : String(o)));
   return {
     id: raw.id,
+    set: typeof raw.set === 'string' ? raw.set : '',
     type: raw.type === 'input' ? 'input' : 'choice',
     passage: str(raw.passage),
     question: str(raw.question),
@@ -223,11 +229,12 @@ export function guessKind(m) {
 export const kindOf = (m) => m.kind || guessKind(m) || OTHER_KIND;
 
 // 每种题型几道: [{ kind, total, left 还没掌握, right, wrong 重做对了几次、错了几次 }], 多的在前
-export function kindStats(list) {
+// label: 显示的名字 (题目集里去掉科目); key 还是 kindOf (专项练习按它筛)
+export function kindStats(list, label = kindOf) {
   const map = new Map();
   for (const m of list) {
     const kind = kindOf(m);
-    const x = map.get(kind) ?? { kind, total: 0, left: 0, right: 0, wrong: 0 };
+    const x = map.get(kind) ?? { kind, label: label(m), total: 0, left: 0, right: 0, wrong: 0 };
     x.total++;
     if (!m.review?.mastered) x.left++;
     x.right += m.review?.right ?? 0;
@@ -235,4 +242,68 @@ export function kindStats(list) {
     map.set(kind, x);
   }
   return [...map.values()].sort((a, b) => b.total - a.total || b.left - a.left || a.kind.localeCompare(b.kind));
+}
+
+// ---- 题目集 ----
+
+export function newQset(id, title, now = Date.now()) {
+  return { id, title: String(title ?? '').trim().slice(0, MAX_QSET_TITLE), createdAt: now, updatedAt: now };
+}
+
+export function cleanQset(raw) {
+  if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !raw.id) return null;
+  const now = Date.now();
+  const createdAt = Number(raw.createdAt) || now;
+  return { id: raw.id, title: str(raw.title).trim().slice(0, MAX_QSET_TITLE), createdAt, updatedAt: Number(raw.updatedAt) || createdAt };
+}
+
+// 同步: 名字听后改的
+export function mergeQset(a, b) {
+  const newer = (b.updatedAt ?? 0) > (a.updatedAt ?? 0) ? b : a;
+  return { ...newer, createdAt: Math.min(a.createdAt, b.createdAt), updatedAt: Math.max(a.updatedAt, b.updatedAt) };
+}
+
+// 题型里带着科目的 (「AP微积分·乘法法则」): 「·」前面是科目, 后面是小类
+const SEP = /[·・]/;
+
+// 还没放进题目集的题 (v1.49 以前记的、旧版本同步来的) 该放哪个: 题型带科目的放科目里 (「AP微积分」);
+// SAT 的题型放「SAT 阅读写作」「SAT 数学」; 别的题型 (旧题目集变来的是题目集的名字) 就用题型当名字; 什么都没有的放「未分类」
+export function autoGroup(m) {
+  const kind = m.kind || guessKind(m);
+  if (!kind) return UNSORTED;
+  const head = kind.split(SEP)[0].trim();
+  if (head && head !== kind.trim()) return head;
+  for (const [exam, list] of Object.entries(KINDS)) if (list.includes(kind)) return exam;
+  return kind;
+}
+
+// 自动建的题目集的 id: 按名字算 (几台设备各自分组, 分出来的是同一个, 同步时合得上, 不会有两个「AP微积分」)
+export function autoQsetId(title) {
+  let h = 0x811c9dc5;
+  for (const ch of String(title)) {
+    h ^= ch.codePointAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `auto_${h.toString(36)}`;
+}
+
+// 题目集里看的题型: 跟题目集同名的科目去掉 (「AP微积分」里的「AP微积分·乘法法则」就叫「乘法法则」)
+export function kindIn(m, qset) {
+  const kind = kindOf(m);
+  const title = qset?.title?.trim();
+  if (!title) return kind;
+  const [head, ...rest] = kind.split(SEP);
+  return head.trim() === title && rest.join('·').trim() ? rest.join('·').trim() : kind;
+}
+
+// 一个题目集的数字: { total, due 今天该重做, left 还没掌握, mastered }
+export function qsetCounts(list, now = Date.now()) {
+  let due = 0;
+  let mastered = 0;
+  for (const m of list) {
+    const st = mistakeStatus(m, now);
+    if (st === 'due') due++;
+    if (st === 'mastered') mastered++;
+  }
+  return { total: list.length, due, left: list.length - mastered, mastered };
 }

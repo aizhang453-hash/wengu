@@ -90,10 +90,15 @@ export function renderShareImport({ store, go }, code) {
           const note = imageFailed ? `，${imageFailed} 张图片无法获取` : '';
           try {
             if (quiz) {
+              // 分享来的题目集: 建一个同名的题目集, 题放进去
+              let qset;
               const list = quizToMistakes({ id: newId(), title: data.title, cards });
-              store.transaction(() => list.forEach((m) => store.putMistake(m)));
+              store.transaction(() => {
+                qset = store.addQset(String(data.title ?? '').trim() || '分享的题目集');
+                list.forEach((m) => store.putMistake({ ...m, set: qset.id }));
+              });
               toast(`已导入 ${list.length} 道题${note}`);
-              return go('#/mistakes');
+              return go(`#/mistakes/set/${encodeURIComponent(qset.id)}`);
             }
             const set = store.putSet({ title: data.title || '分享的卡片集', description: data.description, termLang: normalizeLang(data.termLang), defLang: normalizeLang(data.defLang), cards });
             toast(`导入完成${note}`);

@@ -1,5 +1,5 @@
-// 记一道错题 / 改错题: 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」(没做过的不点);
-// 填空题写对的答案和当时写的; 为什么错; 题型 (不写就按题目猜)。
+// 记一道错题 / 改错题: 放在哪个题目集; 文章 (可以不写)、题目、图片 (截图、函数图像……); 选择题写选项, 点「对」和「我选的」(没做过的不点);
+// 填空题写对的答案和当时写的; 为什么错; 题型 (不写就按题目猜)。存好了回那个题目集。
 // 拍照让 AI 记的 (mistakeimport.js) 没写完的、想一道道看过的: 一道道打开, 补上存了再下一道 (queueMistakes)
 
 import { h, fill, toast } from '../dom.js';
@@ -7,6 +7,7 @@ import { newId } from '../store.js';
 import { putMedia, shrinkImage } from '../media.js';
 import { cardImage } from '../cardview.js';
 import { LETTERS, MIN_OPTIONS, MAX_OPTIONS, MAX_IMAGES, MAX_KIND, KINDS, newMistake, mistakeProblem, tidyMistake, guessKind, scheduleNote } from '../mistakes.js';
+import { qsetPicker, qsetHref, rememberQset } from './mistakes.js';
 
 // 导入的错题先放这里, 下次打开「记一道错题」(#/mistakes/new) 时一道道拿出来
 let queued = [];
@@ -14,15 +15,27 @@ export function queueMistakes(list) {
   queued = list.map((m) => structuredClone(m));
 }
 
-export function renderMistakeEdit({ store, go }, id = null) {
+// set: 新记的先放进这个题目集 (从题目集里点「添加题目」进来的)
+export function renderMistakeEdit({ store, go }, id = null, { set = null } = {}) {
   const existing = id ? store.getMistake(id) : null;
   if (id && !existing) {
-    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '错题不存在'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')) };
+    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '题目不存在'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')) };
   }
   const queue = existing ? [] : queued;
   queued = [];
   const total = queue.length; // 导入的一共几道 (0: 不是导入的)
-  let draft = existing ? structuredClone(existing) : total ? queue.shift() : newMistake(newId());
+  let draft = existing ? structuredClone(existing) : total ? queue.shift() : newMistake(newId(), Date.now(), set ?? '');
+  // 放在哪个题目集
+  const picker = qsetPicker(store, draft.set || set || '', (v) => ((draft.set = v), markDirty(), drawBack()));
+  draft.set = picker.value;
+  const backEl = h('a', { class: 'back' });
+  const backHref = () => (store.getQset(draft.set) ? qsetHref(draft.set) : '#/mistakes');
+  function drawBack() {
+    const q = store.getQset(draft.set);
+    backEl.href = backHref();
+    backEl.textContent = `← ${q ? q.title || '题目集' : '错题集'}`;
+    for (const a of footEl.querySelectorAll('a.cancel')) a.href = backHref();
+  }
   let dirty = total > 0; // 导入的还没存
   const saved = []; // 导入的存了哪几道 (最后说一声什么时候做)
   const markDirty = () => {
@@ -102,7 +115,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
     drawNote();
     fill(
       footEl,
-      h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
+      h('a', { class: 'btn cancel', href: backHref() }, '取消'),
       h('button', { class: 'btn', onclick: () => next(false) }, '跳过'),
       h('button', { class: 'btn primary', onclick: () => save(false) }, queue.length ? `保存并继续（剩余 ${queue.length} 道）` : '保存'),
     );
@@ -201,7 +214,7 @@ export function renderMistakeEdit({ store, go }, id = null) {
   }
 
   function save(again = false) {
-    const m = tidyMistake(draft);
+    const m = tidyMistake({ ...draft, set: picker.value });
     const problem = mistakeProblem(m);
     if (problem) {
       problemEl.textContent = `⚠ ${problem}`;
@@ -209,12 +222,15 @@ export function renderMistakeEdit({ store, go }, id = null) {
       problemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    let put;
     try {
-      store.putMistake(m);
+      put = store.putMistake(m);
     } catch {
       toast('存储空间已满，无法保存');
       return;
     }
+    rememberQset(put.set);
+    draft.set = put.set; // 按题型自动放的: 记住放进了哪个
     dirty = false;
     if (total) {
       saved.push(m);
@@ -222,11 +238,12 @@ export function renderMistakeEdit({ store, go }, id = null) {
     }
     if (!again) {
       toast(existing ? '已保存' : `已记录，${scheduleNote([m])}`);
-      return go('#/mistakes');
+      return go(qsetHref(put.set));
     }
-    // 接着记下一道: 题型留着, 别的清空
+    // 接着记下一道: 题目集、题型留着, 别的清空
     toast('已记录');
-    draft = { ...newMistake(newId()), type: draft.type };
+    draft = { ...newMistake(newId(), Date.now(), put.set), type: draft.type };
+    drawBack();
     fillInputs();
     draw();
     drawImages();
@@ -245,10 +262,10 @@ export function renderMistakeEdit({ store, go }, id = null) {
     if (!queue.length) {
       dirty = false;
       toast(saved.length ? `已记录 ${saved.length} 道，${scheduleNote(saved)}` : '已跳过');
-      return go('#/mistakes');
+      return go(backHref());
     }
     toast(kept ? '已记录' : '已跳过');
-    draft = queue.shift();
+    draft = { ...queue.shift(), set: picker.value }; // 导入的这一批放进同一个题目集 (中途换了就跟着换)
     dirty = true;
     fillInputs();
     draw();
@@ -261,10 +278,11 @@ export function renderMistakeEdit({ store, go }, id = null) {
   draw();
   drawImages();
   drawHead();
+  drawBack();
   if (!total) {
     fill(
       footEl,
-      h('a', { class: 'btn', href: '#/mistakes' }, '取消'),
+      h('a', { class: 'btn cancel', href: backHref() }, '取消'),
       existing ? null : h('button', { class: 'btn', onclick: () => save(true) }, '保存并新建'),
       h('button', { class: 'btn primary', onclick: () => save(false) }, '保存'),
     );
@@ -291,9 +309,11 @@ export function renderMistakeEdit({ store, go }, id = null) {
           addImages(e.dataTransfer.files);
         },
       },
-      h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
+      backEl,
       h('div', { class: 'page-head' }, headEl, h('div', { class: 'row' }, h('div', { class: 'chips', role: 'group', 'aria-label': '题型' }, typeBtns))),
-      total ? importNote : existing ? null : h('p', { class: 'muted small' }, '也可以', h('a', { href: '#/mistakes/import' }, '拍照录入'), '。'),
+      total ? importNote : existing ? null : h('p', { class: 'muted small' }, '也可以', h('a', { href: draft.set ? `#/mistakes/import/${encodeURIComponent(draft.set)}` : '#/mistakes/import' }, '拍照录入'), '。'),
+      h('label', { class: 'ask-label' }, '题目集'),
+      picker.el,
       h('label', { class: 'ask-label' }, '材料（选填）'),
       passageEl,
       h('label', { class: 'ask-label' }, '题目'),

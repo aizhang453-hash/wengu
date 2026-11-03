@@ -9,6 +9,7 @@ import { planLine, todayAll, openCapDialog } from './plan.js';
 import { FOLDER_PREFIX, COLLAPSED_KEY } from '../store.js';
 import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 import { dueMistakes } from '../mistakes.js';
+import { qsetTile } from './mistakes.js';
 import { inApp } from '../platform.js';
 
 const WEEKDAYS = '日一二三四五六';
@@ -224,8 +225,22 @@ export function renderHome({ store, go }) {
         : empty
           ? null
           : h('p', { class: 'muted' }, '还没有卡片集。', h('a', { href: '#/new' }, '新建'), ' 或 ', h('a', { href: '#/import' }, '导入'), '。'),
+      qsetSection(store),
     ),
   };
+}
+
+// 题目集 (错题集里的): 跟卡片集一样摆成方块
+function qsetSection(store) {
+  const qsets = store.allQsets();
+  if (!qsets.length) return null;
+  const bySet = new Map(qsets.map((q) => [q.id, []]));
+  for (const m of store.data.mistakes) bySet.get(m.set)?.push(m);
+  const now = Date.now();
+  return [
+    h('div', { class: 'list-head' }, h('h2', {}, '题目集'), h('a', { class: 'muted small', href: '#/mistakes' }, `错题集 · ${qsets.length} 个`)),
+    h('ul', { class: 'set-grid qset-grid' }, qsets.map((q) => qsetTile(q, bySet.get(q.id), now))),
+  ];
 }
 
 // 同步用的密钥快过期了 (还剩两周以内): 首页提醒一下; 不知道哪天过期: 提醒去填
