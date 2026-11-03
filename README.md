@@ -25,7 +25,7 @@
 | **今日** | 汇总当日新词、到期复习与待重做错题，一键开始；显示连续学习天数 |
 | **卡片集** | 单词卡、学习（选择、判断、拼写、听写）、测试、学习游戏、标注图；支持格式、图片、录音与在线词典 |
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
-| **错题集** | 记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除；连续答对 3 次即为掌握 |
+| **错题集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -36,7 +36,7 @@
 ### 导航
 
 - 左上角 ☰：今日、错题集、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
-- 右上角「新建」：新建卡片集、导入卡片、记录错题、拍照录入错题、新建文件夹。
+- 右上角「新建」：新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹。
 
 ### 卡片集
 
@@ -54,11 +54,12 @@
 
 ### 错题集
 
-- 手动记录：材料、题目、图片、选项（或填空答案）、我的答案、解析、题型。SAT 题型可自动识别。
+- 题目集：错题集里的题按题目集存放，像卡片集一样，如「AP微积分」「SAT 阅读」「Il Postino 电影题」。错题集首页列出所有题目集（也显示在「今日」下方），点开后是其中的题目、题型分布、今日待重做与专项练习；题目集可在标题旁的「更多」中重命名或删除（连同其中的题目）。
+- 手动记录：选择题目集，填写材料、题目、图片、选项（或填空答案）、我的答案、解析、题型。SAT 题型可自动识别。
 - 拍照录入：复制提示词，连同题目照片发给 Claude、ChatGPT 等 AI，再将回复粘贴回来；做错的题和未作答的练习题均可录入。信息不完整的题目会逐题打开以便补充。
 - 重做按 FSRS 安排：做错的题次日开始，未作答的练习题当日即可练习；连续答对 3 次即为掌握；可按题型专项练习。
-- 批量删除：点击「选择」后勾选题目，或先按题型筛选、搜索，再「全选」并删除。
-- 原「题目集」已并入错题集：旧的题目集在读取时自动转为错题，题目集名称作为题型。
+- 批量操作：点击「选择」后勾选题目，或先按题型筛选、搜索，再「全选」，可删除或移到其他题目集。
+- v1.49 以前记录的题目会自动分组：题型写成「AP微积分·乘法法则」的归入「AP微积分」（题目集中只显示「乘法法则」），SAT 题型归入「SAT 阅读写作」「SAT 数学」，其余以题型为名；没有题型的归入「未分类」。v1.42 以前的旧题目集也会恢复为同名的题目集。
 
 ### 导入
 
@@ -102,7 +103,7 @@
 
 ## 更新记录
 
-当前版本 **v1.48**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.49**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -125,14 +126,14 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
   - `home.js` 今日、`set.js` 卡片集、`folder.js` 文件夹、`settings.js` 设置、`menu.js` 菜单与新建菜单、`search.js` 搜索
   - `edit.js` 编辑卡片集、`fileimport.js` 文件导入、`export.js` 导出、`cardedit.js` 卡片快速编辑、`aiprompt.js` 提示词按钮
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
-  - `mistakes.js` 错题集、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
+  - `mistakes.js` 错题集（题目集列表、题目集页）、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
   - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
   - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
-  - `js/mistakes.js` 错题；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
+  - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
   - `js/speech.js` 朗读；`js/recorder.js` 录音；`js/sound.js`、`js/unlock.js` 音效；`js/dict.js` 词典；`js/rich.js` 文字格式；`js/cardview.js` 卡片显示；`js/diagram.js` 标注图；`js/search.js` 搜索；`js/print.js` 打印；`js/share.js` 分享链接；`js/quizlet.js` 书签；`js/qr.js`（`js/vendor/qrcode.js`：MIT）二维码；`js/pet.js` 温温；`js/examlist.js` 考前清单

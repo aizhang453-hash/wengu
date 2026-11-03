@@ -7523,6 +7523,73 @@ body.has-pet main {
   color: var(--bad);
 }
 
+/* ==== 题目集 (错题集里放题的, 像卡片集) ==== */
+.qset-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.qset-head h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.qset-tile.has-due .set-tile-meta span:last-child {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mk-search-all {
+  margin: 18px 0 8px;
+}
+
+.mk-search-all .mk-search {
+  width: 100%;
+}
+
+.mk-results .mk-list {
+  margin-top: 8px;
+}
+
+a.qi-tag.mk-set-tag {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a.qi-tag.mk-set-tag:hover {
+  text-decoration: underline;
+}
+
+.mk-empty {
+  margin: 18px 0;
+  padding: 22px 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.mk-empty p {
+  margin: 0 0 8px;
+}
+
+.qset-pick {
+  max-width: 420px;
+}
+
+/* 窗口里的一排选项 (挪到哪个题目集): 按钮也长得跟链接一样 */
+button.pick-row {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.pick-row:hover {
+  border-color: var(--accent);
+}
+
 /* ==== 游戏厅 ==== */
 .arcade-list {
   display: grid;

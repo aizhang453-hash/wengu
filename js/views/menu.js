@@ -1,11 +1,12 @@
 // 左边的菜单 (顶上的 ☰ 点开): 今日、错题集、统计; 更多 (学习游戏、游戏厅、文件夹、温温); 设置。
-// 顶上的「新建」: 新建卡片集、导入卡片、记录错题、拍照录入错题、新建文件夹, 都在这一个菜单里
+// 顶上的「新建」: 新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹, 都在这一个菜单里
 
 import { h, icon, menuButton } from '../dom.js';
 import { todayAll } from './plan.js';
 import { dueMistakes } from '../mistakes.js';
 import { loadConfig } from '../sync.js';
 import { newFolder } from './folder.js';
+import { newQsetDialog, qsetHref } from './mistakes.js';
 
 // 顶上的「新建」换成点开的菜单 (没开 JavaScript 时还是个去 #/new 的链接)
 function setupNewMenu({ store, go }) {
@@ -17,6 +18,7 @@ function setupNewMenu({ store, go }) {
         { label: '新建卡片集', icon: 'plus', href: '#/new' },
         { label: '导入卡片', icon: 'import', href: '#/import' },
         null,
+        { label: '新建题目集', icon: 'book', onclick: () => newQsetDialog(store, (q) => go(qsetHref(q.id))) },
         { label: '记录错题', icon: 'edit', href: '#/mistakes/new' },
         { label: '拍照录入错题', icon: 'camera', href: '#/mistakes/import' },
         null,

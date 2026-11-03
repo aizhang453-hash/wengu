@@ -4,20 +4,50 @@
 //   #/mistakes/review/all   还没掌握的全做一遍
 //   #/mistakes/review/<id>  只做这一道
 //   #/mistakes/review/kind:<题型>  这类还没掌握的全做一遍
+//   #/mistakes/review/set:<题目集>  这个题目集今天该重做的 (后面加 /all: 还没掌握的全做; /kind:<题型>: 这类还没掌握的)
+//   从题目集进来的, 做完、点「←」回那个题目集
 
 import { h, fill, dialogOpen, openDialog, icon } from '../dom.js';
 import { rich, cardImage } from '../cardview.js';
 import { shuffle } from '../questions.js';
-import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel, kindOf } from '../mistakes.js';
+import { LETTERS, MASTER_STREAK, dueMistakes, checkMistake, answerLabel, mineLabel, kindOf, kindIn } from '../mistakes.js';
+import { qsetHref } from './mistakes.js';
 import { sound } from './match.js';
 
-export function renderMistakeReview({ store }, which = null) {
-  const all = store.allMistakes();
+// 要做哪些题、做完回哪、没有题时怎么说
+export function reviewScope(store, which = null, sub = null) {
+  let all = store.allMistakes();
+  let back = '#/mistakes';
+  let backText = '错题集';
+  let mode = which;
+  let label = (k) => k;
+  if (which?.startsWith('set:')) {
+    const qset = store.getQset(which.slice(4));
+    all = qset ? store.mistakesIn(qset.id) : [];
+    if (qset) [back, backText] = [qsetHref(qset.id), qset.title || '题目集'];
+    mode = sub;
+    // 题型的名字: 题目集里去掉科目
+    const sample = (k) => all.find((m) => kindOf(m) === k);
+    label = (k) => (sample(k) ? kindIn(sample(k), qset) : k);
+  }
+  const unmastered = all.filter((m) => !m.review?.mastered);
   let list;
-  if (!which) list = dueMistakes(all);
-  else if (which === 'all') list = shuffle(all.filter((m) => !m.review?.mastered));
-  else if (which.startsWith('kind:')) list = shuffle(all.filter((m) => !m.review?.mastered && kindOf(m) === which.slice(5)));
-  else list = all.filter((m) => m.id === which);
+  let none;
+  if (!mode) [list, none] = [dueMistakes(all), '今日没有待重做的题'];
+  else if (mode === 'all') [list, none] = [shuffle(unmastered), '没有未掌握的题'];
+  else if (mode.startsWith('kind:')) [list, none] = [shuffle(unmastered.filter((m) => kindOf(m) === mode.slice(5))), `「${label(mode.slice(5))}」已全部掌握`];
+  else {
+    list = all.filter((m) => m.id === mode);
+    none = '题目不存在';
+    const qset = list[0] && store.getQset(list[0].set);
+    if (qset) [back, backText] = [qsetHref(qset.id), qset.title || '题目集'];
+  }
+  return { list, none, back, backText };
+}
+
+export function renderMistakeReview({ store }, which = null, sub = null) {
+  const scope = reviewScope(store, which, sub);
+  let list = scope.list;
 
   const root = h('section', { class: 'mk-review' });
   if (!list.length) {
@@ -26,8 +56,8 @@ export function renderMistakeReview({ store }, which = null) {
         'div',
         { class: 'summary' },
         h('div', { class: 'game-emoji', 'aria-hidden': 'true' }, '✓'),
-        h('h1', {}, which === 'all' ? '没有未掌握的错题' : which?.startsWith('kind:') ? `「${which.slice(5)}」已全部掌握` : which ? '错题不存在' : '今日没有待重做的错题'),
-        h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')),
+        h('h1', {}, scope.none),
+        h('div', { class: 'row center' }, h('a', { class: 'btn primary', href: scope.back }, `返回${scope.backText}`)),
       ),
     );
     return { title: '重做错题', el: root };
@@ -123,7 +153,7 @@ export function renderMistakeReview({ store }, which = null) {
     const side = m.passage ? h('div', { class: 'mk-passage-side' }, h('div', { class: 'mk-passage' }, rich(m.passage)), images(m.images)) : null;
     const questionBlock = h('div', { class: 'mk-q-side' }, m.passage ? null : images(m.images), m.question ? h('div', { class: 'mk-question big' }, rich(m.question)) : null, answerArea, feedback);
     root.replaceChildren(
-      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'), counter),
+      h('div', { class: 'cards-head' }, h('a', { class: 'back', href: scope.back }, `← ${scope.backText}`), counter),
       h('div', { class: `mk-paper${m.passage ? ' with-passage' : ''}` }, side, questionBlock),
     );
     window.scrollTo(0, 0);
@@ -167,7 +197,7 @@ export function renderMistakeReview({ store }, which = null) {
                 `重做答错的 ${wrong.length} 道`,
               )
             : null,
-          h('a', { class: `btn${wrong.length ? '' : ' primary'}`, href: '#/mistakes' }, '返回错题集'),
+          h('a', { class: `btn${wrong.length ? '' : ' primary'}`, href: scope.back }, `返回${scope.backText}`),
         ),
       ),
     );

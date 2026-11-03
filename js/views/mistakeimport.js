@@ -1,5 +1,6 @@
 // 拍照让 AI 记错题 (#/mistakes/import): ① 复制给 AI 的话, 跟题目照片一起发给 AI;
-// ② AI 回的贴进来 (或者选 / 拖进来它给的文件); ③ 看一遍认出来的, 加进错题集。
+// ② AI 回的贴进来 (或者选 / 拖进来它给的文件); ③ 看一遍认出来的, 选好放进哪个题目集, 加进去。
+// #/mistakes/import/<题目集>: 先选上那个题目集
 // 没写完的 (比如 AI 不知道对的答案) 和想一道道看过的, 打开「记一道错题」一道道补上再存 (mistakeedit.js 的 queueMistakes)
 
 import { h, fill, toast } from '../dom.js';
@@ -8,12 +9,15 @@ import { putMedia, shrinkImage } from '../media.js';
 import { LETTERS, MAX_IMAGES, mistakeProblem, kindOf, attempted, scheduleNote } from '../mistakes.js';
 import { aiPrompt, parseMistakeImport, findSame, ImportError } from '../mistakeimport.js';
 import { queueMistakes } from './mistakeedit.js';
+import { qsetPicker, qsetHref, rememberQset } from './mistakes.js';
 import { promptControls } from './aiprompt.js';
 
 const ACCEPT = '.json,.txt,.md,application/json,text/plain';
 const MAX_FILE = 5_000_000;
 
-export function renderMistakeImport({ store, go }) {
+export function renderMistakeImport({ store, go }, { set = null } = {}) {
+  const picker = qsetPicker(store, set ?? '');
+  const backHref = () => (store.getQset(picker.value) ? qsetHref(picker.value) : '#/mistakes');
   const ask = promptControls(aiPrompt());
   let items = []; // 认出来的: [{ mistake, problem 还差什么, same 错题集里一样的那道, on 勾没勾 }]
   let added = false;
@@ -64,6 +68,8 @@ export function renderMistakeImport({ store, go }) {
       resultEl,
       h('h2', {}, `识别到 ${items.length} 道`),
       listEl,
+      h('label', { class: 'ask-label' }, '加入题目集'),
+      picker.el,
       countEl,
       h('div', { class: 'row' }, addBtn, eachBtn),
       h('p', { class: 'muted small' }, '逐题核对：依次打开每道题，可修改并添加照片后保存。'),
@@ -74,7 +80,7 @@ export function renderMistakeImport({ store, go }) {
   function drawCount() {
     const chosen = items.filter((x) => x.on);
     const unfinished = chosen.filter((x) => x.problem).length;
-    addBtn.textContent = `加入错题集（${chosen.length} 道）`;
+    addBtn.textContent = `加入（${chosen.length} 道）`;
     addBtn.disabled = eachBtn.disabled = !chosen.length;
     countEl.textContent = unfinished ? `已选中的题目中有 ${unfinished} 道信息不完整，加入时将逐题打开补充。` : '';
   }
@@ -165,20 +171,23 @@ export function renderMistakeImport({ store, go }) {
   function add(eachOne) {
     const chosen = items.filter((x) => x.on);
     if (!chosen.length) return;
-    const ready = eachOne ? [] : chosen.filter((x) => !x.problem).map((x) => x.mistake);
-    const later = chosen.filter((x) => eachOne || x.problem).map((x) => x.mistake);
+    const into = (x) => ({ ...x.mistake, set: picker.value });
+    const ready = eachOne ? [] : chosen.filter((x) => !x.problem).map(into);
+    const later = chosen.filter((x) => eachOne || x.problem).map(into);
+    let where = picker.value;
     if (ready.length) {
       try {
-        store.transaction(() => ready.forEach((m) => store.putMistake(m)));
+        store.transaction(() => ready.forEach((m) => (where = store.putMistake(m).set)));
       } catch {
         toast('存储空间已满，无法保存');
         return;
       }
     }
+    rememberQset(where);
     added = true;
     if (!later.length) {
       toast(`已加入 ${ready.length} 道，${scheduleNote(ready)}`);
-      return go('#/mistakes');
+      return go(store.getQset(where) ? qsetHref(where) : '#/mistakes');
     }
     queueMistakes(later);
     toast(ready.length ? `已加入 ${ready.length} 道，另有 ${later.length} 道待补充` : `共 ${later.length} 道，逐题核对`);
@@ -222,7 +231,7 @@ export function renderMistakeImport({ store, go }) {
           read(text);
         },
       },
-      h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
+      h('a', { class: 'back', href: backHref() }, `← ${store.getQset(picker.value)?.title || '错题集'}`),
       h('h1', {}, '拍照录入错题'),
       h('p', { class: 'muted' }, '将错题或练习题的照片发给 AI 识别，再把结果粘贴到这里，即可批量录入。'),
       h(

@@ -5,8 +5,10 @@
 //   #/search/<字>         搜索
 //   #/games               学习游戏 (#/games/<游戏>: 先选上那个游戏), 再挑拿哪个卡片集玩
 //   #/arcade              游戏厅 (学累了玩的), #/arcade/pinball 弹珠台, #/arcade/draft 人生草稿
-//   #/mistakes            错题集 (#/mistakes/new 记一道, #/mistakes/import 拍照让 AI 记, #/mistakes/<id>/edit 改,
-//                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道)
+//   #/mistakes            错题集: 所有题目集 (#/mistakes/set/<题目集> 一个题目集;
+//                         #/mistakes/new 记一道, #/mistakes/import 拍照让 AI 记 (后面加 /<题目集>: 先选上那个题目集), #/mistakes/<id>/edit 改,
+//                         #/mistakes/review 重做今天该做的, /review/all 还没掌握的全做, /review/<id> 只做一道,
+//                         /review/set:<题目集> 这个题目集今天该做的 (再加 /all 还没掌握的全做, /kind:<题型> 这类的))
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/settings            设置 (复习、同步、备份、温温)
@@ -55,7 +57,7 @@ import { renderGames } from './views/gamehub.js';
 import { renderArcade } from './views/arcade.js';
 import { renderPinball } from './views/pinball.js';
 import { renderDraft } from './views/draft.js';
-import { renderMistakes } from './views/mistakes.js';
+import { renderMistakes, renderQset } from './views/mistakes.js';
 import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
 import { renderMistakeImport } from './views/mistakeimport.js';
@@ -71,12 +73,12 @@ window.addEventListener('pagehide', () => store.flush());
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') store.flush();
   // 开着过了一夜再回来: 首页、卡片集页这些「今天」的数字换成今天的
-  else if (current && current.day !== dayKey()) refreshPage(['home', 'set', 'folder', 'mistakes', 'stats']);
+  else if (current && current.day !== dayKey()) refreshPage(['home', 'set', 'folder', 'mistakes', 'qset', 'stats']);
 });
 
 // 数据变了 (别的标签页存了、别的设备同步来了、过了一夜): 首页、卡片集页这些重画, 停在原来的地方;
 // 正在背、正在编辑的不打断。开着窗口 (正在改卡片、定计划) 时先不画, 关了再画, 免得打了一半的字没了
-const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'stats', 'arcade', 'settings'];
+const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'qset', 'stats', 'arcade', 'settings'];
 let refreshLater = null;
 function refreshPage(pages = REFRESHABLE) {
   if (!pages.includes(current?.page)) return;
@@ -130,9 +132,10 @@ function parse(hash) {
   if (parts[0] === 'arcade') return parts[1] === 'pinball' ? { page: 'pinball' } : parts[1] === 'draft' ? { page: 'draft' } : { page: 'arcade' };
   if (parts[0] === 'mistakes') {
     if (!parts[1]) return { page: 'mistakes' };
-    if (parts[1] === 'new') return { page: 'mistake-edit', mistake: null };
-    if (parts[1] === 'import') return { page: 'mistake-import' };
-    if (parts[1] === 'review') return { page: 'mistake-review', which: parts[2] ?? null };
+    if (parts[1] === 'set' && parts[2]) return { page: 'qset', id: parts[2] };
+    if (parts[1] === 'new') return { page: 'mistake-edit', mistake: null, set: parts[2] ?? null };
+    if (parts[1] === 'import') return { page: 'mistake-import', set: parts[2] ?? null };
+    if (parts[1] === 'review') return { page: 'mistake-review', which: parts[2] ?? null, sub: parts[3] ?? null };
     if (parts[2] === 'edit') return { page: 'mistake-edit', mistake: parts[1] };
   }
   if (parts[0] === 'folder' && parts[1]) return { page: 'folder', id: parts[1] };
@@ -205,9 +208,10 @@ function render() {
   else if (route.page === 'pinball') view = renderPinball(ctx);
   else if (route.page === 'draft') view = renderDraft(ctx);
   else if (route.page === 'mistakes') view = renderMistakes(ctx);
-  else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake);
-  else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which);
-  else if (route.page === 'mistake-import') view = renderMistakeImport(ctx);
+  else if (route.page === 'qset') view = renderQset(ctx, route.id);
+  else if (route.page === 'mistake-edit') view = renderMistakeEdit(ctx, route.mistake, { set: route.set });
+  else if (route.page === 'mistake-review') view = renderMistakeReview(ctx, route.which, route.sub);
+  else if (route.page === 'mistake-import') view = renderMistakeImport(ctx, { set: route.set });
   else if (route.page === 'folder') view = renderFolder(ctx, route.id);
   else if (route.page === 'review') view = renderReview(ctx, route.id, { practice: route.practice });
   else if (route.page === 'stats') view = renderStats(ctx, route.id);
@@ -284,7 +288,7 @@ setupMenu({ store, go, syncer, pet }); // 左上角 ☰ 的菜单
 window.addEventListener('storage', (e) => {
   if (e.key !== null && e.key !== KEY) return;
   store.reload();
-  refreshPage(['home', 'set', 'folder', 'games', 'mistakes', 'stats']);
+  refreshPage(['home', 'set', 'folder', 'games', 'mistakes', 'qset', 'stats']);
   pet.changed();
 });
 window.addEventListener('beforeunload', (e) => {
