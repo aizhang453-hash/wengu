@@ -11,7 +11,7 @@
 //                         /review/set:<题目集> 这个题目集今天该做的 (再加 /all 还没掌握的全做, /kind:<题型> 这类的))
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
-//   #/read                阅读: 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
+//   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的; #/review/practice:leech 直接练难记卡、:starred 星标的)

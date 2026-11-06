@@ -138,11 +138,11 @@ export function renderLibrary({ store }) {
   }
 
   return {
-    title: '阅读',
+    title: '书斋',
     el: h(
       'section',
       { class: 'read-page' },
-      h('div', { class: 'page-head' }, h('h1', {}, '阅读'), h('span', { class: 'muted' }, '唐诗宋词和古代启蒙读物，原文免费读')),
+      h('div', { class: 'page-head' }, h('h1', {}, '书斋'), h('span', { class: 'muted' }, '唐诗宋词、古文和古代启蒙读物，原文免费读')),
       dailyCard(),
       recent.length
         ? h(
@@ -230,7 +230,7 @@ export function renderBook({ store }, id) {
     el: h(
       'section',
       { class: 'read-page' },
-      h('a', { class: 'back', href: '#/read' }, '← 阅读'),
+      h('a', { class: 'back', href: '#/read' }, '← 书斋'),
       h('h1', {}, `《${book.title}》`),
       h('p', { class: 'muted' }, `${book.era} · ${book.author} · ${book.count} ${book.unit}`),
       h('p', {}, book.intro),
@@ -268,7 +268,7 @@ export function renderPiece({ store, go }, id, n) {
     const on = !isFav(store.data.reading, pid);
     store.setFav(pid, on);
     drawFav();
-    toast(on ? '收藏了，在「阅读」页能找到' : '取消收藏了');
+    toast(on ? '收藏了，在「书斋」页能找到' : '取消收藏了');
   };
   drawFav();
 

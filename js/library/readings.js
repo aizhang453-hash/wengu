@@ -1,5 +1,7 @@
 // 读音特别的字 (通假字、古文里的多音字、姓): 手写的, 不是 tools/library.mjs 生成的。
-// 照现在的语文课本和普通话审音标; 有旧读的写在说明里 (「斜」旧读 xiá)。拿不准、两种读法都规范的不标 (作姓的「宓」「乐」「隗」)。
+// 照现在的语文课本和《普通话异读词审音表》(1985, 2016 修订稿); 有旧读的写在说明里 (「斜」旧读 xiá)。
+// 跟审音表不一样的 (课本、词典照旧读的「期（jī）年」, 审音表统读 qī) 在说明里写明审音表的读法。通假字读本字的音 (「知」同「智」读 zhì), 审音表不管。
+// 拿不准、两种读法都规范的不标 (作姓的「宓」「乐」「隗」)。
 //   at: 在哪句里 (简体; 这几个字在书里出现几次都标), ch: 标哪几个字 (at 里的), py: 拼音, note: 说明,
 //   say: 朗读时换成这几个字 (读音一样; 系统会念错的才写), book: 只在这本书里 (不写是所有的书)
 // tests/reading.test.js 会检查每条的 at 在书里真的有
@@ -62,7 +64,7 @@ export const READINGS = [
   { book: 'guwen', at: '或不焉', ch: '不', py: 'fǒu', note: '同「否」', say: '否' },
   { book: 'guwen', at: '又何间焉', ch: '间', py: 'jiàn', note: '参与', say: '见' },
   { book: 'guwen', at: '朝服衣冠', ch: '朝', py: 'zhāo', note: '早晨', say: '招' },
-  { book: 'guwen', at: '期年之后', ch: '期', py: 'jī', note: '满一年', say: '基' },
+  { book: 'guwen', at: '期年之后', ch: '期', py: 'jī', note: '满一年（课本读 jī；审音表定「期」统读 qī）', say: '基' },
   // 有注释和译文的名篇 (library/yizhu/guwen.js) 里的
   { book: 'guwen', at: '一一为具言所闻', ch: '为', py: 'wèi', note: '给，向', say: '位' },
   { book: 'guwen', at: '不足为外人道也', ch: '为', py: 'wèi', note: '对，向', say: '位' },
@@ -126,7 +128,7 @@ export const READINGS = [
   { book: 'guwen', at: '画栋朝飞', ch: '朝', py: 'zhāo', note: '早晨', say: '招' },
   { book: 'guwen', at: '槛外长江', ch: '槛', py: 'jiàn', note: '栏杆', say: '见' },
   { book: 'guwen', at: '终鲜兄弟', ch: '鲜', py: 'xiǎn', note: '少，这里指没有', say: '显' },
-  { book: 'guwen', at: '外无期功', ch: '期', py: 'jī', note: '期功：服丧一年叫「期」', say: '基' },
+  { book: 'guwen', at: '外无期功', ch: '期', py: 'jī', note: '期功：服丧一年叫「期」（审音表「期」统读 qī，这里照课本的习惯读 jī）', say: '基' },
   { book: 'guwen', at: '除臣洗马', ch: '洗', py: 'xiǎn', note: '洗马：官名', say: '显' },
   { book: 'guwen', at: '朝不虑夕', ch: '朝', py: 'zhāo', note: '早晨', say: '招' },
   { book: 'guwen', at: '更相为命', ch: '更', py: 'gēng', note: '交替，互相', say: '耕' },
@@ -134,7 +136,7 @@ export const READINGS = [
   { book: 'guwen', at: '秦王不说', ch: '说', py: 'yuè', note: '同「悦」，高兴', say: '悦' },
   { book: 'guwen', at: '以头抢地', ch: '抢', py: 'qiāng', note: '撞', say: '枪' },
   { book: 'guwen', at: '要离之刺', ch: '要', py: 'yāo', note: '要离，人名', say: '邀' },
-  { book: 'guwen', at: '刺韩傀也', ch: '傀', py: 'guī', note: '韩傀，人名', say: '归' },
+  { book: 'guwen', at: '刺韩傀也', ch: '傀', py: 'guī', note: '韩傀，人名，旧注音「瑰」（审音表「傀」统读 kuǐ）', say: '归' },
   { book: 'guwen', at: '屈平属草稿', ch: '属', py: 'zhǔ', note: '撰写', say: '嘱' },
   { book: 'guwen', at: '谗人间之', ch: '间', py: 'jiàn', note: '离间', say: '见' },
   { book: 'guwen', at: '靡不毕见', ch: '见', py: 'xiàn', note: '同「现」', say: '现' },
@@ -156,7 +158,7 @@ export const READINGS = [
   { book: 'guwen', at: '自缪公以来', ch: '缪', py: 'mù', note: '同「穆」', say: '穆' },
   { book: 'guwen', at: '见长人者', ch: '长', py: 'zhǎng', note: '长人者，治理百姓的人', say: '掌' },
   { book: 'guwen', at: '至莫夜月明', ch: '莫', py: 'mù', note: '同「暮」', say: '暮' },
-  { book: 'guwen', at: '之无射也', ch: '射', py: 'yì', note: '无射，钟名', say: '亦' },
+  { book: 'guwen', at: '之无射也', ch: '射', py: 'yì', note: '无射，钟名，旧读 yì（审音表「射」统读 shè）', say: '亦' },
   { book: 'guwen', at: '儿号寒', ch: '号', py: 'háo', note: '哭叫', say: '毫' },
   { book: 'guwen', at: '不繇其统', ch: '繇', py: 'yóu', note: '同「由」', say: '由' },
   { book: 'guwen', at: '乃分之宜', ch: '分', py: 'fèn', note: '本分', say: '份' },
@@ -171,7 +173,7 @@ export const READINGS = [
   { book: 'guwen', at: '收责于薛', ch: '责', py: 'zhài', note: '同「债」', say: '债' },
   { book: 'guwen', at: '责毕收', ch: '责', py: 'zhài', note: '同「债」', say: '债' },
   { book: 'guwen', at: '以责赐诸民', ch: '责', py: 'zhài', note: '同「债」', say: '债' },
-  { book: 'guwen', at: '后期年', ch: '期', py: 'jī', note: '期年，一整年', say: '基' },
+  { book: 'guwen', at: '后期年', ch: '期', py: 'jī', note: '期年，一整年（课本读 jī；审音表统读 qī）', say: '基' },
   { book: 'guwen', at: '因而贾利之', ch: '贾', py: 'gǔ', note: '做买卖', say: '古' },
   { book: 'guwen', at: '车五十乘', ch: '乘', py: 'shèng', note: '辆', say: '剩' },
   { book: 'guwen', at: '车百乘', ch: '乘', py: 'shèng', note: '辆', say: '剩' },
@@ -206,10 +208,10 @@ export const READINGS = [
   { book: 'guwen', at: '没死以闻', ch: '没', py: 'mò', note: '没死，冒死', say: '莫' },
   { book: 'guwen', at: '则为之计深远', ch: '为', py: 'wèi', note: '替', say: '位' },
   { book: 'guwen', at: '为之泣', ch: '为', py: 'wèi', note: '为了', say: '位' },
-  { book: 'guwen', at: '中间期年耳', ch: '期', py: 'jī', note: '期年，一整年', say: '基' },
+  { book: 'guwen', at: '中间期年耳', ch: '期', py: 'jī', note: '期年，一整年（课本读 jī；审音表统读 qī）', say: '基' },
   { book: 'guwen', at: '贾十倍', ch: '贾', py: 'jià', note: '同「价」', say: '价' },
   { book: 'guwen', at: '以食吾躯', ch: '食', py: 'sì', note: '养活', say: '饲' },
-  { book: 'guwen', at: '坐皋比者', ch: '比', py: 'pí', note: '皋比，虎皮', say: '皮' },
+  { book: 'guwen', at: '坐皋比者', ch: '比', py: 'pí', note: '皋比，虎皮，词典读 gāopí（审音表「比」统读 bǐ）', say: '皮' },
   { book: 'guwen', at: '滑稽之流', ch: '滑稽', py: 'gǔjī', note: '能言善辩、言辞诙谐；今天读 huájī', say: '古机' },
 
   // ---- 唐诗、宋词 ----

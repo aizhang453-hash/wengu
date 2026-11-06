@@ -508,3 +508,43 @@ test('版本注释拆成一条一条: 「；」连着的拆开, 冒号可有可�
   assert.deepEqual(variantsOf(['食 马者 通： 饲']), [{ w: '食马者', kind: '通', alt: '饲' }]);
   assert.deepEqual(variantsOf(undefined), []);
 });
+
+test('组诗里的一首, 题目写明是其几 (对照《全唐诗》)', async () => {
+  const find = (book, a, first) => book.pieces.find((p) => p.a === a && p.p[0].startsWith(first));
+  const tang = await loadBook('tangshi');
+  assert.equal(find(tang, '王维', '君自故乡来').t, '杂诗三首·其二'); // 书里只收了一首: 写一共几首
+  assert.equal(find(tang, '沈佺期', '闻道黄龙戍').t, '杂诗三首·其三');
+  assert.equal(find(tang, '张九龄', '江南有丹橘').t, '感遇十二首·其七');
+  assert.equal(find(tang, '李白', '金樽清酒').t, '行路难·其一'); // 整组都收了
+  assert.equal(find(tang, '卢纶', '月黑雁飞高').t, '塞下曲六首·其三');
+  assert.equal(find(tang, '李商隐', '昨夜星辰').t, '无题·昨夜星辰昨夜风'); // 无题照旧用第一句区分
+  const hant = await loadBook('tangshi', { hant: true });
+  assert.equal(find(hant, '崔顥', '君家何處住').t, '長干行四首·其一');
+  assert.ok(hant.pieces.every((p) => ![p.t, ...p.p].some((l) => l.includes('長幹'))));
+  const qj = await loadBook('qianjiashi');
+  assert.equal(find(qj, '杜甫', '两个黄鹂').t, '绝句四首·其三');
+  assert.equal(find(qj, '苏轼', '水光潋滟').t, '饮湖上初晴后雨二首·其二');
+  assert.equal(find(qj, '杜甫', '一片花飞').t, '曲江二首'); // 不是「曲江对酒」
+  assert.deepEqual(find(qj, '杜甫', '千家山郭').k.map(([, label]) => label), ['其三', '其五', '其一', '其七']);
+});
+
+test('繁体原文里转错的字改过来了 (只改繁体, 简体不变)', async () => {
+  const hant = async (id) => (await loadBook(id, { hant: true })).pieces.map((p) => [p.t, ...p.p].join('\n')).join('\n');
+  const find = async (id, a, first) => (await loadBook(id, { hant: true })).pieces.find((p) => p.a === a && p.p[0].startsWith(first));
+  assert.equal((await find('tangshi', '李白', '妾髮')).p[0].slice(0, 5), '妾髮初覆額');
+  assert.ok((await find('tangshi', '李白', '金樽')).p[0].includes('斗十千'));
+  assert.ok((await find('qianjiashi', '杜牧', '清明時節')).p[0].includes('欲斷魂'));
+  assert.ok((await hant('lunyu')).includes('《詩》云'));
+  assert.ok((await hant('guwen')).includes('余讀《離騷》'));
+  assert.ok((await hant('baijiaxing')).includes('鍾離'));
+  // 这些都是转错的写法, 哪本书里都不该有
+  const wrong = ['北鬥', '南鬥', '孤鬆', '長幹', '妾發', '《詩》雲', '《書》雲', '樑王', '鹹集', '趙威後', '慾斷魂', '吉孰兇', '餘讀'];
+  for (const { id } of BOOKS) {
+    const text = await hant(id);
+    for (const w of wrong) assert.ok(!text.includes(w), `${id} 里还有「${w}」`);
+  }
+  // 简体没受影响; 幼学琼林简繁都错了的「膏粱」一起改了
+  assert.ok((await loadBook('lunyu')).pieces.some((p) => p.p.some((l) => l.includes('《诗》云'))));
+  const yx = (await loadBook('youxueqionglin')).pieces.flatMap((p) => p.p).join('');
+  assert.ok(yx.includes('富人之口厌膏粱') && !yx.includes('膏梁'));
+});
