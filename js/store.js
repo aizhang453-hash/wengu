@@ -7,6 +7,7 @@ import { cleanPlan, planOf, DEFAULT_REVIEW_CAP, MAX_REVIEW_CAP } from './plan.js
 import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
 import { cleanPet, mergePet, bankDays } from './pet.js';
 import { cleanArcade, mergeArcade, addScore } from './arcade.js';
+import { cleanReading, mergeReading } from './reading.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -29,10 +30,11 @@ export function newId() {
 // undone: 撤销了的复习记录 (跟 revlog 一样存), 同步时别从另一台设备又合回来; 留 120 天
 // pet: 小乌龟温温 (pet.js), 还没见过是 null
 // arcade: 游戏厅的成绩 (arcade.js), 没玩过是 null
+// reading: 阅读的收藏、读到哪 (reading.js), 没读过是 null
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null };
+  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null, reading: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -270,6 +272,7 @@ export function cleanData(raw) {
   data.settings = cleanSettings(raw?.settings);
   data.pet = cleanPet(raw?.pet);
   data.arcade = cleanArcade(raw?.arcade);
+  data.reading = cleanReading(raw?.reading);
   const seen = new Set();
   if (raw && Array.isArray(raw.mistakes)) {
     for (const m of raw.mistakes) {
@@ -1068,6 +1071,21 @@ export class Store {
     return { rank, best };
   }
 
+  // 阅读: 收藏 / 取消收藏一篇 (pid: '书:第几篇')
+  setFav(pid, on, now = Date.now()) {
+    const r = this.data.reading ?? { favs: {}, last: {} };
+    this.data.reading = cleanReading({ ...r, favs: { ...r.favs, [pid]: { on: on ? 1 : 0, at: Math.max(now, (r.favs[pid]?.at ?? 0) + 1) } } });
+    this.save();
+  }
+
+  // 阅读: 记下这本书读到第几篇 (打开一篇就记)
+  markRead(book, i, now = Date.now()) {
+    const r = this.data.reading ?? { favs: {}, last: {} };
+    if (r.last[book]?.i === i && now - r.last[book].at < 60e3) return; // 一分钟里同一篇不用再存 (省得同步来回推)
+    this.data.reading = cleanReading({ ...r, last: { ...r.last, [book]: { i, at: Math.max(now, (r.last[book]?.at ?? 0) + 1) } } });
+    this.save();
+  }
+
   // 温温: 改名字、换装扮 (stamp: 记下改的时间, 同步时听后改的); 解锁、长大、庆祝过的直接合
   updatePet(patch, { stamp = false, now = Date.now() } = {}) {
     const old = this.data.pet ?? cleanPet({});
@@ -1162,6 +1180,7 @@ export class Store {
     this.data.settings = mergeSettings(this.data.settings, incoming.settings);
     this.data.pet = mergePet(this.data.pet, incoming.pet);
     this.data.arcade = mergeArcade(this.data.arcade, incoming.arcade);
+    this.data.reading = mergeReading(this.data.reading, incoming.reading);
     this.applyParameters({ recompute: true });
     for (const q of incoming.qsets) {
       const i = this.data.qsets.findIndex((x) => x.id === q.id);

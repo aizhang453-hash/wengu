@@ -45,7 +45,7 @@ import {
 
 const PREFS_KEY = 'wengu:pet';
 // 出来的页面
-const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'qset', 'search', 'games', 'sync', 'settings', 'arcade']);
+const SHOW_ON = new Set(['home', 'set', 'folder', 'stats', 'mistakes', 'qset', 'search', 'games', 'sync', 'settings', 'arcade', 'read', 'read-book']);
 const QUOTE_EVERY = [6 * 60e3, 12 * 60e3]; // 自己念《论语》: 隔 6–12 分钟一次
 
 // 这台设备上的: hidden 不显示, quiet 不自己说话 (没设过算不说: 默认只在点它的时候说话), mini 缩成小圆点, greeted 哪天打过招呼, cleared 哪天说过「背完了」,

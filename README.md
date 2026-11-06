@@ -26,6 +26,7 @@
 | **卡片集** | 单词卡、学习（选择、判断、拼写、听写）、测试、学习游戏、标注图；支持格式、图片、录音与在线词典 |
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **错题集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
+| **阅读** | 唐诗宋词和古代启蒙读物原文免费读：唐诗三百首、宋词三百首、三字经、百家姓、千字文、弟子规、千家诗、声律启蒙、增广贤文、朱子家训、幼学琼林；每日一首、搜索、收藏、接着读、简体 / 繁体、朗读；一键做成「接下句」卡片集来背 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -35,7 +36,7 @@
 
 ### 导航
 
-- 左上角 ☰：今日、错题集、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
+- 左上角 ☰：今日、错题集、阅读、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
 - 右上角「新建」：新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹。
 
 ### 卡片集
@@ -60,6 +61,15 @@
 - 重做按 FSRS 安排：做错的题次日开始，未作答的练习题当日即可练习；连续答对 3 次即为掌握；可按题型专项练习。
 - 批量操作：点击「选择」后勾选题目，或先按题型筛选、搜索，再「全选」，可删除或移到其他题目集。
 - v1.49 以前记录的题目会自动分组：题型写成「AP微积分·乘法法则」的归入「AP微积分」（题目集中只显示「乘法法则」），SAT 题型归入「SAT 阅读写作」「SAT 数学」，其余以题型为名；没有题型的归入「未分类」。v1.42 以前的旧题目集也会恢复为同名的题目集。
+
+### 阅读
+
+- 书架：《唐诗三百首》《宋词三百首》和九本古代启蒙读物。原文来自开源项目 chinese-poetry，繁体的自动转成简体显示（宋词原本是简体，繁体是转回去的）；读一篇时可以切换，个别字可能转换有出入。宋词资料丢掉的生僻字已照《全宋词》补回。
+- 读：点书进目录，「接着读」回到上次读到的地方；按 ← → 换篇；可以调字号、朗读。
+- 每日一首：每天从《千家诗》里选一首，显示在「今日」和书架上，每台设备上是同一首。
+- 搜索：在书架上按题目、作者或句子找。
+- 收藏：读一篇时点「收藏」，在书架下方找到。收藏和读到哪会跟着多设备同步、备份。
+- 做成卡片背：「接下句」是正面一句、背面下一句（诗的第一张是「题目第一句」），「整首 / 整段」是正面题目、背面全文；可以只做这一篇，也可以整本做成一个卡片集。
 
 ### 导入
 
@@ -103,7 +113,7 @@
 
 ## 更新记录
 
-当前版本 **v1.50**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.51**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -113,6 +123,7 @@
 npm start        # 本地运行：http://localhost:8000
 npm test         # 运行测试
 npm run sw       # 新增 js 文件后，更新离线缓存清单
+node tools/library.mjs <原文文件夹> <opencc-js 的 full.js>   # 重新生成书库（一般不用；要先下载 chinese-poetry 和 opencc-js，放哪些文件见脚本开头）
 ```
 
 直接打开 `index.html` 无法运行（浏览器不允许从本地文件加载 JavaScript 模块），请使用上述本地服务器。
@@ -128,11 +139,12 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
   - `mistakes.js` 错题集（题目集列表、题目集页）、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
   - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
-  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单
+  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
+  - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补）
   - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
@@ -146,4 +158,5 @@ npm run sw       # 新增 js 文件后，更新离线缓存清单
 ## 许可证
 
 [PolyForm Strict 1.0.0](LICENSE)：可查看代码、个人使用，不可修改后再发布或商用。
+书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。

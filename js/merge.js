@@ -18,6 +18,7 @@ import { mergeMistake, mergeQset, PREFIX as MISTAKE_PREFIX, QSET_PREFIX } from '
 import { mergeLogs, subtractLogs } from './revlog.js';
 import { cleanPet, mergePet } from './pet.js';
 import { cleanArcade, mergeArcade } from './arcade.js';
+import { cleanReading, mergeReading } from './reading.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -143,5 +144,6 @@ export function mergeData(local, remote) {
     settings: mergeSettings(local.settings, remote.settings),
     pet: mergePet(cleanPet(local.pet), cleanPet(remote.pet)),
     arcade: mergeArcade(cleanArcade(local.arcade), cleanArcade(remote.arcade)),
+    reading: mergeReading(cleanReading(local.reading), cleanReading(remote.reading)),
   };
 }
