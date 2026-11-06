@@ -89,7 +89,7 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         ),
         item('#/', 'home', '今日', { badge: due, match: (x) => x === '#/' || x === '#' || starts('#/review')(x) }),
         item('#/mistakes', 'book', '错题集', { badge: mistakes, match: starts('#/mistakes') }),
-        item('#/read', 'read', '阅读', { match: starts('#/read') }),
+        item('#/read', 'read', '书斋', { match: starts('#/read') }),
         item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
         folders.length
           ? [
