@@ -9,6 +9,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { HANT_FIX } from './hant-fix.mjs';
 
 const [src, openccPath = 'opencc-js'] = process.argv.slice(2);
 if (!src) {
@@ -220,6 +221,23 @@ function fixPoems(id, pieces) {
   });
   fixes.forEach(([a, first], i) => {
     if (!used.has(i)) throw new Error(`${id}: 要改题目的「${a} ${first}」没找到`);
+  });
+  return out;
+}
+
+// 繁体里转错的字 (表在 tools/hant-fix.mjs): 每条是一小段原文和改成的样子, 题目和正文都找; 有一条没用上就报错 (资料变了要重新看)
+function fixHant(id, pieces) {
+  const fixes = HANT_FIX[id] ?? [];
+  const used = fixes.map(() => 0);
+  const fix = (s) =>
+    fixes.reduce((x, [a, b], i) => {
+      const parts = x.split(a);
+      used[i] += parts.length - 1;
+      return parts.join(b);
+    }, s);
+  const out = pieces.map((x) => ({ ...x, t: fix(x.t), p: x.p.map(fix) }));
+  fixes.forEach(([a], i) => {
+    if (!used[i]) throw new Error(`${id}: 繁体要改的「${a}」没找到`);
   });
   return out;
 }
@@ -467,7 +485,12 @@ const BOOKS = [
     unit: '章',
     chain: 'piece',
     intro: '用对偶的句子讲天文、地理、人物、典故，读了能知道很多成语的来历。明代程登吉编，清代邹圣脉增补。',
-    build: (d) => ({ author: d.author, groups: d.content.map((v) => tidy(v.title)), pieces: d.content.flatMap((v, gi) => v.content.map((c) => ({ t: tidy(c.chapter), g: gi, p: c.paragraphs.map(tidy) }))) }),
+    // 资料里「膏粱」(精美的饭食)、「粱肉」写成了「膏樑」「樑肉」(简体就成了「膏梁」「梁肉」), 简繁一起改
+    build: (d) => ({
+      author: d.author,
+      groups: d.content.map((v) => tidy(v.title)),
+      pieces: d.content.flatMap((v, gi) => v.content.map((c) => ({ t: tidy(c.chapter), g: gi, p: c.paragraphs.map((l) => tidy(l).replace(/膏樑/g, '膏粱').replace(/樑肉/g, '粱肉')) }))),
+    }),
   },
 ];
 
@@ -512,7 +535,8 @@ for (const b of BOOKS) {
   const title = tidy(b.title ?? d.title);
   const hantOf = b.source === 'hans' ? s2t : (s) => s;
   const hans = { id: b.id, title: t2s(title), author: t2s(tidy(built.author)), groups: built.groups.map(t2s), pieces: piecesText(pieces, t2s) };
-  const hant = { id: b.id, title: hantOf(title), author: hantOf(tidy(built.author)), groups: built.groups.map(hantOf), pieces: piecesText(b.source === 'hans' ? hans.pieces : pieces, hantOf) };
+  // 繁体里转错的字改过来 (tools/hant-fix.mjs); 简体已经转好了, 不受影响
+  const hant = { id: b.id, title: hantOf(title), author: hantOf(tidy(built.author)), groups: built.groups.map(hantOf), pieces: fixHant(b.id, piecesText(b.source === 'hans' ? hans.pieces : pieces, hantOf)) };
   const head = `// 《${hans.title}》: tools/library.mjs 从 chinese-poetry (MIT, 见 LICENSE-chinese-poetry.txt) 生成, 别手改`;
   writeFileSync(join(root, `js/library/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文' : '繁体原文自动转的简体'}`, hans));
   writeFileSync(join(root, `js/library/hant/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文自动转的繁体' : '繁体原文'}`, hant));
