@@ -94,6 +94,29 @@ export function parseRepo(text) {
   return m ? { owner: m[1], repo: m[2] } : null;
 }
 
+// ---- 扫码连接的链接: #/sync/connect/<这一串> ----
+// base64url({ r: 用户名/仓库名, t: 密钥, e/s: 密钥哪天过期 })。
+// 只连 GitHub: v1.49 以前链接里还带着连哪个服务器 (a, 测试用的假 GitHub), 别人做一个假链接就能把卡片传到自己的服务器上,
+// 页面上写的仓库名却可以是你自己的。所以不再放进去, 别人的链接里有也不认。
+export function connectLinkData(config) {
+  const known = knownExpiry(config);
+  const json = JSON.stringify({ r: `${config.owner}/${config.repo}`, t: config.token, ...(known.expirySource ? { e: known.expiresAt, s: known.expirySource } : {}) });
+  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// 看不懂返回 null
+export function parseConnectLink(data) {
+  let info = null;
+  try {
+    info = JSON.parse(atob(String(data).replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
+  const r = parseRepo(info?.r);
+  if (!r || typeof info.t !== 'string' || !info.t) return null;
+  return { ...r, token: info.t, expiry: { expiresAt: info.e, expirySource: info.s } };
+}
+
 // ---- 字和 base64 互换 (中文要先变成 UTF-8) ----
 function bytesToB64(bytes) {
   let bin = '';

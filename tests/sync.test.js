@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, INDEX_PATH, PACK_BYTES, encodePack, decodePack, GitHubRepo, expiryFromDate, knownExpiry, expiryInfo, expiryUnknown, SyncManager, loadConfig } from '../js/sync.js';
+import { syncOnce, parseRepo, utf8ToB64, b64ToUtf8, extOf, typeOf, DATA_PATH, INDEX_PATH, PACK_BYTES, encodePack, decodePack, GitHubRepo, expiryFromDate, knownExpiry, expiryInfo, expiryUnknown, SyncManager, loadConfig, connectLinkData, parseConnectLink } from '../js/sync.js';
 import { Store, makeCard } from '../js/store.js';
 
 function memoryStorage() {
@@ -82,6 +82,23 @@ test('仓库名: 用户名/仓库名 或者网址都行', () => {
   assert.deepEqual(parseRepo(' https://github.com/a-b/c.d.git/ '), { owner: 'a-b', repo: 'c.d' });
   assert.equal(parseRepo('just-a-name'), null);
   assert.equal(parseRepo('a/b/c'), null);
+});
+
+test('扫码连接的链接: 来回不变; 只连 GitHub, 链接里写着别的服务器也不认', () => {
+  const at = Date.UTC(2027, 9, 12);
+  const config = { owner: 'aizhang453-hash', repo: 'wengu-data', token: 'github_pat_abc', api: 'http://localhost:9999', expiresAt: at, expirySource: 'user', lastSyncAt: 5 };
+  const data = connectLinkData(config);
+  assert.match(data, /^[A-Za-z0-9_-]+$/); // 放进网址不用转
+  assert.equal('a' in JSON.parse(atob(data.replace(/-/g, '+').replace(/_/g, '/'))), false); // 这台设备的测试服务器不放进去
+  assert.deepEqual(parseConnectLink(data), { owner: 'aizhang453-hash', repo: 'wengu-data', token: 'github_pat_abc', expiry: { expiresAt: at, expirySource: 'user' } });
+  // 别人做的链接: 仓库名写成你的, 卡片却传到他的服务器 —— 服务器那项扔掉
+  const evil = btoa(JSON.stringify({ r: 'aizhang453-hash/wengu-data', t: 'github_pat_evil', a: 'https://evil.example' }));
+  const parsed = parseConnectLink(evil);
+  assert.equal(parsed.token, 'github_pat_evil');
+  assert.equal('api' in parsed, false);
+  assert.equal(JSON.stringify(parsed).includes('evil.example'), false);
+  // 看不懂的
+  for (const bad of ['', '!!!', btoa('not json'),btoa('{"r":"a/b"}'), btoa('{"r":"a","t":"x"}'), btoa('{"r":"a/b","t":5}'), btoa('null')]) assert.equal(parseConnectLink(bad), null, bad);
 });
 
 test('中文来回转 base64 不坏; 后缀和类型', () => {
