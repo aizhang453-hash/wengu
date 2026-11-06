@@ -1,7 +1,7 @@
 // 多设备同步的设置页: 教怎么建仓库和密钥, 连接 / 断开, 手机扫码连接
 
 import { h, fill, toast } from '../dom.js';
-import { loadConfig, saveConfig, parseRepo, GitHubRepo, SyncError, expiryFromDate, knownExpiry, expiryInfo } from '../sync.js';
+import { loadConfig, saveConfig, parseRepo, GitHubRepo, SyncError, expiryFromDate, knownExpiry, expiryInfo, connectLinkData, parseConnectLink } from '../sync.js';
 import { qrSvg } from '../qr.js';
 import { siteBase, onIosWeb, appLink } from '../platform.js';
 
@@ -243,13 +243,7 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
 
   const qrBox = h('div', { class: 'qr-box', hidden: true });
   const showQr = () => {
-    const c = loadConfig();
-    const known = knownExpiry(c);
-    const payload = btoa(JSON.stringify({ r: `${c.owner}/${c.repo}`, t: c.token, ...(c.api ? { a: c.api } : {}), ...(known.expirySource ? { e: known.expiresAt, s: known.expirySource } : {}) }))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-    const link = `${siteBase()}#/sync/connect/${payload}`;
+    const link = `${siteBase()}#/sync/connect/${connectLinkData(loadConfig())}`;
     qrBox.hidden = !qrBox.hidden;
     fill(
       qrBox,
@@ -410,16 +404,10 @@ export function renderSync({ go, syncer }, sub = null, data = null) {
 }
 
 function renderConnectLink({ go, syncer }, data) {
-  let info = null;
-  try {
-    info = JSON.parse(atob(data.replace(/-/g, '+').replace(/_/g, '/')));
-  } catch {
-    info = null;
-  }
-  const r = parseRepo(info?.r);
+  const r = parseConnectLink(data);
   // 网址里有密钥, 马上从地址栏和历史记录里换掉
   history.replaceState(null, '', '#/sync/connect');
-  if (!r || !info?.t) {
+  if (!r) {
     return { title: '连接', el: h('section', { class: 'empty' }, h('h1', {}, '连接链接无效'), h('a', { class: 'btn primary', href: '#/sync' }, '同步设置')) };
   }
   const msg = h('p', { class: 'sync-msg' });
@@ -431,7 +419,8 @@ function renderConnectLink({ go, syncer }, data) {
         btn.disabled = true;
         msg.textContent = '正在连接……';
         try {
-          await connect(syncer, r.owner, r.repo, info.t, info.a, { expiresAt: info.e, expirySource: info.s });
+          // 只连 GitHub (链接里写着别的服务器也不认, 见 parseConnectLink); apiBase 是这台设备自己设的测试用假 GitHub
+          await connect(syncer, r.owner, r.repo, r.token, apiBase(), r.expiry);
           toast('已连接');
           go('#/');
         } catch (e) {
