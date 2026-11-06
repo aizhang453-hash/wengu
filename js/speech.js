@@ -196,14 +196,34 @@ function isAppleWebKit() {
 
 // 选哪个声音。苹果的: 不选, 只告诉它语言, 用系统默认的声音
 // (列表里有些声音其实用不了, 比如没下载的、Siri 的, 选上了一点声音都没有)。
-// 别的浏览器: 有的光设语言不够, 要选一个; 先挑本机就有的 (安卓写成 en_US)
+// 别的浏览器: 有的光设语言不够, 要选一个 (bestVoice)
 function pickVoice(synth, code) {
   if (isAppleWebKit()) return null;
+  return bestVoice(synth.getVoices(), code);
+}
+
+// 苹果电脑上的「趣味声音」: 机器人腔、老爷爷老奶奶、唱歌的…… 中文列表里也有 (Eddy、Grandma 这些读中文很怪), 能不用就不用
+const ODD_VOICE = /^(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Kathy|Ralph)\b/;
+const FINE_VOICE = /premium|enhanced|增强|高品质|优化|natural|neural/i;
+
+// 按分数挑: 语言一样的 > 同一种语言别的地方的 (念普通话时台湾的比粤语的好); 不要趣味声音;
+// 系统默认的、增强版的、本机就有的 (不用联网, 长的也不会念到一半停) 加分。都没有返回 null (安卓写成 en_US 也认)
+export function bestVoice(voices, code) {
   const base = code.split('-')[0];
-  const voices = synth.getVoices().map((v) => [v, v.lang.replace('_', '-')]);
-  const exact = voices.filter(([, l]) => l === code);
-  const near = voices.filter(([, l]) => l.split('-')[0] === base);
-  return (exact.find(([v]) => v.localService) ?? exact[0] ?? near.find(([v]) => v.localService) ?? near[0])?.[0] ?? null;
+  let best = null;
+  let top = -Infinity;
+  for (const v of voices) {
+    const lang = String(v.lang ?? '').replace('_', '-').replace(/^yue(-HK)?$/i, 'zh-HK'); // 粤语有的写成 yue-HK (苹果电脑上的 Chrome)
+    const cantonese = base === 'zh' && code !== 'zh-HK' && lang === 'zh-HK';
+    const fit = lang === code ? 2 : lang.split('-')[0] === base ? (cantonese ? 0.5 : 1) : 0;
+    if (!fit) continue;
+    const score = fit * 100 - (ODD_VOICE.test(v.name) ? 1000 : 0) + (v.default ? 20 : 0) + (FINE_VOICE.test(v.name) ? 10 : 0) + (v.localService ? 5 : 0);
+    if (score > top) {
+      top = score;
+      best = v;
+    }
+  }
+  return best;
 }
 
 // 念不出来时说一声, 不然一点动静都没有, 不知道怎么回事
