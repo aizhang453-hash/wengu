@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { READINGS } from '../js/library/readings.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -273,4 +274,62 @@ test('收藏、读到哪: 存、洗、同步合并 (听后改的)、备份', () 
   other2.importBackup(store.exportBackup(), 6000);
   assert.equal(isFav(other2.data.reading, 'dizigui:0'), true);
   assert.deepEqual(other2.data.reading.last.qianjiashi, { i: 8, at: 2000 });
+});
+
+test('读音特别的字: 清单每条都在书里找得到; 标在对的字上 (繁体一样长的也标); 朗读换成同音字', async () => {
+  const PINYIN = /^[a-zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü]+$/;
+  const data = Object.fromEntries(await Promise.all(BOOKS.map(async (b) => [b.id, await loadBook(b.id)])));
+  const hant = Object.fromEntries(await Promise.all(BOOKS.map(async (b) => [b.id, await loadBook(b.id, { hant: true })])));
+  for (const r of READINGS) {
+    assert.ok(r.at.includes(r.ch), `${r.at} 里没有 ${r.ch}`);
+    assert.ok(PINYIN.test(r.py), `${r.at}: 拼音 ${r.py}`);
+    assert.ok(r.note, `${r.at}: 没写说明`);
+    if (r.say) assert.equal([...r.say].length, [...r.ch].length, `${r.at}: 换的字数不对`);
+    if (r.book) assert.ok(bookOf(r.book), r.book);
+    const where = (r.book ? [r.book] : BOOKS.map((b) => b.id)).filter((id) => data[id].pieces.some((p) => [p.t, ...p.p].some((l) => l.includes(r.at))));
+    assert.ok(where.length, `「${r.at}」在书里找不到`);
+  }
+  // 标出来的那几行, 繁体一样长 (位置对得上)
+  let marked = 0;
+  for (const b of BOOKS) {
+    data[b.id].pieces.forEach((p, i) => {
+      for (const m of readingsOf(b.id, p)) {
+        marked++;
+        const hans = m.line < 0 ? p.t : p.p[m.line];
+        const t = hant[b.id].pieces[i];
+        const trad = m.line < 0 ? t.t : t.p[m.line];
+        assert.equal(hans.slice(m.at, m.at + m.len), m.ch);
+        assert.equal(trad.length, hans.length, `${b.id}「${p.t}」第 ${m.line} 行繁简不一样长`);
+      }
+    });
+  }
+  assert.ok(marked >= READINGS.length);
+
+  const xueer = data.lunyu.pieces[0];
+  const marks = readingsOf('lunyu', xueer);
+  const yue = marks.find((m) => m.ch === '说');
+  assert.equal(xueer.p[yue.line].slice(yue.at, yue.at + 1), '说');
+  assert.equal(yue.py, 'yuè');
+  assert.ok(marks.some((m) => m.ch === '曾' && m.py === 'zēng'));
+  assert.ok(marks.some((m) => m.ch === '弟' && m.py === 'tì'));
+  // 同一个字两条都标到 (「好学」「好之者」) 只留一条
+  const keys = marks.map((m) => `${m.line}:${m.at}`);
+  assert.equal(new Set(keys).size, keys.length);
+  // 朗读: 换成同音字
+  const said = spokenText('lunyu', xueer);
+  assert.ok(said.lines[0].includes('不亦悦乎') && !said.lines[0].includes('不亦说乎'));
+  assert.ok(said.lines.join('').includes('增子'));
+  const jjj = data.tangshi.pieces.find((p) => p.t === '将进酒');
+  assert.equal(spokenText('tangshi', jjj).title, '枪进酒');
+  // 只写说明、不换字的 (「斜」现在课本就读 xié): 朗读照原样
+  const wyx = data.tangshi.pieces.find((p) => p.t === '乌衣巷');
+  assert.ok(readingsOf('tangshi', wyx).some((m) => m.ch === '斜' && m.py === 'xié'));
+  assert.deepEqual(spokenText('tangshi', wyx).lines, wyx.p);
+  // 百家姓: 复姓两个字一起标
+  const bjx = data.baijiaxing.pieces.flatMap((p) => readingsOf('baijiaxing', p));
+  assert.ok(bjx.some((m) => m.ch === '万俟' && m.len === 2 && m.py === 'mòqí'));
+  // 拆开
+  assert.deepEqual(splitMarks('不亦说乎', [{ at: 2, len: 1, py: 'yuè' }]).map((x) => x.text), ['不亦', '说', '乎']);
+  assert.deepEqual(splitMarks('说', [{ at: 0, len: 1 }]).map((x) => x.text), ['说']);
+  assert.deepEqual(splitMarks('abc', []).map((x) => x.text), ['abc']);
 });

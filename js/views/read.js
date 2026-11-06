@@ -6,7 +6,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
@@ -270,27 +270,45 @@ export function renderPiece({ store, go }, id, n) {
   drawFav();
 
   let text = null; // 拿到的这一篇 (简体), 做卡片、朗读用
+  // 读音特别的字上面标拼音 (按简体那份找, 繁体一行一样长时标在同样的位置), 正文下面列出说明
+  const render = (hans, data) => {
+    const p = data.pieces[i];
+    const marks = readingsOf(id, hans.pieces[i]);
+    const shown = new Map(); // 「说 yuè」→ 说明 (按页面上的字)
+    const marked = (str, k, simple) => {
+      const mine = marks.filter((m) => m.line === k);
+      if (!mine.length || str.length !== simple.length) return str;
+      return splitMarks(str, mine).map((x) => {
+        if (!x.mark) return x.text;
+        shown.set(`${x.text} ${x.mark.py}`, x.mark.note);
+        return h('ruby', { class: 'read-ruby', title: `${x.mark.py}：${x.mark.note}` }, x.text, h('rt', {}, x.mark.py));
+      });
+    };
+    const hp = hans.pieces[i];
+    const title = h('h1', { class: 'read-title' }, marked(p.t, -1, hp.t));
+    const lines = p.p.map((l, j) => [p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null, h('p', {}, marked(l, j, hp.p[j] ?? ''))]);
+    return [
+      title,
+      // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
+      h('p', { class: 'read-by muted' }, [byline(p) || `《${data.title}》`, data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).join(' · ')),
+      // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
+      // 组诗在每首前面写「其一」「其二」
+      h('div', { class: `read-text${p.p.every((l) => l.length <= 24) ? ' verse' : ''}` }, lines),
+      shown.size ? h('p', { class: 'read-notes muted small' }, `读音：${[...shown].map(([k, note]) => `${k}（${note}）`).join('；')}`) : null,
+      // 版本注释 (唐诗三百首里的「明年 一作：年年」)
+      p.n?.length ? h('p', { class: 'read-notes muted small' }, `注：${p.n.join('；')}`) : null,
+    ];
+  };
   const draw = () =>
-    whenLoaded(body, id, { hant: prefs.hant }, (data) => {
-      const p = data.pieces[i];
-      if (!prefs.hant) text = { data, p };
-      return [
-        h('h1', { class: 'read-title' }, p.t),
-        // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
-        h('p', { class: 'read-by muted' }, [byline(p) || `《${data.title}》`, data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).join(' · ')),
-        // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
-        // 组诗在每首前面写「其一」「其二」
-        h(
-          'div',
-          { class: `read-text${p.p.every((l) => l.length <= 24) ? ' verse' : ''}` },
-          p.p.map((l, j) => [p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null, h('p', {}, l)]),
-        ),
-        // 版本注释 (唐诗三百首里的「明年 一作：年年」)
-        p.n?.length ? h('p', { class: 'read-notes muted small' }, `注：${p.n.join('；')}`) : null,
-      ];
-    });
+    Promise.all([loadBook(id), prefs.hant ? loadBook(id, { hant: true }) : null]).then(
+      ([hans, hant]) => {
+        text = { data: hans, p: hans.pieces[i] };
+        if (body.isConnected) fill(body, render(hans, hant ?? hans));
+      },
+      () => body.isConnected && fill(body, offline()),
+    );
   draw();
-  // 做卡片、朗读用简体的 (看繁体时另外拿)
+  // 做卡片、朗读用简体的
   const simple = () => (text ? Promise.resolve(text) : loadBook(id).then((data) => ({ data, p: data.pieces[i] })));
 
   const hantBtn = h('button', { class: 'btn small', type: 'button', title: '简体 / 繁体原文', onclick: () => ((prefs.hant = !prefs.hant), savePrefs(prefs), (body.lang = prefs.hant ? 'zh-Hant' : 'zh-Hans'), (hantBtn.textContent = prefs.hant ? '简体' : '繁体'), draw()) }, prefs.hant ? '简体' : '繁体');
@@ -307,9 +325,13 @@ export function renderPiece({ store, go }, id, n) {
         body.classList.add(`size-${prefs.size}`);
       },
     }, label);
-  const say = canSpeak()
-    ? h('button', { class: 'btn small', type: 'button', onclick: () => simple().then(({ p }) => speak(`${p.t}。${p.a ? `${p.a}。` : ''}${p.p.join('')}`, 'zh-CN', { rate: 0.85 })) }, icon('volume', 16), ' 朗读')
-    : null;
+  // 读音特别的字换成同音字念 (「不亦说乎」念「不亦悦乎」)
+  const readAloud = () =>
+    simple().then(({ p }) => {
+      const said = spokenText(id, p);
+      speak(`${said.title}。${p.a ? `${p.a}。` : ''}${said.lines.join('')}`, 'zh-CN', { rate: 0.85 });
+    });
+  const say = canSpeak() ? h('button', { class: 'btn small', type: 'button', onclick: readAloud }, icon('volume', 16), ' 朗读') : null;
 
   const prev = i > 0 ? i - 1 : null;
   const next = i + 1 < book.count ? i + 1 : null;
