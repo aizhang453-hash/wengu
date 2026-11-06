@@ -6,7 +6,7 @@
 //   只在首页、卡片集页这些地方; 背卡、测试、游戏、编辑、打字的时候不出来 (不挡按钮、不打扰)
 //   「温温的小窝」: 长到哪了、心情、装扮、起名字, 这台设备上显示不显示、自己说不说话、缩成小圆点
 
-import { h, fill, openDialog, askText, switchRow, dialogOpen } from '../dom.js';
+import { h, fill, toast, openDialog, askText, switchRow, dialogOpen } from '../dom.js';
 import { todayAll } from './plan.js';
 import { editCardDialog } from './cardedit.js';
 import { openExamList } from './examlist.js';
@@ -19,6 +19,9 @@ import { MATURE, timeOfDay, bestTime } from '../stats.js';
 import {
   STAGES,
   OUTFITS,
+  SPOTS,
+  spotOf,
+  toggleWear,
   stageOf,
   growth,
   xpOf,
@@ -64,7 +67,7 @@ function savePrefs(prefs) {
 }
 
 // ---- 画温温 (自己画的, 颜色跟着白天、夜间模式换) ----
-// stage 0 蛋 … 4 学霸龟; mood 见 pet.js; wear 戴的装扮; progress 离下一个样子 0–1 (蛋快孵出来时有裂缝)
+// stage 0 蛋 … 4 学霸龟; mood 见 pet.js; wears 戴着的装扮 (好几件); progress 离下一个样子 0–1 (蛋快孵出来时有裂缝)
 
 const FACES = {
   normal:
@@ -81,8 +84,6 @@ const FACES = {
 
 const WEAR = {
   scarf: '<path class="p-scarf p-line w2" d="M11 65 Q24 72 39 64 L40 71 Q24 80 10 72 Z"/><path class="p-scarf p-line w2" d="M29 72 L31 85 L37 83.5 L35 71 Z"/>',
-  flower:
-    '<g class="p-flower"><circle class="p-petal" cx="31" cy="35.6" r="2.9"/><circle class="p-petal" cx="35.2" cy="38.6" r="2.9"/><circle class="p-petal" cx="33.6" cy="43.4" r="2.9"/><circle class="p-petal" cx="28.4" cy="43.4" r="2.9"/><circle class="p-petal" cx="26.8" cy="38.6" r="2.9"/><circle class="p-gold" cx="31" cy="40" r="2.2"/></g>',
   hat: '<path class="p-hat p-line w2" d="M7 47 Q7 28 22 28 Q37 28 37 47 Z"/><rect class="p-hat2 p-line w2" x="5.5" y="42" width="33" height="6.5" rx="3.2"/><circle class="p-hat2 p-line w2" cx="22" cy="26" r="4.2"/>',
   glasses:
     '<circle class="p-glass p-line w18" cx="16" cy="52" r="5.4"/><circle class="p-glass p-line w18" cx="28" cy="52" r="5.4"/><path class="p-stroke w18" d="M21.4 51.5 Q22 50.5 22.6 51.5M10.6 51 L6.5 48.5"/>',
@@ -90,7 +91,16 @@ const WEAR = {
   crown: '<path class="p-gold p-line w2" d="M9 43 L10.5 30 L16 36.5 L22 27 L28 36.5 L33.5 30 L35 43 Z"/><circle class="p-gem" cx="22" cy="38" r="2"/>',
 };
 
-function turtleMarkup({ stage, mood, wear, progress }) {
+// 小红花: 没戴帽子别在头顶右边; 戴了帽子小一点, 别在帽子旁边 (学士帽右边挂着穗子, 别在左边)
+const FLOWER =
+  '<g class="p-flower"><circle class="p-petal" cx="31" cy="35.6" r="2.9"/><circle class="p-petal" cx="35.2" cy="38.6" r="2.9"/><circle class="p-petal" cx="33.6" cy="43.4" r="2.9"/><circle class="p-petal" cx="28.4" cy="43.4" r="2.9"/><circle class="p-petal" cx="26.8" cy="38.6" r="2.9"/><circle class="p-gold" cx="31" cy="40" r="2.2"/></g>';
+const FLOWER_AT = { '': [31, 40, 1], hat: [34.5, 43, 0.75], crown: [35, 41.5, 0.75], cap: [7, 43.5, 0.75] };
+function flowerOn(top) {
+  const [x, y, s] = FLOWER_AT[top] ?? FLOWER_AT[''];
+  return `<g transform="translate(${x} ${y}) scale(${s}) translate(-31 -40)">${FLOWER}</g>`;
+}
+
+function turtleMarkup({ stage, mood, wears = [], progress }) {
   if (stage === 0) {
     const crack = progress >= 0.5 ? '<path class="p-stroke w25" d="M41 54 L48 49 L54 56 L61 48 L68 55 L75 49 L83 55 L87 52"/>' : '';
     const z = mood === 'sleepy' ? '<text class="p-z p-z1" x="90" y="30">z</text><text class="p-z p-z2" x="98" y="20">Z</text>' : '';
@@ -101,9 +111,11 @@ function turtleMarkup({ stage, mood, wear, progress }) {
   const droop = mood === 'hungry' || mood === 'sad' ? 'translate(0 3)' : '';
   const hex = stage === 4 ? 'p-gold' : 'p-shell2';
   const spots = stage >= 3 ? '<circle class="p-shell2" cx="40" cy="67" r="4"/><circle class="p-shell2" cx="92" cy="67" r="4"/>' : '';
+  const top = wears.find((k) => spotOf(k) === 'head') ?? '';
   // 宝宝: 头上还顶着半个蛋壳 (戴了帽子就不顶了)
-  const shellCap = stage === 1 && !['hat', 'cap', 'crown'].includes(wear) ? '<path class="p-egg p-line w2" d="M7 46 L11 40 L15 45 L19 38.5 L23 44 L27 38.5 L31 45 L35 40 L37 45 Q36 31 22 31 Q8 31 7 46 Z"/>' : '';
-  const front = wear === 'scarf' ? '' : WEAR[wear] ?? '';
+  const shellCap = stage === 1 && !top ? '<path class="p-egg p-line w2" d="M7 46 L11 40 L15 45 L19 38.5 L23 44 L27 38.5 L31 45 L35 40 L37 45 Q36 31 22 31 Q8 31 7 46 Z"/>' : '';
+  // 头上的: 眼镜先画 (帽檐压着一点), 再帽子, 最后小红花
+  const front = (wears.includes('glasses') ? WEAR.glasses : '') + (top ? WEAR[top] : '') + (wears.includes('flower') ? flowerOn(top) : '');
   return `<ellipse class="p-shadow" cx="64" cy="93" rx="40" ry="4"/>
 <g transform="translate(64 92) scale(${scale}) translate(-64 -92)">
 <path class="p-skin p-line w25" d="M101 76 Q113 77 115 70 Q107 71.5 101 69.5 Z"/>
@@ -117,7 +129,7 @@ ${spots}
 <path class="p-rim p-line w25" d="M22 74 H110 Q114 74 114 78 Q114 82 110 82 H22 Q18 82 18 78 Q18 74 22 74 Z"/>
 <rect class="p-skin p-line w25" x="36" y="76" width="14" height="14" rx="6"/>
 <rect class="p-skin p-line w25" x="82" y="76" width="14" height="14" rx="6"/>
-${wear === 'scarf' ? WEAR.scarf : ''}
+${wears.includes('scarf') ? WEAR.scarf : ''}
 <g class="p-head" transform="${droop}"><g transform="${head}">
 <circle class="p-skin p-line" cx="22" cy="54" r="16"/>
 <ellipse class="p-cheek" cx="11" cy="60" rx="3.2" ry="2"/><ellipse class="p-cheek" cx="33" cy="60" rx="3.2" ry="2"/>
@@ -127,14 +139,90 @@ ${shellCap}${front}
 </g>`;
 }
 
-export function turtleSvg({ stage = 2, mood = 'normal', wear = '', progress = 0, size = 96 } = {}) {
+export function turtleSvg({ stage = 2, mood = 'normal', wears = [], progress = 0, size = 96 } = {}) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 120 100');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(Math.round((size * 100) / 120)));
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add('turtle', `mood-${mood}`, `stage-${stage}`);
-  svg.innerHTML = turtleMarkup({ stage, mood, wear, progress }); // 只有上面写死的图形, 没有用户的字
+  svg.innerHTML = turtleMarkup({ stage, mood, wears, progress }); // 只有上面写死的图形, 没有用户的字
+  return svg;
+}
+
+// ---- 温温的小窝: 一间小书房 ----
+// 窗外、挂钟跟着现在的时间 (白天、傍晚、夜里; 夜里台灯亮着); 墙上的日历是连续打卡几天; 碗里有菜 = 吃饱了 (饿了、想你了是空碗); 地上的软垫是它的床。
+// 东西跟着长大添: 蛋睡在草窝里, 小乌龟起有书桌、台灯, 大乌龟起有书架, 学霸龟书架上摆着奖杯
+
+export const skyOf = (hour) => (hour >= 6 && hour < 17 ? 'day' : hour >= 17 && hour < 19 ? 'dusk' : 'night');
+
+const SKY = {
+  day: '<rect class="h-sky-day" x="23" y="19" width="66" height="56" rx="2"/><circle class="h-sun" cx="40" cy="35" r="8"/><path class="h-cloud" d="M60 58 Q60 51 67 52 Q70 46 76 50 Q83 49 83 56 Q86 58 83 61 H62 Q57 61 60 58 Z"/>',
+  dusk: '<rect class="h-sky-dusk" x="23" y="19" width="66" height="56" rx="2"/><circle class="h-sun-low" cx="45" cy="64" r="9"/><path class="h-cloud-dusk" d="M58 36 H82 M64 42 H86"/>',
+  night:
+    '<rect class="h-sky-night" x="23" y="19" width="66" height="56" rx="2"/><circle class="h-moon" cx="70" cy="34" r="9"/><circle class="h-sky-night" cx="74.5" cy="30.5" r="7.5"/><circle class="h-star" cx="34" cy="28" r="1.3"/><circle class="h-star" cx="46" cy="40" r="1"/><circle class="h-star" cx="31" cy="56" r="1.1"/><circle class="h-star" cx="54" cy="25" r="0.9"/><circle class="h-star" cx="80" cy="62" r="1"/>',
+};
+
+function homeMarkup({ stage, mood, wears, progress, hour, minute, streak }) {
+  const sky = skyOf(hour);
+  const days = Math.max(0, Math.floor(streak));
+  const full = !['hungry', 'sad'].includes(mood);
+  const parts = [
+    // 墙、护墙板、地板
+    '<rect class="h-wall" width="320" height="120"/><rect class="h-wall2" y="98" width="320" height="22"/><rect class="h-wood" y="96" width="320" height="3"/>',
+    '<rect class="h-floor" y="120" width="320" height="50"/><rect class="h-wood2" y="118" width="320" height="3"/>',
+    '<path class="h-plank" d="M0 136 H320M0 153 H320M58 121 V136M168 121 V136M262 121 V136M18 136 V153M118 136 V153M222 136 V153M84 153 V170M196 153 V170M298 153 V170"/>',
+    // 窗户和窗帘
+    `<rect class="h-wood2" x="4" y="8" width="104" height="4" rx="2"/><rect class="h-wood h-o" x="18" y="14" width="76" height="66" rx="4"/>${SKY[sky]}`,
+    '<path class="h-bar" d="M56 19 V75M23 47 H89"/><rect class="h-wood h-o" x="14" y="77" width="84" height="6" rx="2"/>',
+    '<path class="h-curtain h-o" d="M8 10 H28 Q21 42 26 86 H8 Z"/><path class="h-curtain h-o" d="M104 10 H84 Q91 42 86 86 H104 Z"/>',
+    // 日历: 连续打卡几天
+    `<path class="h-string" d="M135 18 L121 23M135 18 L149 23"/><circle class="h-wood2" cx="135" cy="17.5" r="1.8"/>
+<rect class="h-paper h-o" x="118" y="22" width="34" height="37" rx="3"/><path class="h-red" d="M118 25 Q118 22 121 22 H149 Q152 22 152 25 V32 H118 Z"/>
+<text class="h-cal-t" x="135" y="30">连续</text><text class="h-cal-n${days >= 1000 ? ' small' : ''}" x="135" y="48.5">${days}</text><text class="h-cal-d" x="135" y="56">天</text>`,
+    // 挂钟: 现在几点
+    `<circle class="h-wood h-o" cx="186" cy="38" r="14"/><circle class="h-paper" cx="186" cy="38" r="11"/><path class="h-tick" d="M186 28.5 V30.5M186 45.5 V47.5M176.5 38 H178.5M193.5 38 H195.5"/>
+<path class="h-hand" d="M186 38 V31.5" transform="rotate(${((hour % 12) + minute / 60) * 30} 186 38)"/><path class="h-hand thin" d="M186 38 V29" transform="rotate(${minute * 6} 186 38)"/><circle class="h-wood2" cx="186" cy="38" r="1.5"/>`,
+    // 盆栽、饭碗、地毯
+    '<path class="h-leaf h-o" d="M35 129 Q21 114 25 98 Q37 111 35 129 Z"/><path class="h-leaf h-o" d="M35 129 Q49 112 46 96 Q33 109 35 129 Z"/><path class="h-leaf2 h-o" d="M35 129 Q30 109 36 91 Q42 110 35 129 Z"/>',
+    '<path class="h-pot h-o" d="M23 133 H47 L44 153 H26 Z"/><rect class="h-pot2 h-o" x="20" y="128" width="30" height="6" rx="2"/>',
+    `<ellipse class="h-rug" cx="160" cy="151" rx="80" ry="11"/><ellipse class="h-rug2" cx="160" cy="151" rx="69" ry="7.5"/>`,
+    '<ellipse class="h-cushion h-o" cx="262" cy="147" rx="27" ry="8"/><ellipse class="h-cushion2" cx="262" cy="145.5" rx="18" ry="4"/>',
+    `${full ? '<path class="h-leaf h-o" d="M68 143 Q69 134 75 138 Q79 131 84 137 Q90 134 89 143 Z"/>' : ''}<path class="h-bowl h-o" d="M63 142 H93 Q92 154 78 154 Q64 154 63 142 Z"/><path class="h-bowl2" d="M70 147 H86"/>`,
+  ];
+  // 书架 (大乌龟起), 学霸龟摆奖杯
+  if (stage >= 3) {
+    parts.push(
+      '<rect class="h-b1 h-o" x="226" y="34" width="7" height="18" rx="1"/><rect class="h-b2 h-o" x="233" y="37" width="6" height="15" rx="1"/><rect class="h-b3 h-o" x="239" y="32" width="8" height="20" rx="1"/><rect class="h-b4 h-o" x="247" y="36" width="6" height="16" rx="1"/><rect class="h-b1 h-o" x="256" y="38" width="6" height="15" rx="1" transform="rotate(14 259 52)"/>',
+      stage >= 4
+        ? '<path class="h-gold h-o" d="M281 35 H297 V39 Q297 46 289 47 Q281 46 281 39 Z"/><path class="h-gold-line" d="M281 37.5 Q276.5 37.5 277.5 41.5 Q278.5 44 281.5 43.5M297 37.5 Q301.5 37.5 300.5 41.5 Q299.5 44 296.5 43.5"/><rect class="h-gold h-o" x="287.5" y="46.5" width="3" height="3"/><rect class="h-gold h-o" x="283.5" y="49" width="11" height="3" rx="1"/>'
+        : '<rect class="h-b2 h-o" x="282" y="40" width="16" height="5" rx="1"/><rect class="h-b4 h-o" x="283" y="45" width="14" height="7" rx="1"/>',
+      '<rect class="h-wood h-o" x="220" y="52" width="84" height="5" rx="1.5"/><path class="h-wood2" d="M228 57 H234 L228 65 Z M296 57 H290 L296 65 Z"/>',
+    );
+  }
+  // 书桌、台灯 (小乌龟起); 夜里台灯亮
+  if (stage >= 2) {
+    if (sky === 'night') parts.push('<path class="h-glow" d="M281 79 L266 100 H310 L301 79 Z"/>');
+    parts.push(
+      '<rect class="h-wood2 h-o" x="220" y="105" width="6" height="47"/><rect class="h-wood2 h-o" x="294" y="105" width="6" height="47"/><rect class="h-wood h-o" x="252" y="106" width="40" height="13" rx="1.5"/><circle class="h-wood2" cx="272" cy="112.5" r="1.8"/>',
+      '<rect class="h-wood h-o" x="214" y="100" width="92" height="7" rx="2"/>',
+      '<rect class="h-b1 h-o" x="223" y="93" width="27" height="7" rx="1"/><rect class="h-b2 h-o" x="225" y="87" width="23" height="6" rx="1"/><rect class="h-b3 h-o" x="224" y="82" width="25" height="5" rx="1"/>',
+      '<rect class="h-cup h-o" x="260" y="89" width="9" height="11" rx="2"/><path class="h-pencil" d="M262 89 L261 81M265 89 L266 80M267.5 89 L270 83"/>',
+      `<rect class="h-pole" x="289" y="78" width="2.4" height="20"/><rect class="h-lamp h-o" x="283" y="97" width="15" height="3.5" rx="1.5"/><path class="h-lamp h-o" d="M283 68 H298 L302 79 H279 Z"/>`,
+    );
+  }
+  const nestBack = stage === 0 ? '<ellipse class="h-nest h-o" cx="160" cy="146" rx="36" ry="9"/><path class="h-straw" d="M128 145 Q141 139 153 146M150 142 Q163 137 176 144M167 145 Q181 140 192 146"/>' : '';
+  const nestFront = stage === 0 ? '<path class="h-nest h-o" d="M123 145 Q160 160 197 145 Q197 154 160 157 Q123 154 123 145 Z"/><path class="h-straw" d="M132 151 Q146 148 158 153M162 153 Q175 148 188 151"/>' : '';
+  return `${parts.join('')}${nestBack}<g transform="translate(96 57)">${turtleMarkup({ stage, mood, wears, progress })}</g>${nestFront}`;
+}
+
+export function homeSvg({ stage = 2, mood = 'normal', wears = [], progress = 0, hour = 12, minute = 0, streak = 0 } = {}) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 320 170');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', '温温的小窝');
+  svg.classList.add('turtle', 'pet-scene', `mood-${mood}`, `stage-${stage}`, `sky-${skyOf(hour)}`);
+  svg.innerHTML = homeMarkup({ stage, mood, wears, progress, hour, minute, streak }); // 只有写死的图形和数字, 没有用户的字
   return svg;
 }
 
@@ -384,7 +472,7 @@ export function setupPet({ store }) {
     root.classList.toggle('mini', Boolean(prefs.mini));
     root.dataset.mood = c.mood;
     const mini = Boolean(prefs.mini);
-    fill(body, turtleSvg({ stage: c.stage, mood: c.mood, wear: pet.wear, progress: c.progress, size: mini ? 44 : 100 }));
+    fill(body, turtleSvg({ stage: c.stage, mood: c.mood, wears: pet.wears, progress: c.progress, size: mini ? 44 : 100 }));
     body.setAttribute('aria-label', `小乌龟${pet.name} (${MOOD_TEXT[c.mood]}): 点一下听它说话`);
     body.title = `${pet.name}: ${MOOD_TEXT[c.mood]}`;
     // 还有好多没背: 举个牌子
@@ -719,27 +807,39 @@ export function setupPet({ store }) {
       happy: now.due ? '今天学了不少, 它很开心。' : '今天的背完了, 它吃饱了, 很开心。',
       normal: now.due ? `今天还有 ${now.due} 张, 背完它就吃饱了。` : '今天没有要背的。',
     }[now.mood];
-    const outfit = (key, name, need, unlocked) =>
-      h(
+    const wearNow = (wears) => {
+      store.updatePet({ wears }, { stamp: true });
+      refresh();
+      draw();
+    };
+    // 点一下戴上, 再点摘下; 同一个地方原来戴着的换下来 (说一声)
+    const outfit = (o) => {
+      const unlocked = pet.unlocked.includes(o.key);
+      const on = pet.wears.includes(o.key);
+      return h(
         'button',
         {
           type: 'button',
-          class: `outfit${pet.wear === key ? ' on' : ''}${unlocked ? '' : ' locked'}`,
-          'aria-pressed': String(pet.wear === key),
+          class: `outfit${on ? ' on' : ''}${unlocked ? '' : ' locked'}`,
+          'aria-pressed': String(on),
           disabled: !unlocked,
-          title: unlocked ? name : `${name}: ${need}解锁`,
+          title: unlocked ? `${o.name}（${SPOTS[o.spot]}）` : `${o.name}: ${o.need}解锁`,
           onclick: () => {
-            store.updatePet({ wear: key }, { stamp: true });
-            refresh();
-            draw();
+            const { wears, off } = toggleWear(pet.wears, o.key);
+            wearNow(wears);
+            if (off) toast(`${SPOTS[o.spot]}只能戴一件，换下了${OUTFITS.find((x) => x.key === off)?.name ?? ''}`);
           },
         },
-        turtleSvg({ stage: Math.max(2, g.stage), mood: 'happy', wear: key, size: 64 }),
-        h('span', { class: 'outfit-name' }, name),
-        unlocked ? null : h('span', { class: 'outfit-need' }, need),
+        h('span', { class: 'outfit-spot' }, SPOTS[o.spot]),
+        turtleSvg({ stage: Math.max(2, g.stage), mood: 'happy', wears: [o.key], size: 64 }),
+        h('span', { class: 'outfit-name' }, o.name),
+        unlocked ? null : h('span', { class: 'outfit-need' }, o.need),
       );
+    };
+    const spots = Object.keys(SPOTS);
+    const byPlace = [...OUTFITS].sort((a, b) => spots.indexOf(a.spot) - spots.indexOf(b.spot));
     return [
-      h('div', { class: 'pet-home' }, h('div', { class: 'pet-preview' }, turtleSvg({ stage: g.stage, mood: now.mood, wear: pet.wear, progress: g.progress, size: 150 }))),
+      h('div', { class: 'pet-home' }, homeSvg({ stage: g.stage, mood: now.mood, wears: pet.wears, progress: g.progress, hour: now.hour, minute: new Date(now.now).getMinutes(), streak: now.streak })),
       h(
         'div',
         { class: 'pet-title' },
@@ -779,19 +879,15 @@ export function setupPet({ store }) {
         ),
       ),
       h('p', { class: 'muted small' }, '怎么喂: 答一题、重做一道错题、玩一局游戏, 都是喂它一口; 今天的复习背完, 它就吃饱了。几天不学它会饿、会想你, 但不会生病, 也不会离开。连续打卡到 3、7、14、30、50、100…… 天放烟花。'),
+      h('p', { class: 'muted small' }, '小窝里的东西跟着长大添: 长成小乌龟有书桌和台灯, 大乌龟有书架, 学霸龟有奖杯。墙上的日历是连续打卡的天数, 窗外和挂钟跟着现在的时间变。'),
       h('h3', {}, '这 7 天学得怎么样'),
       (() => {
         const r = report({ ...deepNow.week, retention: deepNow.retention, bestTime: deepNow.bestTime, streak: now.streak, examDays: now.examDays });
         return [h('p', {}, r.text), h('ul', { class: 'pet-list' }, r.list.map((x) => h('li', {}, x)))];
       })(),
-      h('h3', {}, '装扮'),
-      h('p', { class: 'muted small' }, '学到了就解锁, 不用买。点一下戴上。'),
-      h(
-        'div',
-        { class: 'outfits' },
-        outfit('', '不戴', '', true),
-        OUTFITS.map((o) => outfit(o.key, o.name, o.need, pet.unlocked.includes(o.key))),
-      ),
+      h('div', { class: 'pet-h3-row' }, h('h3', {}, '装扮'), pet.wears.length ? h('button', { class: 'btn small ghost', type: 'button', onclick: () => wearNow([]) }, '全部摘下') : null),
+      h('p', { class: 'muted small' }, '学到了就解锁, 不用买。点一下戴上, 再点一下摘下。不同地方的可以一起戴; 同一个地方 (比如头顶的毛线帽、学士帽、皇冠) 只能戴一件。'),
+      h('div', { class: 'outfits' }, byPlace.map(outfit)),
       h('h3', {}, '这台设备上'),
       switchRow({ label: `显示${pet.name}`, desc: '待在首页、卡片集页这些地方的右下角。背卡、测试、游戏、编辑的时候不出来', checked: !prefs.hidden, onchange: (on) => setPrefs({ hidden: !on }) }),
       switchRow({ label: '主动提示', desc: '每日问候、《论语》摘句、成长提醒；关闭时仅在点击后显示', checked: !quiet(), onchange: (on) => setPrefs({ quiet: !on }) }),

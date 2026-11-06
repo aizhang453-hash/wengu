@@ -5,7 +5,7 @@ import { Store, makeSet, makeCard, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { dayKey, DAY } from '../js/srs.js';
 import { addReviews, AGAIN, GOOD } from '../js/revlog.js';
-import { insight } from '../js/views/pet.js';
+import { insight, skyOf } from '../js/views/pet.js';
 import {
   STAGES,
   stageOf,
@@ -28,6 +28,10 @@ import {
   randomQuote,
   quoteSource,
   eventLine,
+  OUTFITS,
+  SPOTS,
+  cleanWears,
+  toggleWear,
 } from '../js/pet.js';
 
 function memoryStorage() {
@@ -85,6 +89,7 @@ test('同步合并温温: 解锁的装扮合起来, 名字和装扮听后改的,
   const m = mergePet(a, b);
   assert.equal(m.name, '慢慢');
   assert.equal(m.wear, 'hat');
+  assert.deepEqual(m.wears, ['hat']);
   assert.deepEqual(m.unlocked.sort(), ['glasses', 'hat', 'scarf']);
   assert.equal(m.stageSeen, 3);
   assert.deepEqual(m.cheer, { from: '2026-10-01', days: [3, 7] });
@@ -94,16 +99,53 @@ test('同步合并温温: 解锁的装扮合起来, 名字和装扮听后改的,
   assert.equal(mergePet(a, null), a);
 });
 
+test('装扮: 不同地方的可以一起戴, 同一个地方只能戴一件; 点一下戴上、再点摘下; 老版本存的一件也认', () => {
+  // 每件都有地方, 头顶有三件 (毛线帽、学士帽、皇冠)
+  for (const o of OUTFITS) assert.ok(SPOTS[o.spot], o.key);
+  assert.deepEqual(OUTFITS.filter((o) => o.spot === 'head').map((o) => o.key), ['hat', 'cap', 'crown']);
+  // 洗: 不认识的、重复的去掉, 一个地方留后戴的
+  assert.deepEqual(cleanWears(['scarf', 'hat', 'rocket', 'scarf', 'glasses', 'crown', 'flower']), ['scarf', 'glasses', 'crown', 'flower']);
+  assert.deepEqual(cleanWears('hat'), []);
+  // 点一下
+  let w = [];
+  ({ wears: w } = toggleWear(w, 'hat'));
+  ({ wears: w } = toggleWear(w, 'scarf'));
+  ({ wears: w } = toggleWear(w, 'glasses'));
+  ({ wears: w } = toggleWear(w, 'flower'));
+  assert.deepEqual(w, ['hat', 'scarf', 'glasses', 'flower']);
+  const swap = toggleWear(w, 'crown');
+  assert.equal(swap.off, 'hat');
+  assert.deepEqual(swap.wears, ['scarf', 'glasses', 'flower', 'crown']);
+  const off = toggleWear(swap.wears, 'glasses');
+  assert.equal(off.off, '');
+  assert.deepEqual(off.wears, ['scarf', 'flower', 'crown']);
+  // 存: 好几件; wear 留一件给老版本看 (头顶的, 没有就第一件)
+  assert.deepEqual(cleanPet({ wears: ['scarf', 'crown', 'flower'] }), { ...cleanPet({}), wears: ['scarf', 'crown', 'flower'], wear: 'crown' });
+  assert.equal(cleanPet({ wears: ['flower', 'scarf'] }).wear, 'flower');
+  // 老版本存的、同步来的只有 wear
+  assert.deepEqual(cleanPet({ wear: 'glasses' }).wears, ['glasses']);
+  assert.deepEqual(cleanPet({ wear: 'rocket' }).wears, []);
+  // 同步: 听后改的那台 (老版本后改的也算)
+  const mine = cleanPet({ wears: ['hat', 'scarf'], at: 1000 });
+  assert.deepEqual(mergePet(mine, cleanPet({ wear: 'crown', at: 2000 })).wears, ['crown']);
+  assert.deepEqual(mergePet(mine, cleanPet({ wear: 'crown', at: 500 })).wears, ['hat', 'scarf']);
+  assert.deepEqual(mergeData({ sets: [], pet: mine }, { sets: [], pet: { wear: 'cap', at: 900 } }).pet.wears, ['hat', 'scarf']);
+});
+
+test('小窝的窗外: 白天、傍晚、夜里', () => {
+  assert.deepEqual([0, 5, 6, 12, 16, 17, 18, 19, 23].map(skyOf), ['night', 'night', 'day', 'day', 'day', 'dusk', 'dusk', 'night', 'night']);
+});
+
 test('温温跟着数据存、同步、备份; 老数据没有温温是 null; 乱七八糟的值洗掉', () => {
   assert.equal(cleanData({ sets: [] }).pet, null);
   const pet = cleanPet({ name: '  ', bank: -3, since: 'yesterday', unlocked: ['hat', 'rocket', 'hat'], wear: 'rocket', stageSeen: 99, cheer: { from: 'x', days: [7, 8, 3] } });
-  assert.deepEqual(pet, { name: '温温', bank: 0, since: '', unlocked: ['hat'], wear: '', cheer: { from: '', days: [3, 7] }, stageSeen: 4, at: 0 });
+  assert.deepEqual(pet, { name: '温温', bank: 0, since: '', unlocked: ['hat'], wears: [], wear: '', cheer: { from: '', days: [3, 7] }, stageSeen: 4, at: 0 });
   assert.equal(cleanPet({ name: '一二三四五六七八九十一二三' }).name.length, 12);
 
   const store = new Store(memoryStorage());
   const set = store.putSet(makeSet({ cards: [makeCard('a', 'b')] }));
   store.updatePet({ unlocked: ['scarf'] });
-  store.updatePet({ name: '慢慢', wear: 'scarf' }, { stamp: true, now });
+  store.updatePet({ name: '慢慢', wears: ['scarf', 'glasses'] }, { stamp: true, now });
   assert.equal(store.data.pet.at, now);
   const backup = store.exportBackup();
   const other = new Store(memoryStorage());
@@ -111,6 +153,7 @@ test('温温跟着数据存、同步、备份; 老数据没有温温是 null; �
   other.updatePet({ unlocked: ['hat'] });
   other.importBackup(backup, now + 1000);
   assert.equal(other.data.pet.name, '慢慢');
+  assert.deepEqual(other.data.pet.wears, ['scarf', 'glasses']);
   assert.deepEqual(other.data.pet.unlocked.sort(), ['hat', 'scarf']);
   assert.ok(other.getSet(set.id));
   // 没有温温的老备份不会把这里的去掉
