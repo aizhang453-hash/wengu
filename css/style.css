@@ -9263,3 +9263,319 @@ button.pick-row:hover {
   background: var(--good-soft);
   color: var(--good);
 }
+
+/* ---- 阅读: 书架、目录、读一篇、每日一首 (views/read.js) ---- */
+.read-daily {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.read-daily:empty {
+  display: none; /* 诗还没拿来 */
+}
+
+.read-daily:hover {
+  border-color: var(--accent);
+}
+
+.read-daily.compact {
+  padding: 12px 18px;
+}
+
+.read-daily-tag {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.read-daily-title {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+}
+
+.read-daily-title .muted {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.read-daily-lines {
+  display: grid;
+  gap: 2px;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.read-recent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.read-recent .chip {
+  text-decoration: none;
+}
+
+.read-search {
+  margin: 14px 0 6px;
+}
+
+.read-search .input {
+  width: 100%;
+}
+
+.read-list {
+  margin: 8px 0 16px;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.read-list li {
+  border-bottom: 1px solid var(--line);
+}
+
+.read-list a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 10px 4px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.read-list a:hover {
+  background: var(--surface-2);
+}
+
+.read-hit {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+}
+
+.read-no {
+  min-width: 2em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.read-toc-list li.on a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.read-toc-list.poem {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  column-gap: 20px;
+  border-top: 0;
+}
+
+.read-toc h2 {
+  margin: 22px 0 4px;
+  font-size: 1.05rem;
+}
+
+.read-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 8px 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.read-book {
+  display: flex;
+  gap: 14px;
+  height: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.read-book:hover {
+  border-color: var(--accent);
+}
+
+/* 书脊: 竖着写书名, 几种颜色轮着 */
+.read-spine {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-height: 100px;
+  padding: 8px 0;
+  border-radius: 4px 8px 8px 4px;
+  background: #b8372e;
+  box-shadow: inset 5px 0 0 rgb(0 0 0 / 18%);
+  color: #fff;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  line-height: 1.15;
+  letter-spacing: 0.15em;
+  writing-mode: vertical-rl;
+}
+
+.read-shelf li:nth-child(4n + 2) .read-spine {
+  background: #3f6f8f;
+}
+
+.read-shelf li:nth-child(4n + 3) .read-spine {
+  background: #5d7d3a;
+}
+
+.read-shelf li:nth-child(4n + 4) .read-spine {
+  background: #8a6236;
+}
+
+.read-book-text {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.read-intro {
+  line-height: 1.55;
+}
+
+.read-source {
+  margin-top: 24px;
+}
+
+.read-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.read-piece {
+  max-width: 40em;
+  margin: 8px auto 0;
+  padding: 20px 4px 4px;
+}
+
+.read-title {
+  margin: 0 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.7rem;
+  text-align: center;
+}
+
+.read-by {
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.read-text {
+  font-family: var(--font-serif);
+  line-height: 2;
+}
+
+.read-text p {
+  margin: 0 0 0.6em;
+}
+
+.read-piece.poem .read-text {
+  text-align: center;
+}
+
+.read-piece.text .read-text p {
+  text-indent: 2em;
+}
+
+.read-text.verse {
+  text-align: center;
+  text-wrap: balance; /* 折行时两半差不多长 */
+}
+
+.read-piece .read-text.verse p {
+  text-indent: 0;
+}
+
+.read-piece.size-0 .read-text {
+  font-size: 1.05rem;
+}
+
+.read-piece.size-1 .read-text {
+  font-size: 1.25rem;
+}
+
+.read-piece.size-2 .read-text {
+  font-size: 1.5rem;
+}
+
+.read-notes {
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+.read-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+
+.read-tools .btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.read-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.chip-row.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.read-cards .small {
+  margin: 10px 0 6px;
+}
+
+.read-sample {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.read-sample-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  font-family: var(--font-serif);
+  white-space: pre-line;
+}
+
+.read-sample-arrow {
+  color: var(--muted);
+}

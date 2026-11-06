@@ -11,6 +11,7 @@ import { loadConfig, expiryInfo, expiryUnknown } from '../sync.js';
 import { dueMistakes } from '../mistakes.js';
 import { qsetTile } from './mistakes.js';
 import { inApp } from '../platform.js';
+import { dailyCard } from './read.js';
 
 const WEEKDAYS = '日一二三四五六';
 const num = (n) => n.toLocaleString('zh-CN');
@@ -217,6 +218,7 @@ export function renderHome({ store, go }) {
       expiryNotice(),
       examBanner(store),
       empty ? welcome() : todayCard(store, sets, go),
+      dailyCard({ compact: true }),
       sets.length
         ? [
             h('div', { class: 'list-head' }, h('h2', {}, '卡片集'), h('span', { class: 'muted small' }, `${sets.length} 个`)),
