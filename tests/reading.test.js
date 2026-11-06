@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -332,4 +332,167 @@ test('读音特别的字: 清单每条都在书里找得到; 标在对的字上 
   assert.deepEqual(splitMarks('不亦说乎', [{ at: 2, len: 1, py: 'yuè' }]).map((x) => x.text), ['不亦', '说', '乎']);
   assert.deepEqual(splitMarks('说', [{ at: 0, len: 1 }]).map((x) => x.text), ['说']);
   assert.deepEqual(splitMarks('abc', []).map((x) => x.text), ['abc']);
+});
+
+test('注释和译文: 每篇都在书里、注释都找得到 (按顺序)、译文一段对一段; 标在对的字上; 读音不跨注释; 字词卡片', async () => {
+  const guwen = await loadBook('guwen');
+  const hant = await loadBook('guwen', { hant: true });
+  const yizhu = await loadYizhu('guwen');
+  assert.equal(await loadYizhu('tangshi'), null);
+  const titles = Object.keys(yizhu);
+  assert.ok(titles.length >= 20);
+  for (const t of ['曹刿论战', '前出师表', '桃花源记', '陋室铭', '岳阳楼记', '醉翁亭记', '师说', '前赤壁赋', '滕王阁序']) assert.ok(yizhu[t], t);
+  for (const [t, e] of Object.entries(yizhu)) {
+    // 键是「篇名」或者「篇名|作者」(同名的两篇要写作者)
+    const [title, author] = t.split('|');
+    const list = guwen.pieces.filter((p) => p.t === title && (!author || p.a === author));
+    assert.equal(list.length, 1, `「${t}」在古文观止里不是正好一篇`);
+    assert.equal(entryOf(yizhu, list[0]), e);
+    const p = list[0];
+    const i = guwen.pieces.indexOf(p);
+    assert.equal(e.yi.length, p.p.length, `「${t}」译文 ${e.yi.length} 段, 原文 ${p.p.length} 段`);
+    for (const y of e.yi) assert.ok(y.trim() && !/[a-z]{3}/i.test(y), `「${t}」译文: ${y.slice(0, 20)}`);
+    const marks = notesOf(p, e);
+    assert.equal(marks.length, e.notes.length, `「${t}」有注释找不到: ${e.notes.filter((x, j) => !marks.some((m) => m.n === j + 1)).map((x) => x.at).join('、')}`);
+    const reads = readingsOf('guwen', p);
+    marks.forEach((m, j) => {
+      const x = e.notes[j];
+      assert.ok(x.note && x.note.length > 1, `「${t}」${x.at} 没写解释`);
+      assert.ok(/[。！？」）]$/.test(x.note), `「${t}」${x.at} 的解释没有句末标点: ${x.note}`);
+      const text = m.line < 0 ? p.t : p.p[m.line];
+      assert.equal(text.slice(m.at, m.at + m.len), x.w ?? x.at);
+      // 按原文顺序, 不重叠
+      if (j) {
+        const prev = marks[j - 1];
+        assert.ok(m.line > prev.line || (m.line === prev.line && m.at >= prev.at + prev.len), `「${t}」${x.at} 跟上一条重叠或倒序`);
+      }
+      // 繁体一样长 (标得上)
+      const tt = hant.pieces[i];
+      assert.equal((m.line < 0 ? tt.t : tt.p[m.line]).length, text.length, `「${t}」第 ${m.line} 行繁简不一样长`);
+      // 读音标记要么整个在注释里, 要么整个在外面
+      for (const r of reads.filter((r) => r.line === m.line)) {
+        const inside = r.at >= m.at && r.at + r.len <= m.at + m.len;
+        const outside = r.at + r.len <= m.at || r.at >= m.at + m.len;
+        assert.ok(inside || outside, `「${t}」读音「${r.ch}」跨了注释「${x.at}」`);
+      }
+    });
+  }
+
+  // 同名的两篇 (《左传》《谷梁传》的《郑伯克段于鄢》) 按「篇名|作者」分开: 只有《左传》那篇有注释
+  const zb = guwen.pieces.filter((p) => p.t === '郑伯克段于鄢');
+  assert.equal(zb.length, 2);
+  assert.ok(entryOf(yizhu, zb.find((p) => p.a === '左丘明'))?.notes.length);
+  assert.equal(entryOf(yizhu, zb.find((p) => p.a === '谷梁赤')), null);
+  // 对照维基文库改掉的错字 (tools/library.mjs 的 GUWEN_FIX)
+  const gwText = guwen.pieces.flatMap((p) => p.p).join('');
+  for (const ok of ['一旦山陵崩', '当此时也，世非无深谋', '冯谖曰：“君之']) assert.ok(gwText.includes(ok), ok);
+  assert.ok(!/—旦|也非无深谋|冯谖曰；/.test(gwText));
+  const allT = hant.pieces.flatMap((p) => p.p).join('');
+  assert.ok(allT.includes('一旦山陵崩') && allT.includes('世非無深謀') && !allT.includes('—旦'));
+
+  // 标在对的字上: 同一个词出现几次, 按顺序往下找
+  const ms = guwen.pieces.find((p) => p.t === '杂说·马说');
+  const msMarks = notesOf(ms, yizhu['杂说·马说']);
+  assert.deepEqual(msMarks[0], { n: 1, line: -1, at: 4, len: 1, w: '说', note: msMarks[0].note }); // 题目「杂说·马说」里「马说」的「说」, 不是「杂说」的
+  const yx = guwen.pieces.find((p) => p.t === '岳阳楼记');
+  const ruo = notesOf(yx, yizhu['岳阳楼记']).find((m) => m.w === '若夫');
+  assert.equal(ruo.line, 2);
+  // 找不到的那条跳过, 后面的照样标
+  const fake = { notes: [{ at: '没有这句' }, { at: '十年春', w: '十年', note: 'x' }], yi: [] };
+  const cgld = guwen.pieces.find((p) => p.t === '曹刿论战');
+  assert.deepEqual(notesOf(cgld, fake).map((m) => [m.n, m.line, m.at, m.w]), [[2, 0, 0, '十年']]);
+  assert.deepEqual(notesOf(cgld, null), []);
+
+  // 注的词在哪一小句里
+  assert.equal(clauseAround('其乡人曰：“肉食者谋之，又何间焉？”', 14, 1), '又何间焉');
+  assert.equal(clauseAround('先天下之忧而忧，后天下之乐而乐', 0, 15), '先天下之忧而忧，后天下之乐而乐');
+  // 字词卡片: 正面「间（又何间焉）」, 背面注释; 词就是一小句的只写词
+  const cards = noteCards(cgld, yizhu['曹刿论战']);
+  assert.equal(cards.length, yizhu['曹刿论战'].notes.length);
+  assert.ok(cards.some((c) => c.term === '间（又何间焉）' && c.def === '参与。'));
+  assert.ok(cards.some((c) => c.term === '既克'));
+  const book = bookOf('guwen');
+  assert.deepEqual(makeCards(book, [cgld], 'zhu', yizhu), cards);
+  // 整本: 只有有注释的那几篇出卡片
+  const all = makeCards(book, guwen.pieces, 'zhu', yizhu);
+  assert.equal(all.length, Object.values(yizhu).reduce((n, e) => n + e.notes.length, 0));
+  assert.deepEqual(makeCards(book, [guwen.pieces[1]], 'zhu', yizhu), []);
+});
+
+test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书库里; 搜成语找得到出处; 成语卡片', async () => {
+  const guwen = await loadBook('guwen');
+  const yizhu = await loadYizhu('guwen');
+  let count = 0;
+  for (const [t, e] of Object.entries(yizhu)) {
+    const p = guwen.pieces.find((x) => entryOf(yizhu, x) === e);
+    assert.ok(e.cy?.length, `「${t}」没写成语、名句`);
+    const ws = new Set();
+    for (const x of idiomsOf(p, e)) {
+      const raw = e.cy[x.n - 1];
+      count++;
+      assert.ok(x.w && !ws.has(x.w), `「${t}」成语重复或空: ${x.w}`);
+      ws.add(x.w);
+      assert.ok(CY_KINDS.includes(x.kind), `「${t}」${x.w} 的 kind: ${x.kind}`);
+      assert.ok(/[。！？」]$/.test(x.note), `「${t}」${x.w} 的说明没有句末标点`);
+      if (raw.at) {
+        assert.notEqual(x.line, null, `「${t}」${x.w}: 原文里找不到「${raw.at}」`);
+        const text = x.line < 0 ? p.t : p.p[x.line];
+        assert.equal(text.slice(x.at, x.at + x.len), raw.at);
+        // 原文和成语对得上: 一样, 或者说明里写了是从哪句来的 / 原文怎么写
+        const plain = (str) => str.replace(/[，。；、]/g, '');
+        if (plain(raw.at) !== plain(x.w)) assert.ok(raw.at.includes(x.w) || x.note.includes(raw.at) || x.note.includes('原文'), `「${t}」${x.w} 和原文「${raw.at}」不一样, 说明里要写清楚`);
+      } else assert.equal(x.line, null);
+    }
+    for (const z of e.zhi ?? []) {
+      if (typeof z === 'string') {
+        assert.ok(/[。！？」]$/.test(z), `「${t}」知道吗: ${z}`);
+        continue;
+      }
+      assert.ok(z.text && /[。！？」]$/.test(z.text), `「${t}」知道吗: ${z.text}`);
+      const [bookId, key] = z.go;
+      const [title, author] = key.split('|');
+      const data = await loadBook(bookId);
+      const hits = data?.pieces.filter((x) => x.t === title && (!author || x.a === author)) ?? [];
+      assert.equal(hits.length, 1, `「${t}」知道吗链接的《${key}》在 ${bookId} 里不是正好一篇`);
+      assert.ok(entryOf(yizhu, hits[0]) !== e, `「${t}」知道吗链接到了自己`);
+    }
+  }
+  assert.ok(count >= 100);
+  // 文中用了、但不是出自这篇的, 不收 (出自《老子》《史记》《左传》《论语》)
+  const all = Object.values(yizhu).flatMap((e) => e.cy.map((x) => x.w));
+  for (const no of ['鸡犬相闻', '正襟危坐', '杯盘狼藉', '居安思危', '何陋之有', '鞠躬尽瘁', '三人行，必有我师', '舳舻千里']) assert.ok(!all.includes(no), no);
+
+  // 找字、整句
+  const thy = guwen.pieces.find((p) => p.t === '桃花源记');
+  assert.deepEqual(findText(thy, '豁然开朗'), { line: 1, at: thy.p[1].indexOf('豁然开朗') });
+  assert.equal(findText(thy, '没有这句'), null);
+  assert.deepEqual(findText(thy, '桃花'), { line: -1, at: 0 });
+  assert.equal(sentenceAround('其乡人曰：“肉食者谋之，又何间焉？”刿曰：“肉食者鄙，未能远谋。”', 22, 3), '肉食者鄙，未能远谋。');
+  const idioms = idiomsOf(thy, yizhu['桃花源记']);
+  const stwy = idioms.find((x) => x.w === '世外桃源');
+  assert.equal(stwy.line, null);
+  // 成语卡片: 正面成语, 背面意思和出处 (有原句写原句, 引号去掉)
+  const cards = idiomCards(thy, yizhu['桃花源记']);
+  assert.equal(cards.length, yizhu['桃花源记'].cy.length);
+  const hr = cards.find((c) => c.term === '豁然开朗');
+  assert.ok(hr.def.includes('\n出自《桃花源记》（陶渊明）：复行数十步，豁然开朗。'), hr.def);
+  assert.ok(cards.find((c) => c.term === '世外桃源').def.endsWith('\n出自《桃花源记》（陶渊明）'));
+  assert.ok(!cards.some((c) => /[“”]/.test(c.def)));
+  const book = bookOf('guwen');
+  assert.deepEqual(makeCards(book, [thy], 'cy', yizhu), cards);
+  assert.equal(makeCards(book, guwen.pieces, 'cy', yizhu).length, count);
+
+  // 搜成语: 原文里没有这几个字的也找得到出处 (「世外桃源」「勾心斗角」), 排在句子前面
+  const hits = await searchLibrary('世外桃源');
+  assert.equal(hits[0].piece.t, '桃花源记');
+  assert.equal(hits[0].where, 'idiom');
+  assert.equal(hits[0].line, '成语「世外桃源」出自这里');
+  assert.equal((await searchLibrary('勾心斗角'))[0].piece.t, '阿房宫赋');
+  assert.ok((await searchLibrary('东道主')).some((x) => x.piece.t === '烛之武退秦师' && x.line === '词语「东道主」出自这里'));
+  assert.equal((await searchLibrary('狡兔三窟'))[0].piece.t, '冯谖客孟尝君');
+  assert.equal((await searchLibrary('焚膏继晷'))[0].piece.t, '进学解');
+  // 名句里带标点的, 不打标点也找得到
+  assert.ok((await searchLibrary('先天下之忧而忧后天下之乐而乐')).some((x) => x.piece.t === '岳阳楼记'));
+  // 原来的搜法照旧
+  assert.equal((await searchLibrary('春眠'))[0].where, 'title');
 });

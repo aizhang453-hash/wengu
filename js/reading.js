@@ -63,10 +63,12 @@ export function poemsOf(p) {
   return p.k.map(([from, label], j) => ({ ...p, t: `${p.t}·${label}`, p: p.p.slice(from, p.k[j + 1]?.[0] ?? p.p.length), k: undefined }));
 }
 
-// 做成卡片: style 'next' 接下句 (正面一句, 背面下一句), 'whole' 整篇 (正面题目, 背面全文)。返回 [{ term, def }]
+// 做成卡片: style 'next' 接下句 (正面一句, 背面下一句), 'whole' 整篇 (正面题目, 背面全文), 'zhu' 字词 (正面注的词, 背面注释), 'cy' 成语 (正面成语, 背面意思和出处; 这两种要有 yizhu)。返回 [{ term, def }]
 //   诗一首一首分开接 (组诗也拆开), 第一张是「《题目》（作者）第一句」(题目里就有第一句的不要, 像宋词「水调歌头·明月几时有」);
 //   文章看书的 chain: 'book' 整本连着接 (三字经切成的几段, 上一段的末句接下一段的头一句), 'line' 一行一行接 (论语一章、增广贤文一句, 互不相干), 别的一篇里连着接
-export function makeCards(book, pieces, style = 'next') {
+export function makeCards(book, pieces, style = 'next', yizhu = null) {
+  if (style === 'zhu') return pieces.flatMap((p) => noteCards(p, entryOf(yizhu, p)));
+  if (style === 'cy') return pieces.flatMap((p) => idiomCards(p, entryOf(yizhu, p)));
   if (style === 'whole') return pieces.flatMap(poemsOf).map((p) => ({ term: p.a ? poemName(p) : `${book.title} · ${p.t}`, def: p.p.join('\n') }));
   const cards = [];
   const chain = (list) => {
@@ -142,6 +144,109 @@ export function spokenText(bookId, piece) {
   return { title: line(piece.t, -1), lines: piece.p.map(line) };
 }
 
+// ---- 注释、译文、成语 (library/yizhu/<书>.js, 手写的; 现在只有《古文观止》的名篇有) ----
+//   { '篇名': { notes: [{ at, w, note }], yi: [译文, 跟原文一段对一段], cy: [成语、名句], zhi: [知道吗] } }
+//   一条注释: at 在哪几个字里 (简体), w 注哪几个字 (at 里的, 不写就是 at 整个), note 解释。
+//   按原文的顺序写, 每条从上一条注的字后面往下找 (同一个词出现几次也标得对)
+export const YIZHU_BOOKS = ['guwen'];
+// 一篇的注释: 按「篇名|作者」找 (书里有同名的两篇, 像《左传》和《谷梁传》的《郑伯克段于鄢》), 没有再按篇名找
+export const entryOf = (yizhu, piece) => yizhu?.[`${piece.t}|${piece.a}`] ?? yizhu?.[piece.t] ?? null;
+const yizhuLoaded = new Map();
+export function loadYizhu(id) {
+  if (!YIZHU_BOOKS.includes(id)) return Promise.resolve(null);
+  if (!yizhuLoaded.has(id)) {
+    const p = import(`./library/yizhu/${id}.js`).then((m) => m.default);
+    p.catch(() => yizhuLoaded.delete(id));
+    yizhuLoaded.set(id, p);
+  }
+  return yizhuLoaded.get(id);
+}
+
+// 一篇 (简体) 的注释标在哪: [{ n 第几条 (从 1 数), line (-1 题目, 0 起正文第几行), at 第几个字, len, w, note }]; 找不到的那条跳过 (测试会查)
+export function notesOf(piece, entry) {
+  const texts = [piece.t, ...piece.p];
+  const out = [];
+  let k = 0;
+  let from = 0;
+  (entry?.notes ?? []).forEach((x, j) => {
+    const w = x.w ?? x.at;
+    const off = x.at.indexOf(w);
+    if (off < 0) return;
+    for (let kk = k; kk < texts.length; kk++) {
+      const i = texts[kk].indexOf(x.at, kk === k ? Math.max(0, from - off) : 0);
+      if (i === -1) continue;
+      out.push({ n: j + 1, line: kk - 1, at: i + off, len: w.length, w, note: x.note });
+      k = kk;
+      from = i + off + w.length;
+      return;
+    }
+  });
+  return out;
+}
+
+// 注的词在哪一小句里 (按标点断): 「间」→「又何间焉」; 做字词卡片用
+export function clauseAround(text, at, len) {
+  const stop = (ch) => MARKS.includes(ch) || /[“”‘’「」『』]/.test(ch);
+  let a = at;
+  let b = at + len;
+  while (a > 0 && !stop(text[a - 1])) a--;
+  while (b < text.length && !stop(text[b])) b++;
+  return text.slice(a, b);
+}
+
+// 字词卡片: 正面「间（又何间焉）」, 背面注释
+export function noteCards(piece, entry) {
+  return notesOf(piece, entry).map((m) => {
+    const text = m.line < 0 ? piece.t : piece.p[m.line];
+    const clause = clauseAround(text, m.at, m.len);
+    return { term: clause === m.w ? m.w : `${m.w}（${clause}）`, def: m.note };
+  });
+}
+
+// ---- 出自这篇的成语、名句 (yizhu 的 cy) ----
+//   { w 成语或名句, kind '成语' (不写) | '名句' | '词语', at 原文里是哪几个字 (不写: 整篇的故事来的, 像「世外桃源」), note 现在的意思 }
+//   只收出自这篇的; 化用别的书的在 note 里写明「语本……」
+export const CY_KINDS = ['成语', '名句', '词语'];
+// 一段字在一篇里第一次出现的地方: { line (-1 题目), at }; 找不到 null
+export function findText(piece, at) {
+  const texts = [piece.t, ...piece.p];
+  for (let k = 0; k < texts.length; k++) {
+    const i = texts[k].indexOf(at);
+    if (i !== -1) return { line: k - 1, at: i };
+  }
+  return null;
+}
+
+// [{ n 第几条 (从 1 数), w, kind, note, line, at, len }]; 没写 at 的 line 是 null
+export function idiomsOf(piece, entry) {
+  return (entry?.cy ?? []).map((x, j) => {
+    const where = x.at ? findText(piece, x.at) : null;
+    return { n: j + 1, w: x.w, kind: x.kind ?? '成语', note: x.note, line: where?.line ?? null, at: where?.at ?? -1, len: x.at?.length ?? 0 };
+  });
+}
+
+// 一段字在哪一整句里 (按句号、问号、叹号、分号断; 在引号里的只要引号里那句): 做成语卡片时写原句
+export function sentenceAround(text, at, len) {
+  const end = '。？！；';
+  const stop = (ch) => end.includes(ch) || '“”「」'.includes(ch);
+  let a = at;
+  let b = at + len;
+  while (a > 0 && !stop(text[a - 1])) a--;
+  while (b < text.length && !stop(text[b])) b++;
+  if (b < text.length && end.includes(text[b])) b++; // 带上句末的标点
+  return text.slice(a, b).replace(/[“”‘’「」『』]/g, '');
+}
+
+// 成语卡片: 正面成语, 背面意思和出处 (有原句的写原句)
+export function idiomCards(piece, entry) {
+  const src = `《${piece.t}》${piece.a ? `（${piece.a}）` : ''}`;
+  return idiomsOf(piece, entry).map((x) => {
+    const text = x.line === null ? '' : x.line < 0 ? piece.t : piece.p[x.line];
+    const said = x.line === null || x.line < 0 ? '' : `：${sentenceAround(text, x.at, x.len)}`;
+    return { term: x.w, def: `${x.note}\n出自${src}${said}` };
+  });
+}
+
 // ---- 每日一首 (《千家诗》里挑): 每天换一首, 哪台设备上都一样 ----
 export const DAILY_BOOK = 'qianjiashi';
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
@@ -152,22 +257,24 @@ export function dailyIndex(day, n) {
   return (((days * step) % n) + n) % n;
 }
 
-// ---- 搜 (题目、作者、句子) ----
-// 返回 [{ book, i, piece, where 'title' | 'author' | 'line', line 找到的那句 }], 题目、作者对上的排前面
+// ---- 搜 (题目、作者、成语、句子) ----
+// 返回 [{ book, i, piece, where 'title' | 'author' | 'idiom' | 'line', line 找到的那句 (成语是「成语「世外桃源」出自这里」) }],
+//   题目、作者对上的排前面, 然后是出自这篇的成语 (「世外桃源」原文里没有这几个字也找得到)
 export async function searchLibrary(query, { limit = 60 } = {}) {
   const q = String(query ?? '').replace(/\s+/g, '');
   if (!q) return [];
-  const books = await Promise.all(BOOKS.map((b) => loadBook(b.id)));
+  const [books, extra] = await Promise.all([Promise.all(BOOKS.map((b) => loadBook(b.id))), Promise.all(BOOKS.map((b) => loadYizhu(b.id).catch(() => null)))]);
   const hits = [];
   books.forEach((data, bi) => {
     const book = BOOKS[bi];
     data.pieces.forEach((piece, i) => {
       const line = piece.p.find((l) => l.replace(/\s+/g, '').includes(q));
-      const where = piece.t.includes(q) ? 'title' : piece.a?.includes(q) ? 'author' : line ? 'line' : '';
-      if (where) hits.push({ book: book.id, i, piece, where, line: line ?? piece.p[0] ?? '' });
+      const cy = entryOf(extra[bi], piece)?.cy?.find((x) => x.w.replace(/[，。；：？！、\s]/g, '').includes(q.replace(/[，。；：？！、]/g, '')));
+      const where = piece.t.includes(q) ? 'title' : piece.a?.includes(q) ? 'author' : cy ? 'idiom' : line ? 'line' : '';
+      if (where) hits.push({ book: book.id, i, piece, where, line: where === 'idiom' ? `${cy.kind ?? '成语'}「${cy.w}」出自这里` : (line ?? piece.p[0] ?? '') });
     });
   });
-  const rank = { title: 0, author: 1, line: 2 };
+  const rank = { title: 0, author: 1, idiom: 2, line: 3 };
   return hits.sort((a, b) => rank[a.where] - rank[b.where]).slice(0, limit);
 }
 
