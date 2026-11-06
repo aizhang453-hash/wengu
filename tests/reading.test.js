@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, notesOf, clauseAround, noteCards, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -402,4 +402,78 @@ test('注释和译文: 每篇都在书里、注释都找得到 (按顺序)、译
   const all = makeCards(book, guwen.pieces, 'zhu', yizhu);
   assert.equal(all.length, Object.values(yizhu).reduce((n, e) => n + e.notes.length, 0));
   assert.deepEqual(makeCards(book, [guwen.pieces[1]], 'zhu', yizhu), []);
+});
+
+test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书库里; 搜成语找得到出处; 成语卡片', async () => {
+  const guwen = await loadBook('guwen');
+  const yizhu = await loadYizhu('guwen');
+  let count = 0;
+  for (const [t, e] of Object.entries(yizhu)) {
+    const p = guwen.pieces.find((x) => x.t === t);
+    assert.ok(e.cy?.length, `「${t}」没写成语、名句`);
+    const ws = new Set();
+    for (const x of idiomsOf(p, e)) {
+      const raw = e.cy[x.n - 1];
+      count++;
+      assert.ok(x.w && !ws.has(x.w), `「${t}」成语重复或空: ${x.w}`);
+      ws.add(x.w);
+      assert.ok(CY_KINDS.includes(x.kind), `「${t}」${x.w} 的 kind: ${x.kind}`);
+      assert.ok(/[。！？」]$/.test(x.note), `「${t}」${x.w} 的说明没有句末标点`);
+      if (raw.at) {
+        assert.notEqual(x.line, null, `「${t}」${x.w}: 原文里找不到「${raw.at}」`);
+        const text = x.line < 0 ? p.t : p.p[x.line];
+        assert.equal(text.slice(x.at, x.at + x.len), raw.at);
+        // 原文和成语对得上: 一样, 或者说明里写了是从哪句来的 / 原文怎么写
+        const plain = (str) => str.replace(/[，。；、]/g, '');
+        if (plain(raw.at) !== plain(x.w)) assert.ok(raw.at.includes(x.w) || x.note.includes(raw.at) || x.note.includes('原文'), `「${t}」${x.w} 和原文「${raw.at}」不一样, 说明里要写清楚`);
+      } else assert.equal(x.line, null);
+    }
+    for (const z of e.zhi ?? []) {
+      if (typeof z === 'string') {
+        assert.ok(/[。！？」]$/.test(z), `「${t}」知道吗: ${z}`);
+        continue;
+      }
+      assert.ok(z.text && /[。！？」]$/.test(z.text), `「${t}」知道吗: ${z.text}`);
+      const [bookId, title] = z.go;
+      const data = await loadBook(bookId);
+      assert.ok(data?.pieces.some((x) => x.t === title), `「${t}」知道吗链接的《${title}》不在 ${bookId} 里`);
+      assert.notEqual(title, t);
+    }
+  }
+  assert.ok(count >= 100);
+  // 文中用了、但不是出自这篇的, 不收 (出自《老子》《史记》《左传》《论语》)
+  const all = Object.values(yizhu).flatMap((e) => e.cy.map((x) => x.w));
+  for (const no of ['鸡犬相闻', '正襟危坐', '杯盘狼藉', '居安思危', '何陋之有', '鞠躬尽瘁', '三人行，必有我师', '舳舻千里']) assert.ok(!all.includes(no), no);
+
+  // 找字、整句
+  const thy = guwen.pieces.find((p) => p.t === '桃花源记');
+  assert.deepEqual(findText(thy, '豁然开朗'), { line: 1, at: thy.p[1].indexOf('豁然开朗') });
+  assert.equal(findText(thy, '没有这句'), null);
+  assert.deepEqual(findText(thy, '桃花'), { line: -1, at: 0 });
+  assert.equal(sentenceAround('其乡人曰：“肉食者谋之，又何间焉？”刿曰：“肉食者鄙，未能远谋。”', 22, 3), '肉食者鄙，未能远谋。');
+  const idioms = idiomsOf(thy, yizhu['桃花源记']);
+  const stwy = idioms.find((x) => x.w === '世外桃源');
+  assert.equal(stwy.line, null);
+  // 成语卡片: 正面成语, 背面意思和出处 (有原句写原句, 引号去掉)
+  const cards = idiomCards(thy, yizhu['桃花源记']);
+  assert.equal(cards.length, yizhu['桃花源记'].cy.length);
+  const hr = cards.find((c) => c.term === '豁然开朗');
+  assert.ok(hr.def.includes('\n出自《桃花源记》（陶渊明）：复行数十步，豁然开朗。'), hr.def);
+  assert.ok(cards.find((c) => c.term === '世外桃源').def.endsWith('\n出自《桃花源记》（陶渊明）'));
+  assert.ok(!cards.some((c) => /[“”]/.test(c.def)));
+  const book = bookOf('guwen');
+  assert.deepEqual(makeCards(book, [thy], 'cy', yizhu), cards);
+  assert.equal(makeCards(book, guwen.pieces, 'cy', yizhu).length, count);
+
+  // 搜成语: 原文里没有这几个字的也找得到出处 (「世外桃源」「勾心斗角」), 排在句子前面
+  const hits = await searchLibrary('世外桃源');
+  assert.equal(hits[0].piece.t, '桃花源记');
+  assert.equal(hits[0].where, 'idiom');
+  assert.equal(hits[0].line, '成语「世外桃源」出自这里');
+  assert.equal((await searchLibrary('勾心斗角'))[0].piece.t, '阿房宫赋');
+  assert.ok((await searchLibrary('东道主')).some((x) => x.piece.t === '烛之武退秦师' && x.line === '词语「东道主」出自这里'));
+  // 名句里带标点的, 不打标点也找得到
+  assert.ok((await searchLibrary('先天下之忧而忧后天下之乐而乐')).some((x) => x.piece.t === '岳阳楼记'));
+  // 原来的搜法照旧
+  assert.equal((await searchLibrary('春眠'))[0].where, 'title');
 });

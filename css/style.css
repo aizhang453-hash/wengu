@@ -9740,3 +9740,93 @@ button.pick-row:hover {
   font-size: 1.3rem;
   cursor: pointer;
 }
+
+/* 出自这篇的成语、名句 和 知道吗 (yizhu 的 cy、zhi) */
+.read-cy {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.read-cy h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.read-cy ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.read-zhi ul {
+  padding-left: 1.2em;
+  list-style: disc;
+}
+
+.read-zhi li::marker {
+  color: var(--accent);
+}
+
+.read-cy-kind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  vertical-align: 0.1em;
+}
+
+.read-cy-jump,
+.read-zhi-go {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+}
+
+.read-gloss-cy {
+  display: block;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+/* 点了「看原文」: 那一段闪一下, 那几个字标出来 */
+.read-flash {
+  animation: read-flash 1.6s ease-out;
+}
+
+@keyframes read-flash {
+  0%,
+  30% {
+    background: var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+::highlight(read-cy) {
+  background-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .read-flash {
+    animation: none;
+  }
+}

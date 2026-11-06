@@ -6,7 +6,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, notesOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, notesOf, idiomsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
@@ -80,7 +80,7 @@ export function renderLibrary({ store }) {
   const search = h('input', {
     class: 'input',
     type: 'search',
-    placeholder: '搜题目、作者或句子，比如：春眠、孟浩然、一寸光阴',
+    placeholder: '搜题目、作者、句子或成语，比如：春眠、孟浩然、世外桃源',
     'aria-label': '在书库里搜',
     oninput: async () => {
       const n = ++searchN;
@@ -197,7 +197,7 @@ function shelf(s, books, row) {
 }
 
 // 注释和译文是温故自己写的 (原文的资料里没有)
-const YIZHU_NOTE = '注释和译文是温故自己写的，讲法照通行的课本注释；有两种讲法的写了「一说」。难免有疏漏，欢迎指出。';
+const YIZHU_NOTE = '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。难免有疏漏，欢迎指出。';
 
 const sourceNote = () =>
   h(
@@ -273,14 +273,35 @@ export function renderPiece({ store, go }, id, n) {
   drawFav();
 
   let text = null; // 拿到的这一篇 (简体), 做卡片、朗读用
-  let entry = null; // 这一篇的注释和译文 (有的才有)
-  // 点了注释的词: 在页面底下显示解释
+  let entry = null; // 这一篇的注释、译文、成语 (有的才有)
+  let idioms = []; // 出自这篇的成语、名句 (idiomsOf)
+  // 点了注释的词: 在页面底下显示解释; 这个词正好在一个成语、名句里的, 也写出来
   const gloss = h('div', { class: 'read-gloss', hidden: true, role: 'status' });
   const showGloss = (el, m) => {
     body.querySelectorAll('.read-term.on').forEach((x) => x.classList.remove('on'));
     el.classList.add('on');
-    fill(gloss, h('span', {}, h('strong', {}, m.w), `：${m.note}`), h('button', { class: 'read-gloss-close', type: 'button', 'aria-label': '关上', onclick: () => ((gloss.hidden = true), el.classList.remove('on')) }, '×'));
+    const also = idioms.filter((x) => x.line === m.line && x.at < m.at + m.len && m.at < x.at + x.len);
+    fill(
+      gloss,
+      h('span', {}, h('strong', {}, m.w), `：${m.note}`, also.map((x) => h('span', { class: 'read-gloss-cy' }, h('span', { class: 'read-cy-kind' }, x.kind), h('strong', {}, x.w), `：${x.note}`))),
+      h('button', { class: 'read-gloss-close', type: 'button', 'aria-label': '关上', onclick: () => ((gloss.hidden = true), el.classList.remove('on')) }, '×'),
+    );
     gloss.hidden = false;
+  };
+  // 点成语的「原文」: 滚到那一段, 闪一下, 那几个字标出来 (浏览器支持的话)
+  const jumpTo = (x) => {
+    const el = body.querySelector(`[data-line="${x.line}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('read-flash');
+    void el.offsetWidth; // 再闪一次
+    el.classList.add('read-flash');
+    const range = el.dataset.same === '1' ? rangeIn(el, x.at, x.len) : null;
+    if (range && globalThis.CSS?.highlights && globalThis.Highlight) {
+      CSS.highlights.set('read-cy', new Highlight(range));
+      clearTimeout(jumpTo.timer);
+      jumpTo.timer = setTimeout(() => CSS.highlights.delete('read-cy'), 4000);
+    }
   };
   // 读音特别的字上面标拼音, 注释的词下面画虚线、标号 (都按简体那份找, 繁体一行一样长时标在同样的位置); 正文下面列出读音说明、注释, 打开「译文」时每段下面跟着译文
   const render = (hans, data) => {
@@ -320,10 +341,11 @@ export function renderPiece({ store, go }, id, n) {
       });
     };
     const yi = entry && prefs.yi ? entry.yi : null;
-    const title = h('h1', { class: 'read-title' }, marked(p.t, -1, hp.t));
+    // data-line: 第几行 (成语跳过去用), data-same: 跟简体一样长 (字的位置对得上)
+    const title = h('h1', { class: 'read-title', 'data-line': '-1', 'data-same': p.t.length === hp.t.length ? '1' : '0' }, marked(p.t, -1, hp.t));
     const lines = p.p.map((l, j) => [
       p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null,
-      h('p', {}, marked(l, j, hp.p[j] ?? '')),
+      h('p', { 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0' }, marked(l, j, hp.p[j] ?? '')),
       yi?.[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null,
     ]);
     return [
@@ -348,6 +370,28 @@ export function renderPiece({ store, go }, id, n) {
             ),
           )
         : null,
+      idioms.length
+        ? h(
+            'section',
+            { class: 'read-cy', lang: 'zh-Hans', 'aria-label': '出自这篇的成语和名句' },
+            h('h2', {}, '出自这篇的成语和名句'),
+            h(
+              'ul',
+              {},
+              idioms.map((x) =>
+                h(
+                  'li',
+                  {},
+                  h('span', { class: 'read-cy-kind' }, x.kind),
+                  h('strong', {}, x.w),
+                  `：${x.note}`,
+                  x.line !== null ? h('button', { class: 'read-cy-jump', type: 'button', onclick: () => jumpTo(x), 'aria-label': `看「${x.w}」的原文` }, '看原文') : null,
+                ),
+              ),
+            ),
+          )
+        : null,
+      entry?.zhi?.length ? h('section', { class: 'read-cy read-zhi', lang: 'zh-Hans', 'aria-label': '知道吗' }, h('h2', {}, '知道吗'), h('ul', {}, entry.zhi.map(zhiItem))) : null,
       entry ? h('p', { class: 'read-notes muted small' }, YIZHU_NOTE) : null,
       gloss,
     ];
@@ -358,6 +402,7 @@ export function renderPiece({ store, go }, id, n) {
       ([hans, hant, yizhu]) => {
         text = { data: hans, p: hans.pieces[i], yizhu };
         entry = yizhu?.[hans.pieces[i].t] ?? null;
+        idioms = idiomsOf(hans.pieces[i], entry);
         zhuBtn.hidden = yiBtn.hidden = !entry;
         gloss.hidden = true;
         if (body.isConnected) fill(body, render(hans, hant ?? hans));
@@ -455,20 +500,24 @@ export function renderPiece({ store, go }, id, n) {
 }
 
 // ---- 做成卡片: 接下句 / 整篇, 这一篇 / 整本 ----
-//   有注释的书多一种「字词」: 正面注的词 (带着那一小句), 背面注释; 整本就是有注释的那几篇
+//   有注释的书多两种: 「字词」正面注的词 (带着那一小句), 背面注释; 「成语」正面成语, 背面意思和出处。整本就是有的那几篇
 function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   const draft = { style: 'next', all: false };
   const hasZhu = (p) => Boolean(yizhu?.[p.t]?.notes?.length);
+  const hasCy = (p) => Boolean(yizhu?.[p.t]?.cy?.length);
   const zhuOK = () => (draft.all ? data.pieces.some(hasZhu) : hasZhu(piece));
+  const cyOK = () => (draft.all ? data.pieces.some(hasCy) : hasCy(piece));
+  const canZhu = Boolean(yizhu) && (hasZhu(piece) || data.pieces.some(hasZhu));
+  const canCy = Boolean(yizhu) && (hasCy(piece) || data.pieces.some(hasCy));
   const preview = h('p', { class: 'muted small' });
   const choice = (key, value, label, desc) =>
     h('button', { class: `chip-toggle${draft[key] === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(draft[key] === value), title: desc, onclick: () => ((draft[key] = value), draw()) }, label);
   const box = h('div', { class: 'read-cards' });
   const pieces = () => (draft.all ? data.pieces : [piece]);
   const cards = () => makeCards(book, pieces(), draft.style, yizhu);
-  const title = () => `${setTitle(book, draft.all ? null : piece)}${draft.style === 'zhu' ? ' · 字词' : ''}`;
+  const title = () => `${setTitle(book, draft.all ? null : piece)}${draft.style === 'zhu' ? ' · 字词' : draft.style === 'cy' ? ' · 成语' : ''}`;
   function draw() {
-    if (draft.style === 'zhu' && !zhuOK()) draft.style = 'next';
+    if ((draft.style === 'zhu' && !zhuOK()) || (draft.style === 'cy' && !cyOK())) draft.style = 'next';
     const list = cards();
     const sample = list[book.kind === 'poem' && draft.style === 'next' ? Math.min(1, list.length - 1) : 0];
     fill(
@@ -476,10 +525,11 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
       h('p', { class: 'small' }, '怎么背'),
       h(
         'div',
-        { class: `chip-row${yizhu && (hasZhu(piece) || data.pieces.some(hasZhu)) ? '' : ' two'}` }, // 三种是三格一行
+        { class: `chip-row${canZhu + canCy === 1 ? '' : ' two'}` }, // 三种是三格一行, 两种、四种两格一行
         choice('style', 'next', '接下句', '正面一句，背面下一句'),
         choice('style', 'whole', book.kind === 'poem' ? '整首' : '整段', '正面题目，背面全文'),
-        yizhu && (hasZhu(piece) || data.pieces.some(hasZhu)) ? choice('style', 'zhu', '字词', '正面是注释的词，背面是解释') : null,
+        canZhu ? choice('style', 'zhu', '字词', '正面是注释的词，背面是解释') : null,
+        canCy ? choice('style', 'cy', '成语', '正面是成语、名句，背面是意思和出处') : null,
       ),
       h(
         'p',
@@ -488,7 +538,9 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
           ? '正面是一句，想下一句是什么，翻过来对答案。适合一句一句背熟。'
           : draft.style === 'zhu'
             ? `正面是注释里的词（带着它在的那一小句），背面是解释。适合记实词、虚词${draft.all ? '；整本只做有注释的那几篇' : ''}。`
-            : `正面是题目，背面是全文。适合背完以后整${book.kind === 'poem' ? '首' : '段'}默写、复习。`,
+            : draft.style === 'cy'
+              ? `正面是出自这${draft.all ? '些篇' : `一${book.unit}`}的成语、名句，背面是现在的意思和出处原句。`
+              : `正面是题目，背面是全文。适合背完以后整${book.kind === 'poem' ? '首' : '段'}默写、复习。`,
       ),
       book.count > 1
         ? [
@@ -518,7 +570,7 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
             const list = cards();
             const set = makeSet({
               title: name,
-              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${draft.style === 'next' ? '接下句' : draft.style === 'zhu' ? '字词（注释）' : `整${book.unit}`}。`,
+              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${draft.style === 'next' ? '接下句' : draft.style === 'zhu' ? '字词（注释）' : draft.style === 'cy' ? '成语、名句' : `整${book.unit}`}。`,
               termLang: 'zh-CN',
               defLang: 'zh-CN',
               cards: list.map((c) => makeCard(c.term, c.def)),
@@ -538,6 +590,44 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
       ),
     ],
   });
+}
+
+// 「知道吗」的一条: 一句话, 或者带一个去书库里另一篇的链接 ({ text, go: [书, 篇名] }; 拿到那本书才知道是第几篇)
+function zhiItem(z) {
+  if (typeof z === 'string') return h('li', {}, z);
+  const [bookId, title] = z.go;
+  const a = h('a', { class: 'read-zhi-go', href: `#/read/${bookId}` }, `读《${title}》→`);
+  loadBook(bookId).then(
+    (d) => {
+      const i = d.pieces.findIndex((p) => p.t === title);
+      if (i >= 0) a.href = pieceHref(bookId, i);
+    },
+    () => {},
+  );
+  return h('li', {}, z.text, a);
+}
+
+// 一段字 (第 at 个字起, len 个) 在页面上的 Range: 跳过拼音 (rt)、注释的号 (sup) 和连字符 (\u2060); 找不到 null
+function rangeIn(el, at, len) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement?.closest('rt, sup') || n.data === '\u2060' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  const range = document.createRange();
+  let pos = 0;
+  let started = false;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const end = pos + n.data.length;
+    if (!started && at < end) {
+      range.setStart(n, at - pos);
+      started = true;
+    }
+    if (started && at + len <= end) {
+      range.setEnd(n, at + len - pos);
+      return range;
+    }
+    pos = end;
+  }
+  return null;
 }
 
 function notFound() {
