@@ -1,12 +1,12 @@
-// 阅读 (书库): 唐诗宋词和古代启蒙读物的原文 (想法在 ../reading.js)
-//   #/read                书架: 每日一首、接着读、搜索、所有的书、收藏
+// 阅读 (书库): 唐诗宋词、论语、古文观止和古代启蒙读物的原文 (想法在 ../reading.js)
+//   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首、接着读、搜索、所有的书、收藏
 //   #/read/<书>           一本书的目录
 //   #/read/<书>/<第几篇>  读一篇 (从 1 数): 收藏、做成卡片背、朗读、简体 / 繁体、字号; ← → 换篇
 //   首页「今日」的「每日一首」也在这里画 (dailyCard)
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
@@ -30,7 +30,8 @@ function savePrefs(p) {
 }
 
 const pieceHref = (book, i) => `#/read/${book}/${i + 1}`;
-const byline = (book, p) => (book.kind === 'poem' ? [p.e ? `〔${p.e}〕` : '', p.a ?? ''].join('') : '');
+// 「〔唐〕孟浩然」「〔先秦〕左丘明 《左传》」; 没有作者的 (三字经的一段) 是空的
+const byline = (p) => (p.a ? `${p.e ? `〔${p.e}〕` : ''}${p.a}${p.s ? ` ${p.s}` : ''}` : '');
 const unitOf = (book, i) => (book.count > 1 ? `第 ${i + 1} ${book.unit}` : '');
 
 // 正文拿不来 (第一次打开时没网)
@@ -56,7 +57,7 @@ export function dailyCard({ compact = false } = {}) {
       fill(
         box,
         h('span', { class: 'read-daily-tag' }, `每日一首 · ${book.title}`),
-        h('strong', { class: 'read-daily-title' }, p.t, h('span', { class: 'muted' }, ` ${byline(book, p)}`)),
+        h('strong', { class: 'read-daily-title' }, p.t, h('span', { class: 'muted' }, ` ${byline(p)}`)),
         h(
           'span',
           { class: 'read-daily-lines' },
@@ -103,7 +104,7 @@ export function renderLibrary({ store }) {
                     'a',
                     { href: pieceHref(x.book, x.i) },
                     h('strong', {}, x.piece.t),
-                    h('span', { class: 'muted small' }, ` ${book.title}${byline(book, x.piece) ? ` · ${byline(book, x.piece)}` : ''}`),
+                    h('span', { class: 'muted small' }, ` ${book.title}${byline(x.piece) ? ` · ${byline(x.piece)}` : ''}`),
                     h('span', { class: 'read-hit' }, x.line),
                   ),
                 );
@@ -128,7 +129,7 @@ export function renderLibrary({ store }) {
           favs.map((f) => {
             const book = bookOf(f.book);
             const p = data[f.book].pieces[f.i];
-            return h('li', {}, h('a', { href: pieceHref(f.book, f.i) }, h('strong', {}, p.t), h('span', { class: 'muted small' }, ` ${book.title}${byline(book, p) ? ` · ${byline(book, p)}` : ''}`), h('span', { class: 'read-hit' }, p.p[0] ?? '')));
+            return h('li', {}, h('a', { href: pieceHref(f.book, f.i) }, h('strong', {}, p.t), h('span', { class: 'muted small' }, ` ${book.title}${byline(p) ? ` · ${byline(p)}` : ''}`), h('span', { class: 'read-hit' }, p.p[0] ?? '')));
           }),
         );
       },
@@ -153,27 +154,46 @@ export function renderLibrary({ store }) {
         : null,
       h('div', { class: 'read-search' }, search),
       results,
-      h('div', { class: 'list-head' }, h('h2', {}, '书架'), h('span', { class: 'muted small' }, `${BOOKS.length} 本`)),
-      h(
-        'ul',
-        { class: 'read-shelf' },
-        BOOKS.map((b) =>
-          h(
-            'li',
-            {},
-            h(
-              'a',
-              { class: 'read-book', href: `#/read/${b.id}` },
-              h('span', { class: 'read-spine', 'aria-hidden': 'true' }, b.title),
-              h('span', { class: 'read-book-text' }, h('strong', {}, `《${b.title}》`), h('span', { class: 'muted small' }, `${b.era} · ${b.author} · ${b.count} ${b.unit}`), h('span', { class: 'small read-intro' }, b.intro)),
-            ),
-          ),
-        ),
-      ),
+      h('div', { class: 'list-head' }, h('h2', {}, '书架'), h('span', { class: 'muted small' }, `${BOOKS.length} 本 · 点书看简介和目录`)),
+      h('div', { class: 'read-shelves' }, SHELVES.map((s, row) => shelf(s, BOOKS.filter((b) => b.cat === s.key), row))),
       favs.length ? [h('div', { class: 'list-head' }, h('h2', {}, '收藏'), h('span', { class: 'muted small' }, `${favs.length} 篇`)), favBox] : null,
       sourceNote(),
     ),
   };
+}
+
+// 一层书架: 书竖着立着, 露出书脊 (书名竖着写); 篇数多的书厚一点、高一点, 颜色一层里轮着来 (挨着的不一样)
+const CLOTH = ['#b8372e', '#3f6f8f', '#5d7d3a', '#8a6236', '#6b4f8a', '#2f6b66', '#a0522d', '#4a5a7a'];
+function shelf(s, books, row) {
+  if (!books.length) return null;
+  const size = (n) => Math.log2(n + 1);
+  return h(
+    'section',
+    { class: 'read-shelf', 'aria-label': s.name },
+    h('div', { class: 'read-shelf-head' }, h('h3', {}, s.name), h('span', { class: 'muted small' }, `${books.length} 本`)),
+    h(
+      'ul',
+      { class: 'read-spines' },
+      books.map((b, i) =>
+        h(
+          'li',
+          {},
+          h(
+            'a',
+            {
+              class: 'read-spine-book',
+              href: `#/read/${b.id}`,
+              title: `《${b.title}》${b.era} · ${b.author}\n${b.intro}`,
+              'aria-label': `《${b.title}》，${b.era}，${b.count} ${b.unit}`,
+              style: `--c: ${CLOTH[(row * 3 + i) % CLOTH.length]}; --w: ${Math.round(46 + Math.min(16, size(b.count) * 2))}px; --h: ${Math.round(122 + Math.min(34, size(b.count) * 4))}px`,
+            },
+            h('span', { class: 'read-spine-title' }, b.title),
+            h('span', { class: 'read-spine-count' }, `${b.count}${b.unit}`),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 const sourceNote = () =>
@@ -196,7 +216,7 @@ export function renderBook({ store }, id) {
       h(
         'li',
         { class: last?.i === i ? 'on' : '' },
-        h('a', { href: pieceHref(id, i) }, book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${i + 1}`), h('span', {}, p.t), book.kind === 'poem' && p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null),
+        h('a', { href: pieceHref(id, i) }, book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${i + 1}`), h('span', {}, p.t), p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null),
       );
     const items = data.pieces.map((p, i) => ({ p, i }));
     if (!data.groups.length) return h('ol', { class: `read-list read-toc-list ${book.kind}` }, items.map(({ p, i }) => item(p, i)));
@@ -256,12 +276,14 @@ export function renderPiece({ store, go }, id, n) {
       if (!prefs.hant) text = { data, p };
       return [
         h('h1', { class: 'read-title' }, p.t),
-        h('p', { class: 'read-by muted' }, [byline(book, p), book.kind === 'poem' ? '' : `《${data.title}》${data.groups[p.g] ? ` · ${data.groups[p.g]}` : ''}${unitOf(book, i) ? ` · ${unitOf(book, i)}` : ''}`].filter(Boolean).join(' ')),
-        // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、声律启蒙) 首行缩进
+        // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
+        h('p', { class: 'read-by muted' }, [byline(p) || `《${data.title}》`, data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).join(' · ')),
+        // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
+        // 组诗在每首前面写「其一」「其二」
         h(
           'div',
           { class: `read-text${p.p.every((l) => l.length <= 24) ? ' verse' : ''}` },
-          p.p.map((l) => h('p', {}, l)),
+          p.p.map((l, j) => [p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null, h('p', {}, l)]),
         ),
         // 版本注释 (唐诗三百首里的「明年 一作：年年」)
         p.n?.length ? h('p', { class: 'read-notes muted small' }, `注：${p.n.join('；')}`) : null,
@@ -286,7 +308,7 @@ export function renderPiece({ store, go }, id, n) {
       },
     }, label);
   const say = canSpeak()
-    ? h('button', { class: 'btn small', type: 'button', onclick: () => simple().then(({ p }) => speak(`${p.t}。${byline(book, p) ? `${p.a}。` : ''}${p.p.join('')}`, 'zh-CN', { rate: 0.85 })) }, icon('volume', 16), ' 朗读')
+    ? h('button', { class: 'btn small', type: 'button', onclick: () => simple().then(({ p }) => speak(`${p.t}。${p.a ? `${p.a}。` : ''}${p.p.join('')}`, 'zh-CN', { rate: 0.85 })) }, icon('volume', 16), ' 朗读')
     : null;
 
   const prev = i > 0 ? i - 1 : null;

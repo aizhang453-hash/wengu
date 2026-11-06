@@ -1,4 +1,4 @@
-// 阅读 (书库): 唐诗宋词和古代启蒙读物的原文 (js/library/, tools/library.mjs 生成)。这里是不碰网页的部分: 拿书、找、做卡片、每日一首、收藏和读到哪 (画在 views/read.js)
+// 阅读 (书库): 唐诗宋词、论语、古文观止和古代启蒙读物的原文 (js/library/, tools/library.mjs 生成)。这里是不碰网页的部分: 拿书、找、做卡片、每日一首、收藏和读到哪 (画在 views/read.js)
 //   一篇的编号 (收藏、读到哪用): '书:第几篇', 比如 'qianjiashi:0' 是《千家诗》第一首
 //   data.reading = { favs: { 编号: { on 1 收藏 / 0 取消了, at } }, last: { 书: { i 读到第几篇, at } } }; 没读过是 null
 //   同步: 收藏、读到哪都按编号 (书) 听后改的
@@ -34,12 +34,15 @@ export function parsePieceId(pid) {
 
 // ---- 做卡片 ----
 const MARKS = '，。；：？！、';
-// 一句一句拆开 (按标点), 去掉句末的标点
+const QUOTES = /[“”‘’「」『』]/g;
+// 「子曰」「曾子曰」「子禽问于子贡曰」这种 (谁说的) 跟后面一句连起来, 不然卡片正面只有「子曰」
+const SPEAKER = /^.{1,8}[曰云]$/;
+// 一句一句拆开 (按标点), 去掉句末的标点和引号
 export function clauses(lines) {
   const out = [];
   for (const line of lines) {
     let cur = '';
-    for (const ch of line) {
+    for (const ch of line.replace(QUOTES, '')) {
       if (MARKS.includes(ch)) {
         if (cur.trim()) out.push(cur.trim());
         cur = '';
@@ -47,32 +50,48 @@ export function clauses(lines) {
     }
     if (cur.trim()) out.push(cur.trim());
   }
+  for (let i = 0; i + 1 < out.length; i++) if (SPEAKER.test(out[i])) out.splice(i, 2, `${out[i]}：${out[i + 1]}`);
   return out;
 }
 
 const poemName = (p) => `《${p.t}》${p.a ? `（${p.a}）` : ''}`;
 
+// 组诗 (一篇里有「其一」「其二」, k: [[从第几行, '其一'], …]) 拆成一首一首: [{ ...p, t: '宫词·其一', p: 那几行 }]
+export function poemsOf(p) {
+  if (!p.k?.length) return [p];
+  return p.k.map(([from, label], j) => ({ ...p, t: `${p.t}·${label}`, p: p.p.slice(from, p.k[j + 1]?.[0] ?? p.p.length), k: undefined }));
+}
+
 // 做成卡片: style 'next' 接下句 (正面一句, 背面下一句), 'whole' 整篇 (正面题目, 背面全文)。返回 [{ term, def }]
-//   诗一首一首分开接, 第一张是「《题目》（作者）第一句」(题目里就有第一句的不要, 像宋词「水调歌头·明月几时有」);
-//   文章的几段是连着的, 整本做时上一段的末句接下一段的头一句
+//   诗一首一首分开接 (组诗也拆开), 第一张是「《题目》（作者）第一句」(题目里就有第一句的不要, 像宋词「水调歌头·明月几时有」);
+//   文章看书的 chain: 'book' 整本连着接 (三字经切成的几段, 上一段的末句接下一段的头一句), 'line' 一行一行接 (论语一章、增广贤文一句, 互不相干), 别的一篇里连着接
 export function makeCards(book, pieces, style = 'next') {
-  if (style === 'whole') return pieces.map((p) => ({ term: book.kind === 'poem' ? poemName(p) : `${book.title} · ${p.t}`, def: p.p.join('\n') }));
+  if (style === 'whole') return pieces.flatMap(poemsOf).map((p) => ({ term: p.a ? poemName(p) : `${book.title} · ${p.t}`, def: p.p.join('\n') }));
   const cards = [];
   const chain = (list) => {
     for (let i = 0; i + 1 < list.length; i++) cards.push({ term: list[i], def: list[i + 1] });
   };
   if (book.kind === 'poem') {
-    for (const p of pieces) {
+    for (const p of pieces.flatMap(poemsOf)) {
       const list = clauses(p.p);
       if (list.length && !p.t.includes(list[0])) cards.push({ term: `${poemName(p)}第一句`, def: list[0] });
       chain(list);
     }
-  } else chain(pieces.flatMap((p) => clauses(p.p)));
+  } else if (book.chain === 'book') chain(pieces.flatMap((p) => clauses(p.p)));
+  else if (book.chain === 'line') for (const p of pieces) for (const line of p.p) chain(clauses([line]));
+  else for (const p of pieces) chain(clauses(p.p));
   return cards;
 }
 
-// 卡片集叫什么: 一首诗「水调歌头·明月几时有（苏轼）」, 一段文章「三字经 · 人之初」, 整本「三字经」
-export const setTitle = (book, piece = null) => (!piece ? book.title : book.kind === 'poem' ? `${piece.t}${piece.a ? `（${piece.a}）` : ''}` : `${book.title} · ${piece.t}`);
+// 卡片集叫什么: 有作者的一篇「水调歌头·明月几时有（苏轼）」「出师表（诸葛亮）」, 一段文章「三字经 · 人之初」, 整本「三字经」
+export const setTitle = (book, piece = null) => (!piece ? book.title : piece.a ? `${piece.t}（${piece.a}）` : `${book.title} · ${piece.t}`);
+
+// 书架上分几层 (书目里每本书的 cat)
+export const SHELVES = [
+  { key: 'poetry', name: '诗词' },
+  { key: 'classic', name: '经典与古文' },
+  { key: 'primer', name: '启蒙读物' },
+];
 
 // ---- 每日一首 (《千家诗》里挑): 每天换一首, 哪台设备上都一样 ----
 export const DAILY_BOOK = 'qianjiashi';
