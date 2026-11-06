@@ -6,7 +6,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
@@ -309,7 +309,7 @@ export function renderPiece({ store, go }, id, n) {
     const hp = hans.pieces[i];
     const marks = readingsOf(id, hp);
     const glosses = entry && prefs.zhu ? notesOf(hp, entry) : [];
-    const shown = new Map(); // 「说 yuè」→ 说明 (按页面上的字)
+    const shown = new Map(); // 「说 yuè」→ { text 页面上的字, py, note } (一样的字和读音只列一次)
     // 一段字标上拼音 (off: 这段在一行里从第几个字起)
     const ruby = (str, mine, off) =>
       splitMarks(
@@ -317,7 +317,7 @@ export function renderPiece({ store, go }, id, n) {
         mine.map((m) => ({ ...m, at: m.at - off })),
       ).map((x) => {
         if (!x.mark) return x.text;
-        shown.set(`${x.text} ${x.mark.py}`, x.mark.note);
+        shown.set(`${x.text} ${x.mark.py}`, { text: x.text, py: x.mark.py, note: x.mark.note });
         return h('ruby', { class: 'read-ruby', title: `${x.mark.py}：${x.mark.note}` }, x.text, h('rt', {}, x.mark.py));
       });
     const marked = (str, k, simple) => {
@@ -355,9 +355,32 @@ export function renderPiece({ store, go }, id, n) {
       // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
       // 组诗在每首前面写「其一」「其二」
       h('div', { class: `read-text${p.p.every((l) => l.length <= 24) ? ' verse' : ''}` }, lines),
-      shown.size ? h('p', { class: 'read-notes muted small' }, `读音：${[...shown].map(([k, note]) => `${k}（${note}）`).join('；')}`) : null,
+      // 读音、版本注释: 跟「注释」一样一条一条列出来 (不挤成一段居中的长句子)
+      shown.size
+        ? h(
+            'section',
+            { class: 'read-zhu read-yin', lang: 'zh-Hans', 'aria-label': '读音' },
+            h('h2', {}, '读音'),
+            h(
+              'ul',
+              {},
+              [...shown.values()].map((x) => h('li', {}, h('span', { class: 'read-yin-ch' }, x.text), h('span', { class: 'read-yin-py' }, x.py), h('span', { class: 'read-yin-note' }, x.note))),
+            ),
+          )
+        : null,
       // 版本注释 (唐诗三百首里的「明年 一作：年年」)
-      p.n?.length ? h('p', { class: 'read-notes muted small' }, `注：${p.n.join('；')}`) : null,
+      p.n?.length
+        ? h(
+            'section',
+            { class: 'read-zhu read-yin', 'aria-label': '版本不同的字' },
+            h('h2', {}, '版本不同的字'),
+            h(
+              'ul',
+              {},
+              variantsOf(p.n).map((v) => h('li', {}, v.text ?? [h('span', { class: 'read-yin-ch' }, v.w), h('span', { class: 'read-yin-note' }, ` ${v.kind === '通' ? '同' : '一作'}「${v.alt}」`)])),
+            ),
+          )
+        : null,
       glosses.length
         ? h(
             'section',

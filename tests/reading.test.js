@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, variantsOf, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -495,4 +495,16 @@ test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书�
   assert.ok((await searchLibrary('先天下之忧而忧后天下之乐而乐')).some((x) => x.piece.t === '岳阳楼记'));
   // 原来的搜法照旧
   assert.equal((await searchLibrary('春眠'))[0].where, 'title');
+});
+
+test('版本注释拆成一条一条: 「；」连着的拆开, 冒号可有可无, 看不懂的原样', () => {
+  assert.deepEqual(variantsOf(['层峦 一作：层台；即冈 一作：列冈', '轴 通：舳', '试 一作 始', '□：资料里缺这个字']), [
+    { w: '层峦', kind: '一作', alt: '层台' },
+    { w: '即冈', kind: '一作', alt: '列冈' },
+    { w: '轴', kind: '通', alt: '舳' },
+    { w: '试', kind: '一作', alt: '始' },
+    { text: '□：资料里缺这个字' },
+  ]);
+  assert.deepEqual(variantsOf(['食 马者 通： 饲']), [{ w: '食马者', kind: '通', alt: '饲' }]);
+  assert.deepEqual(variantsOf(undefined), []);
 });
