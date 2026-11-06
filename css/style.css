@@ -9830,3 +9830,29 @@ button.pick-row:hover {
     animation: none;
   }
 }
+
+/* 读音、版本不同的字: 跟注释一样一条一条列出来, 屏幕宽就排成几列 */
+.read-yin ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14em, 1fr));
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.read-yin-ch {
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.read-yin-py {
+  margin: 0 0.6em 0 0.3em;
+  color: var(--accent);
+}
+
+.read-yin-note {
+  color: var(--muted);
+}

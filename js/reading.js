@@ -247,6 +247,19 @@ export function idiomCards(piece, entry) {
   });
 }
 
+// ---- 版本注释 (一篇的 n: 「明年 一作：年年」「轴 通：舳」, 资料里有的几条用「；」连在一起) ----
+// 拆成一条一条: [{ w 原文的字, kind '一作' | '通', alt 别的写法 }]; 看不懂格式的 { text } 原样
+export function variantsOf(notes) {
+  return (notes ?? [])
+    .flatMap((n) => String(n).split(/[；;]/))
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const m = /^(.+?)\s*(一作|通)\s*[：:]?\s*(.+)$/.exec(x); // 冒号有的资料没写
+      return m ? { w: m[1].replace(/\s+/g, ''), kind: m[2], alt: m[3].replace(/\s+/g, '') } : { text: x };
+    });
+}
+
 // ---- 每日一首 (《千家诗》里挑): 每天换一首, 哪台设备上都一样 ----
 export const DAILY_BOOK = 'qianjiashi';
 const gcd = (a, b) => (b ? gcd(b, a % b) : a);
