@@ -508,3 +508,22 @@ test('版本注释拆成一条一条: 「；」连着的拆开, 冒号可有可�
   assert.deepEqual(variantsOf(['食 马者 通： 饲']), [{ w: '食马者', kind: '通', alt: '饲' }]);
   assert.deepEqual(variantsOf(undefined), []);
 });
+
+test('组诗里的一首, 题目写明是其几 (对照《全唐诗》)', async () => {
+  const find = (book, a, first) => book.pieces.find((p) => p.a === a && p.p[0].startsWith(first));
+  const tang = await loadBook('tangshi');
+  assert.equal(find(tang, '王维', '君自故乡来').t, '杂诗三首·其二'); // 书里只收了一首: 写一共几首
+  assert.equal(find(tang, '沈佺期', '闻道黄龙戍').t, '杂诗三首·其三');
+  assert.equal(find(tang, '张九龄', '江南有丹橘').t, '感遇十二首·其七');
+  assert.equal(find(tang, '李白', '金樽清酒').t, '行路难·其一'); // 整组都收了
+  assert.equal(find(tang, '卢纶', '月黑雁飞高').t, '塞下曲六首·其三');
+  assert.equal(find(tang, '李商隐', '昨夜星辰').t, '无题·昨夜星辰昨夜风'); // 无题照旧用第一句区分
+  const hant = await loadBook('tangshi', { hant: true });
+  assert.equal(find(hant, '崔顥', '君家何處住').t, '長干行四首·其一');
+  assert.ok(hant.pieces.every((p) => ![p.t, ...p.p].some((l) => l.includes('長幹'))));
+  const qj = await loadBook('qianjiashi');
+  assert.equal(find(qj, '杜甫', '两个黄鹂').t, '绝句四首·其三');
+  assert.equal(find(qj, '苏轼', '水光潋滟').t, '饮湖上初晴后雨二首·其二');
+  assert.equal(find(qj, '杜甫', '一片花飞').t, '曲江二首'); // 不是「曲江对酒」
+  assert.deepEqual(find(qj, '杜甫', '千家山郭').k.map(([, label]) => label), ['其三', '其五', '其一', '其七']);
+});

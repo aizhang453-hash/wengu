@@ -3,6 +3,7 @@
 // 蒙学那里是繁体, 简体用 OpenCC (opencc-js) 自动转; 宋词三百首那里是简体, 繁体用 OpenCC 转回去。只在更新书库时跑, 网页和 App 不用 OpenCC。
 //   node tools/library.mjs <放原文的文件夹> [opencc-js 的 dist/esm/full.js]
 //   文件夹里要有: 蒙学的那些 json,「宋词/宋词三百首.json」(改名成 songci300.json), 和放《全宋词》(宋词/ci.song.*.json) 的 ci 文件夹 (补字用)
+//   opencc-js 用 1.4.2 (别的版本有几个字转得不一样, 像「沈醉 / 沉醉」); 文件夹里还要有论语/lunyu.json
 // 每本书的篇目顺序别改: 收藏、读到哪记的是「书:第几篇」
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
@@ -136,6 +137,90 @@ function fixByTang(pieces, tang) {
     return { ...x, p, n: [...(x.n ?? []), ...notes] };
   });
   console.log(`千家诗: 照唐诗三百首改了 ${fixed} 首里的错字 (原来的写法记在注里)`);
+  return out;
+}
+
+// ---- 组诗里的一首, 题目标上「其几」 ----
+// 资料里有的只写了组诗的总题 (王维「君自故乡来」只写「杂诗」, 其实是《杂诗三首》其二), 有的用第一句区分 (「清平调·云想衣裳花想容」),
+// 看不出是第几首。对照同一个资料库 chinese-poetry 的《全唐诗》《全宋诗》、维基文库的《全唐诗》核对过:
+// 书里只收了这组诗里的几首, 写「杂诗三首·其二」(看得出一共几首); 整组都收了, 写「清平调·其一」。
+// 书里另起了题目的 (千家诗把《观书有感》其二叫「泛舟」、唐诗三百首把《长信秋词》其一叫「长信怨」) 照书里的, 不改。
+// [作者, 第一句开头 (简体), 题目后面加的, { base 换掉题目, k 组诗每首的「其几」 }]; 一条对不上正好一首就报错
+const TITLE_FIX = {
+  tangshi: [
+    ['王建', '三日入厨下', '三首·其三'],
+    ['王维', '君自故乡来', '三首·其二'],
+    ['张祜', '故国三千里', '二首·其一'],
+    ['权德舆', '昨夜裙带解', '十二首·其十一'],
+    ['王昌龄', '寒雨连江夜入吴', '二首·其一'],
+    ['王翰', '葡萄美酒夜光杯', '二首·其一'],
+    ['张泌', '别梦依依到谢家', '二首·其一'],
+    ['陈陶', '誓扫匈奴不顾身', '四首·其二'],
+    ['贺知章', '少小离家老大回', '二首·其一'],
+    ['崔涂', '几行归塞尽', '二首·其二'],
+    ['许浑', '遥夜泛清瑟', '三首·其一'],
+    ['张九龄', '孤鸿海上来', '十二首·其四'],
+    ['张九龄', '兰叶春葳蕤', '十二首·其一'],
+    ['张九龄', '幽人归独卧', '十二首·其二'],
+    ['张九龄', '江南有丹橘', '十二首·其七'],
+    ['王之涣', '黄河远上白云间', '二首·其一'],
+    ['王昌龄', '秦时明月汉时关', '二首·其一'],
+    ['王昌龄', '饮马渡秋水', '四首·其二'],
+    ['李白', '云想衣裳花想容', '·其一'],
+    ['李白', '一枝红艳露凝香', '·其二'],
+    ['李白', '名花倾国两相欢', '·其三'],
+    ['李白', '金樽清酒斗十千', '·其一'],
+    ['李白', '大道如青天', '·其二'],
+    ['李白', '有耳莫洗颍川水', '·其三'],
+    ['李白', '妾发初覆额', '二首·其一'],
+    ['崔颢', '君家何处住', '四首·其一'], // 《全唐诗》题作《长干曲四首》
+    ['崔颢', '家临九江水', '四首·其二'],
+    ['卢纶', '鹫翎金仆姑', '六首·其一'], // 《全唐诗》题作《和张仆射塞下曲六首》
+    ['卢纶', '林暗草惊风', '六首·其二'],
+    ['卢纶', '月黑雁飞高', '六首·其三'],
+    ['卢纶', '野幕敞琼筵', '六首·其四'],
+  ],
+  qianjiashi: [
+    ['崔颢', '君家在何处', '四首·其一'],
+    ['韦应物', '林中观易罢', '三首·其三'],
+    ['李白', '白发三千丈', '十七首·其十五'],
+    ['陈子昂', '银烛吐青烟', '二首·其一'],
+    ['杜甫', '方丈浑连水', '三首·其二'],
+    ['杜甫', '凤林戈未息', '二十首·其十九'],
+    ['李白', '云想衣裳花想容', '三首·其一'],
+    ['杜甫', '两个黄鹂鸣翠柳', '四首·其三'],
+    ['杜甫', '肠断春江欲尽头', '九首·其五'],
+    ['杜甫', '糁径杨花铺白毡', '九首·其七', { base: '絕句漫興' }], // 书里题作「漫兴」, 跟上一首是同一组
+    ['苏轼', '水光潋滟晴方好', '二首·其二'],
+    ['朱熹', '半亩方塘一鉴开', '二首·其一', { base: '觀書有感' }], // 原来写「观书有感（其一）」
+    ['张文潜', '长夏江村风日清', '三首·其一'],
+    ['杜甫', '一片花飞减却春', '二首', { base: '曲江' }], // 资料写成「曲江对酒」, 那是另一首 (「苑外江头坐不归」)
+    ['杜甫', '千家山郭静朝晖', '', { k: ['其三', '其五', '其一', '其七'] }], // 秋兴八首选了四首, 资料按选的次序写成其一到其四
+  ],
+};
+// 资料 (繁体) 里地名「长干」成了「長幹」、「长干里」成了「長幹裏」
+const POEM_FIX = [
+  ['長幹裏', '長干里'],
+  ['長幹', '長干'],
+];
+function fixPoems(id, pieces) {
+  const fixes = TITLE_FIX[id];
+  if (!fixes) return pieces;
+  const fix = (s) => POEM_FIX.reduce((x, [a, b]) => x.split(a).join(b), s);
+  const used = new Set();
+  const out = pieces.map((x0) => {
+    const x = { ...x0, t: fix(x0.t), p: x0.p.map(fix) };
+    const i = fixes.findIndex(([a, first]) => t2s(x.a ?? '') === a && t2s(x.p[0]).startsWith(first));
+    if (i < 0) return x;
+    if (used.has(i)) throw new Error(`${id}: 「${fixes[i][0]} ${fixes[i][1]}」对上了不止一首`);
+    used.add(i);
+    const [, , add, { base, k } = {}] = fixes[i];
+    if (k && k.length !== x.k?.length) throw new Error(`${id}「${x.t}」的组诗不是 ${k.length} 首`);
+    return { ...x, t: `${base ?? x.t.split('·')[0]}${add}`, ...(k ? { k: x.k.map(([at], j) => [at, k[j]]) } : {}) };
+  });
+  fixes.forEach(([a, first], i) => {
+    if (!used.has(i)) throw new Error(`${id}: 要改题目的「${a} ${first}」没找到`);
+  });
   return out;
 }
 
@@ -421,11 +506,13 @@ for (const b of BOOKS) {
     if (!x.p.length || x.p.some((l) => typeof l !== 'string' || !l.trim())) throw new Error(`${b.id}「${x.t}」的正文不对`);
     x.p = x.p.map(prose);
   }
+  // 组诗标上「其几」(上面 TITLE_FIX); builtById 里的不动, 千家诗对照唐诗三百首时用的是资料原来的题目
+  const pieces = fixPoems(b.id, built.pieces);
   // 原文是繁体: 繁体照原样, 简体转; 原文是简体: 简体也过一遍 (夹着的「後」这种改过来), 繁体转回去
   const title = tidy(b.title ?? d.title);
   const hantOf = b.source === 'hans' ? s2t : (s) => s;
-  const hans = { id: b.id, title: t2s(title), author: t2s(tidy(built.author)), groups: built.groups.map(t2s), pieces: piecesText(built.pieces, t2s) };
-  const hant = { id: b.id, title: hantOf(title), author: hantOf(tidy(built.author)), groups: built.groups.map(hantOf), pieces: piecesText(b.source === 'hans' ? hans.pieces : built.pieces, hantOf) };
+  const hans = { id: b.id, title: t2s(title), author: t2s(tidy(built.author)), groups: built.groups.map(t2s), pieces: piecesText(pieces, t2s) };
+  const hant = { id: b.id, title: hantOf(title), author: hantOf(tidy(built.author)), groups: built.groups.map(hantOf), pieces: piecesText(b.source === 'hans' ? hans.pieces : pieces, hantOf) };
   const head = `// 《${hans.title}》: tools/library.mjs 从 chinese-poetry (MIT, 见 LICENSE-chinese-poetry.txt) 生成, 别手改`;
   writeFileSync(join(root, `js/library/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文' : '繁体原文自动转的简体'}`, hans));
   writeFileSync(join(root, `js/library/hant/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文自动转的繁体' : '繁体原文'}`, hant));
