@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
-import { BOOKS, bookOf, loadBook, pieceId, parsePieceId, clauses, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -13,8 +13,12 @@ function memoryStorage() {
 const TRAD = /[們這個來時為爲說國學對開後裏雲風東書詩長門見無與會從問間點總義聖訓謹愛親餘歲禮將學經憂樂聲啓興龍鳥]/;
 
 test('书库: 每本书都拿得到, 篇数跟书目一样; 简体、繁体一篇对一篇; 简体里没有繁体字', async () => {
-  assert.equal(BOOKS.length, 11);
-  assert.deepEqual(BOOKS.slice(0, 2).map((b) => b.title), ['唐诗三百首', '宋词三百首']);
+  assert.equal(BOOKS.length, 13);
+  assert.deepEqual(BOOKS.slice(0, 4).map((b) => b.title), ['唐诗三百首', '宋词三百首', '论语', '古文观止']);
+  // 书架每层都有书, 每本书都在一层上
+  for (const b of BOOKS) assert.ok(SHELVES.some((x) => x.key === b.cat), b.id);
+  for (const x of SHELVES) assert.ok(BOOKS.some((b) => b.cat === x.key), x.key);
+  assert.deepEqual(BOOKS.filter((b) => b.cat === 'poetry').map((b) => b.id), ['tangshi', 'songci', 'qianjiashi']);
   for (const b of BOOKS) {
     const hans = await loadBook(b.id);
     const hant = await loadBook(b.id, { hant: true });
@@ -32,6 +36,8 @@ test('书库: 每本书都拿得到, 篇数跟书目一样; 简体、繁体一�
       // 没有很多字体里没有的少见字 (会显示成方框), 句子里没夹着版本注释的括号
       assert.ok(![...text].some((ch) => ch.codePointAt(0) > 0xffff), `${b.id}「${p.t}」里有少见字`);
       assert.ok(!/[（(][^）)]*一作/.test(text), `${b.id}「${p.t}」句子里有注释`);
+      // 只有汉字和中文标点 (资料里混着的「[object Object]」、半角标点、空格、括号、乱码都清掉了)
+      for (const line of p.p) assert.ok(/^[\u3400-\u4dbf\u4e00-\u9fff，。；：？！、“”‘’「」『』《》·—…□]+$/.test(line), `${b.id}「${p.t}」: ${line}`);
     }
     assert.ok(/[聖詩學經書]|[^\x00-\x7f]/.test(hant.pieces.map((p) => p.p.join('')).join('')), b.id);
   }
@@ -40,6 +46,55 @@ test('书库: 每本书都拿得到, 篇数跟书目一样; 简体、繁体一�
   assert.equal((await loadBook('qianziwen')).pieces[0].p[0], '天地玄黄，宇宙洪荒。');
   assert.equal((await loadBook('dizigui')).pieces[0].p[0], '弟子规，圣人训。首孝弟，次谨信。');
   assert.equal((await loadBook('qianjiashi')).pieces[0].p[0], '春眠不觉晓，处处闻啼鸟。');
+});
+
+test('论语、古文观止: 篇数、名句、作者和出处、注, 资料里的怪地方清掉了', async () => {
+  const lunyu = await loadBook('lunyu');
+  assert.equal(lunyu.pieces.length, 20);
+  assert.equal(lunyu.pieces[0].t, '学而篇');
+  const all = lunyu.pieces.flatMap((p) => p.p).join('');
+  for (const q of ['学而时习之', '温故而知新，可以为师矣', '三人行，必有我师焉', '己所不欲，勿施于人']) assert.ok(all.includes(q), q);
+  const guwen = await loadBook('guwen');
+  assert.equal(guwen.pieces.length, 222);
+  assert.equal(guwen.groups.length, 12);
+  assert.equal(guwen.groups[0], '卷一·周文');
+  const find = (t) => guwen.pieces.find((p) => p.t === t);
+  assert.deepEqual([find('前出师表').a, find('前出师表').e], ['诸葛亮', '两汉']);
+  assert.equal(find('郑伯克段于鄢').s, '《左传》');
+  // 同题的两篇 (《左传》和《谷梁传》的《郑伯克段于鄢》) 都在
+  assert.deepEqual(guwen.pieces.filter((p) => p.t === '郑伯克段于鄢').map((p) => p.a), ['左丘明', '谷梁赤']);
+  assert.ok(find('桃花源记').n.includes('间隔 一作：隔绝'));
+  for (const t of ['岳阳楼记', '醉翁亭记', '前赤壁赋', '陋室铭', '师说']) assert.ok(find(t), t);
+  assert.ok(guwen.pieces.some((p) => p.p.some((l) => l.includes('鞠跽，侍酒于前'))));
+  // 资料里缺的字用 □, 注里说明
+  const gap = guwen.pieces.filter((p) => p.p.some((l) => l.includes('□')));
+  assert.equal(gap.length, 1);
+  assert.ok(gap[0].n.some((x) => x.startsWith('□')));
+});
+
+test('千家诗: 组诗 (其一、其二) 正常显示、拆开做卡片; 跟唐诗三百首对出来的错字改了, 原来的写法在注里', async () => {
+  const qj = await loadBook('qianjiashi');
+  const gongci = qj.pieces.find((p) => p.t === '宫词' && p.k);
+  assert.deepEqual(gongci.k, [
+    [0, '其一'],
+    [2, '其二'],
+  ]);
+  assert.deepEqual(poemsOf(gongci).map((p) => [p.t, p.p.length]), [
+    ['宫词·其一', 2],
+    ['宫词·其二', 2],
+  ]);
+  const cards = makeCards(bookOf('qianjiashi'), [gongci]);
+  assert.equal(cards.filter((c) => c.term.includes('第一句')).length, 2);
+  assert.deepEqual(cards[0], { term: `《宫词·其一》（${gongci.a}）第一句`, def: '金殿当头紫阁重' });
+  assert.equal(qj.pieces.filter((p) => p.k).length, 5);
+  const friend = qj.pieces.find((p) => p.t === '送友人');
+  assert.ok(friend.p.join('').includes('孤蓬万里征') && friend.p.join('').includes('萧萧班马鸣'));
+  assert.deepEqual(friend.n, ['孤蓬万里征 一作：孤篷万里征', '萧萧班马鸣 一作：萧萧斑马鸣']);
+  // 只是字形不同的 (静夜思「牀 / 床」) 不改、不加注
+  assert.equal(qj.pieces.find((p) => p.t === '静夜思').n, undefined);
+  // 每首的篇号没变 (v1.51 收藏、读到哪记的是第几篇)
+  assert.equal(qj.pieces[0].t, '春眠');
+  assert.equal(qj.pieces.length, 219);
 });
 
 test('唐诗三百首: 版本注释拿到正文外面; 宋词三百首: 题目是「词牌·第一句」, 按词人分组, 资料丢的字补回来了', async () => {
@@ -86,6 +141,9 @@ test('一篇的编号: 书:第几篇; 没有的书、超出的篇返回 null', (
 test('做卡片: 接下句 (诗一首一首, 第一张问第一句; 文章连着接), 整篇', async () => {
   assert.deepEqual(clauses(['春眠不觉晓，处处闻啼鸟。', '夜来风雨声，花落知多少。']), ['春眠不觉晓', '处处闻啼鸟', '夜来风雨声', '花落知多少']);
   assert.deepEqual(clauses(['人之初，性本善；性相近？习相远！']), ['人之初', '性本善', '性相近', '习相远']);
+  // 引号去掉; 「子曰」这种跟后面一句连起来
+  assert.deepEqual(clauses(['子曰：“学而时习之，不亦说乎？”']), ['子曰：学而时习之', '不亦说乎']);
+  assert.deepEqual(clauses(['子禽问于子贡曰：“夫子至于是邦也，必闻其政。”']), ['子禽问于子贡曰：夫子至于是邦也', '必闻其政']);
   const poems = await loadBook('qianjiashi');
   const book = bookOf('qianjiashi');
   const one = makeCards(book, [poems.pieces[0]]);
@@ -118,6 +176,20 @@ test('做卡片: 接下句 (诗一首一首, 第一张问第一句; 文章连着
   assert.ok(all.some((c) => c.term === lastOfFirst && c.def === firstOfSecond));
   assert.deepEqual(makeCards(sbook, [szj.pieces[0]], 'whole')[0].term, `三字经 · ${szj.pieces[0].t}`);
   assert.equal(setTitle(sbook), '三字经');
+  // 论语: 一章一章接, 不跨章
+  const ly = await loadBook('lunyu');
+  const lyCards = makeCards(bookOf('lunyu'), [ly.pieces[0]]);
+  assert.deepEqual(lyCards[0], { term: '子曰：学而时习之', def: '不亦说乎' });
+  assert.ok(!lyCards.some((c) => c.term === '不亦君子乎'));
+  // 增广贤文: 一句一句接 (一行一句俗语)
+  const zg = await loadBook('zengguangxianwen');
+  const zgCards = makeCards(bookOf('zengguangxianwen'), [zg.pieces[0]]);
+  assert.equal(zgCards.length, zg.pieces[0].p.reduce((n, l) => n + clauses([l]).length - 1, 0));
+  // 古文观止: 有作者的卡片集名字写作者
+  const gw = await loadBook('guwen');
+  const cs = gw.pieces.find((p) => p.t === '前出师表');
+  assert.equal(setTitle(bookOf('guwen'), cs), '前出师表（诸葛亮）');
+  assert.equal(makeCards(bookOf('guwen'), [cs], 'whole')[0].term, '《前出师表》（诸葛亮）');
   assert.equal(setTitle(book, poems.pieces[0]), '春眠（孟浩然）');
   assert.equal(setTitle(sbook, szj.pieces[0]), `三字经 · ${szj.pieces[0].t}`);
   // 每本书每篇都做得出卡片, 卡片两面都不空

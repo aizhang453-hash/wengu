@@ -9390,72 +9390,122 @@ button.pick-row:hover {
   font-size: 1.05rem;
 }
 
-.read-shelf {
+/* 书架: 一层一层 (诗词、经典与古文、启蒙读物), 书竖着立着露出书脊; 一行放不下就折到下一行, 每行底下都有一块木板 */
+.read-shelves {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  margin: 8px 0 20px;
-  padding: 0;
+  gap: 18px;
+  margin: 8px 0 22px;
+}
+
+.read-shelf-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.read-shelf-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.read-spines {
+  --row: 178px; /* 一行多高 (木板画在每行的最底下) */
+  --plank: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin: 0;
+  padding: 0 14px;
   list-style: none;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--row) - var(--plank)), var(--home-wood) calc(var(--row) - var(--plank)) calc(var(--row) - 3px), var(--home-wood-2) calc(var(--row) - 3px) var(--row)),
+    var(--surface-2);
 }
 
-.read-book {
+.read-spines li {
   display: flex;
-  gap: 14px;
-  height: 100%;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
+  align-items: flex-end;
+  height: var(--row);
+  padding: 12px 0 var(--plank);
 }
 
-.read-book:hover {
-  border-color: var(--accent);
-}
-
-/* 书脊: 竖着写书名, 几种颜色轮着 */
-.read-spine {
-  flex: none;
+.read-spine-book {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 38px;
-  min-height: 100px;
-  padding: 8px 0;
-  border-radius: 4px 8px 8px 4px;
-  background: #b8372e;
-  box-shadow: inset 5px 0 0 rgb(0 0 0 / 18%);
+  justify-content: space-between;
+  width: var(--w, 52px);
+  height: var(--h, 140px);
+  padding: 16px 0 7px;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--c, #b8372e);
+  box-shadow:
+    inset 5px 0 0 rgb(0 0 0 / 16%),
+    inset -2px 0 0 rgb(255 255 255 / 14%),
+    0 2px 4px rgb(0 0 0 / 22%);
   color: #fff;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+/* 书脊上下两道细线 */
+.read-spine-book::before,
+.read-spine-book::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  left: 8px;
+  height: 2px;
+  background: rgb(255 255 255 / 40%);
+}
+
+.read-spine-book::before {
+  top: 8px;
+}
+
+.read-spine-book::after {
+  bottom: 24px;
+}
+
+.read-spine-book:hover,
+.read-spine-book:focus-visible {
+  transform: translateY(-6px);
+}
+
+.read-spine-book:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.read-spine-title {
   font-family: var(--font-serif);
-  font-size: 0.95rem;
-  line-height: 1.15;
-  letter-spacing: 0.15em;
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0.12em;
   writing-mode: vertical-rl;
 }
 
-.read-shelf li:nth-child(4n + 2) .read-spine {
-  background: #3f6f8f;
+.read-spine-count {
+  font-size: 0.66rem;
+  opacity: 0.85;
+  white-space: nowrap;
 }
 
-.read-shelf li:nth-child(4n + 3) .read-spine {
-  background: #5d7d3a;
+@media (prefers-reduced-motion: reduce) {
+  .read-spine-book {
+    transition: none;
+  }
 }
 
-.read-shelf li:nth-child(4n + 4) .read-spine {
-  background: #8a6236;
-}
-
-.read-book-text {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  min-width: 0;
-}
-
-.read-intro {
-  line-height: 1.55;
+.read-part {
+  margin: 1.2em 0 0.4em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .read-source {
