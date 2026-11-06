@@ -55,6 +55,7 @@ const FILES = [
   'js/library/lunyu.js',
   'js/library/qianjiashi.js',
   'js/library/qianziwen.js',
+  'js/library/readings.js',
   'js/library/sanzijing.js',
   'js/library/shenglvqimeng.js',
   'js/library/songci.js',

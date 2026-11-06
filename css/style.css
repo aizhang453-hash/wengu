@@ -9629,3 +9629,15 @@ button.pick-row:hover {
 .read-sample-arrow {
   color: var(--muted);
 }
+
+/* 读音特别的字: 上面标拼音 (reading.js 的 readingsOf) */
+.read-ruby {
+  ruby-position: over;
+}
+
+.read-ruby rt {
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 0.5em;
+  letter-spacing: 0;
+}

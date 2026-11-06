@@ -4,6 +4,7 @@
 //   同步: 收藏、读到哪都按编号 (书) 听后改的
 
 import { BOOKS, SOURCE } from './library/books.js';
+import { READINGS } from './library/readings.js';
 
 export { BOOKS, SOURCE };
 
@@ -92,6 +93,54 @@ export const SHELVES = [
   { key: 'classic', name: '经典与古文' },
   { key: 'primer', name: '启蒙读物' },
 ];
+
+// ---- 读音特别的字 (library/readings.js) ----
+// 一篇 (简体) 里要标的: [{ line (-1 是题目, 0 起是正文第几行), at 第几个字, len 几个字, ch, py, note, say }], 按位置排好
+export function readingsOf(bookId, piece) {
+  const texts = [piece.t, ...piece.p];
+  const marks = [];
+  const taken = new Set();
+  for (const r of READINGS) {
+    if (r.book && r.book !== bookId) continue;
+    const off = r.at.indexOf(r.ch);
+    texts.forEach((text, k) => {
+      for (let i = text.indexOf(r.at); i !== -1; i = text.indexOf(r.at, i + 1)) {
+        const key = `${k}:${i + off}`;
+        if (taken.has(key)) continue; // 两条都标了同一个字 (「好学」「好之者」), 留前面那条
+        taken.add(key);
+        marks.push({ line: k - 1, at: i + off, len: r.ch.length, ch: r.ch, py: r.py, note: r.note, say: r.say });
+      }
+    });
+  }
+  return marks.sort((a, b) => a.line - b.line || a.at - b.at);
+}
+
+// 一行字按标出来的拆开: [{ text }, { text, mark }, …] (画注音、朗读换字都用这个)
+export function splitMarks(text, marks) {
+  const out = [];
+  let from = 0;
+  for (const m of marks) {
+    if (m.at < from || m.at + m.len > text.length) continue;
+    if (m.at > from) out.push({ text: text.slice(from, m.at) });
+    out.push({ text: text.slice(m.at, m.at + m.len), mark: m });
+    from = m.at + m.len;
+  }
+  if (from < text.length) out.push({ text: text.slice(from) });
+  return out;
+}
+
+// 朗读用的字: 读音特别的换成同音字 (「不亦说乎」念成「不亦悦乎」), 系统就不会念错
+export function spokenText(bookId, piece) {
+  const marks = readingsOf(bookId, piece);
+  const line = (text, k) =>
+    splitMarks(
+      text,
+      marks.filter((m) => m.line === k),
+    )
+      .map((x) => x.mark?.say ?? x.text)
+      .join('');
+  return { title: line(piece.t, -1), lines: piece.p.map(line) };
+}
 
 // ---- 每日一首 (《千家诗》里挑): 每天换一首, 哪台设备上都一样 ----
 export const DAILY_BOOK = 'qianjiashi';
