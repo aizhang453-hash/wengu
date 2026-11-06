@@ -260,8 +260,11 @@ function shelf(s, books, row) {
   );
 }
 
-// 注释和译文是温故自己写的 (原文的资料里没有)
-const YIZHU_NOTE = '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。原文和讲法对照维基文库、古诗文网核对过，难免还有疏漏，欢迎指出。';
+// 注释和译文是温故自己写的 (原文的资料里没有); 没有成语的 (唐诗宋词) 不提成语
+const yizhuNote = (entry) =>
+  entry.cy?.length
+    ? '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。原文和讲法对照维基文库、古诗文网核对过，难免还有疏漏，欢迎指出。'
+    : '注释和译文是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」。讲法对照古诗文网等资料核对过，难免还有疏漏，欢迎指出。';
 
 const sourceNote = () =>
   h(
@@ -479,7 +482,7 @@ export function renderPiece({ store, go }, id, n) {
           )
         : null,
       entry?.zhi?.length ? h('section', { class: 'read-cy read-zhi', lang: 'zh-Hans', 'aria-label': '知道吗' }, h('h2', {}, '知道吗'), h('ul', {}, entry.zhi.map(zhiItem))) : null,
-      entry ? h('p', { class: 'read-notes muted small' }, YIZHU_NOTE) : null,
+      entry ? h('p', { class: 'read-notes muted small' }, yizhuNote(entry)) : null,
       gloss,
     ];
   };

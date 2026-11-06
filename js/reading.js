@@ -144,11 +144,11 @@ export function spokenText(bookId, piece) {
   return { title: line(piece.t, -1), lines: piece.p.map(line) };
 }
 
-// ---- 注释、译文、成语 (library/yizhu/<书>.js, 手写的; 现在只有《古文观止》的名篇有) ----
+// ---- 注释、译文、成语 (library/yizhu/<书>.js, 手写的; 现在有《古文观止》的名篇、唐诗宋词千家诗里课本要背的诗) ----
 //   { '篇名': { notes: [{ at, w, note }], yi: [译文, 跟原文一段对一段], cy: [成语、名句], zhi: [知道吗] } }
 //   一条注释: at 在哪几个字里 (简体), w 注哪几个字 (at 里的, 不写就是 at 整个), note 解释。
 //   按原文的顺序写, 每条从上一条注的字后面往下找 (同一个词出现几次也标得对)
-export const YIZHU_BOOKS = ['guwen'];
+export const YIZHU_BOOKS = ['guwen', 'tangshi', 'songci', 'qianjiashi'];
 // 一篇的注释: 按「篇名|作者」找 (书里有同名的两篇, 像《左传》和《谷梁传》的《郑伯克段于鄢》), 没有再按篇名找
 export const entryOf = (yizhu, piece) => yizhu?.[`${piece.t}|${piece.a}`] ?? yizhu?.[piece.t] ?? null;
 const yizhuLoaded = new Map();

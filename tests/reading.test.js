@@ -338,7 +338,7 @@ test('注释和译文: 每篇都在书里、注释都找得到 (按顺序)、译
   const guwen = await loadBook('guwen');
   const hant = await loadBook('guwen', { hant: true });
   const yizhu = await loadYizhu('guwen');
-  assert.equal(await loadYizhu('tangshi'), null);
+  assert.equal(await loadYizhu('lunyu'), null);
   const titles = Object.keys(yizhu);
   assert.ok(titles.length >= 20);
   for (const t of ['曹刿论战', '前出师表', '桃花源记', '陋室铭', '岳阳楼记', '醉翁亭记', '师说', '前赤壁赋', '滕王阁序']) assert.ok(yizhu[t], t);

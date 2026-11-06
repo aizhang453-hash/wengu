@@ -220,4 +220,15 @@ export const READINGS = [
   { at: '夕阳斜', ch: '斜', py: 'xié', note: '旧读 xiá，跟上下句押韵；现在课本读 xié' },
   { book: 'songci', at: '一骑红尘', ch: '骑', py: 'qí', note: '旧读 jì；现在课本读 qí' },
   { book: 'songci', at: '乍暖还寒', ch: '还', py: 'huán', note: '又，仍', say: '环' },
+  // 课本要背的诗 (v1.58 加了注释的)
+  { book: 'tangshi', at: '鹿柴', ch: '柴', py: 'zhài', note: '同「寨」，栅栏', say: '寨' },
+  { book: 'tangshi', at: '返景', ch: '景', py: 'yǐng', note: '同「影」，日光', say: '影' },
+  { book: 'tangshi', at: '朝辞白帝', ch: '朝', py: 'zhāo', note: '早晨', say: '招' },
+  { book: 'tangshi', at: '单于夜遁逃', ch: '单', py: 'chán', note: '单于，匈奴的首领', say: '蝉' },
+  { book: 'tangshi', at: '将登太行', ch: '行', py: 'háng', note: '太行山', say: '杭' },
+  { book: 'tangshi', at: '岱宗夫如何', ch: '夫', py: 'fú', note: '句中语气词', say: '扶' },
+  { book: 'tangshi', at: '荡胸生曾云', ch: '曾', py: 'céng', note: '同「层」', say: '层' },
+  { book: 'tangshi', at: '冷难着', ch: '着', py: 'zhuó', note: '穿', say: '浊' },
+  { book: 'tangshi', at: '置酒饮归客', ch: '饮', py: 'yìn', note: '请人喝酒', say: '印' },
+  { book: 'qianjiashi', at: '一行白鹭', ch: '行', py: 'háng', note: '行列', say: '杭' },
 ];
