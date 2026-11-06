@@ -60,6 +60,7 @@ const FILES = [
   'js/library/shenglvqimeng.js',
   'js/library/songci.js',
   'js/library/tangshi.js',
+  'js/library/yizhu/guwen.js',
   'js/library/youxueqionglin.js',
   'js/library/zengguangxianwen.js',
   'js/library/zhuzijiaxun.js',

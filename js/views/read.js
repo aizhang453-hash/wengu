@@ -6,19 +6,19 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, notesOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
 
-// 这台设备上的: hant 看繁体原文, size 字号 (0 小 1 中 2 大)
+// 这台设备上的: hant 看繁体原文, size 字号 (0 小 1 中 2 大), zhu 标注释 (默认标), yi 每段下面显示译文 (默认不显示)
 const PREFS_KEY = 'wengu:read';
 function loadPrefs() {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
-    return { hant: Boolean(raw?.hant), size: [0, 1, 2].includes(raw?.size) ? raw.size : 1 };
+    return { hant: Boolean(raw?.hant), size: [0, 1, 2].includes(raw?.size) ? raw.size : 1, zhu: raw?.zhu !== false, yi: raw?.yi === true };
   } catch {
-    return { hant: false, size: 1 };
+    return { hant: false, size: 1, zhu: true, yi: false };
   }
 }
 function savePrefs(p) {
@@ -196,6 +196,9 @@ function shelf(s, books, row) {
   );
 }
 
+// 注释和译文是温故自己写的 (原文的资料里没有)
+const YIZHU_NOTE = '注释和译文是温故自己写的，讲法照通行的课本注释；有两种讲法的写了「一说」。难免有疏漏，欢迎指出。';
+
 const sourceNote = () =>
   h(
     'p',
@@ -270,23 +273,59 @@ export function renderPiece({ store, go }, id, n) {
   drawFav();
 
   let text = null; // 拿到的这一篇 (简体), 做卡片、朗读用
-  // 读音特别的字上面标拼音 (按简体那份找, 繁体一行一样长时标在同样的位置), 正文下面列出说明
+  let entry = null; // 这一篇的注释和译文 (有的才有)
+  // 点了注释的词: 在页面底下显示解释
+  const gloss = h('div', { class: 'read-gloss', hidden: true, role: 'status' });
+  const showGloss = (el, m) => {
+    body.querySelectorAll('.read-term.on').forEach((x) => x.classList.remove('on'));
+    el.classList.add('on');
+    fill(gloss, h('span', {}, h('strong', {}, m.w), `：${m.note}`), h('button', { class: 'read-gloss-close', type: 'button', 'aria-label': '关上', onclick: () => ((gloss.hidden = true), el.classList.remove('on')) }, '×'));
+    gloss.hidden = false;
+  };
+  // 读音特别的字上面标拼音, 注释的词下面画虚线、标号 (都按简体那份找, 繁体一行一样长时标在同样的位置); 正文下面列出读音说明、注释, 打开「译文」时每段下面跟着译文
   const render = (hans, data) => {
     const p = data.pieces[i];
-    const marks = readingsOf(id, hans.pieces[i]);
+    const hp = hans.pieces[i];
+    const marks = readingsOf(id, hp);
+    const glosses = entry && prefs.zhu ? notesOf(hp, entry) : [];
     const shown = new Map(); // 「说 yuè」→ 说明 (按页面上的字)
-    const marked = (str, k, simple) => {
-      const mine = marks.filter((m) => m.line === k);
-      if (!mine.length || str.length !== simple.length) return str;
-      return splitMarks(str, mine).map((x) => {
+    // 一段字标上拼音 (off: 这段在一行里从第几个字起)
+    const ruby = (str, mine, off) =>
+      splitMarks(
+        str,
+        mine.map((m) => ({ ...m, at: m.at - off })),
+      ).map((x) => {
         if (!x.mark) return x.text;
         shown.set(`${x.text} ${x.mark.py}`, x.mark.note);
         return h('ruby', { class: 'read-ruby', title: `${x.mark.py}：${x.mark.note}` }, x.text, h('rt', {}, x.mark.py));
       });
+    const marked = (str, k, simple) => {
+      const mine = marks.filter((m) => m.line === k);
+      const terms = glosses.filter((m) => m.line === k);
+      if ((!mine.length && !terms.length) || str.length !== simple.length) return str;
+      let off = 0;
+      return splitMarks(str, terms).map((x) => {
+        const start = off;
+        off += x.text.length;
+        if (!x.mark) return ruby(x.text, mine, start);
+        const m = x.mark;
+        const term = h(
+          'span',
+          { class: 'read-term', role: 'button', tabindex: '0', title: `${m.w}：${m.note}`, onclick: () => showGloss(term, m), onkeydown: (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), showGloss(term, m)) },
+          ruby(x.text, mine, start),
+          '\u2060', // 号跟词连着, 不单独折到下一行
+          h('sup', { class: 'read-term-n' }, String(m.n)),
+        );
+        return term;
+      });
     };
-    const hp = hans.pieces[i];
+    const yi = entry && prefs.yi ? entry.yi : null;
     const title = h('h1', { class: 'read-title' }, marked(p.t, -1, hp.t));
-    const lines = p.p.map((l, j) => [p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null, h('p', {}, marked(l, j, hp.p[j] ?? ''))]);
+    const lines = p.p.map((l, j) => [
+      p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null,
+      h('p', {}, marked(l, j, hp.p[j] ?? '')),
+      yi?.[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null,
+    ]);
     return [
       title,
       // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
@@ -297,19 +336,58 @@ export function renderPiece({ store, go }, id, n) {
       shown.size ? h('p', { class: 'read-notes muted small' }, `读音：${[...shown].map(([k, note]) => `${k}（${note}）`).join('；')}`) : null,
       // 版本注释 (唐诗三百首里的「明年 一作：年年」)
       p.n?.length ? h('p', { class: 'read-notes muted small' }, `注：${p.n.join('；')}`) : null,
+      glosses.length
+        ? h(
+            'section',
+            { class: 'read-zhu', lang: 'zh-Hans', 'aria-label': '注释' },
+            h('h2', {}, '注释'),
+            h(
+              'ol',
+              {},
+              glosses.map((m) => h('li', {}, h('strong', {}, m.w), `：${m.note}`)),
+            ),
+          )
+        : null,
+      entry ? h('p', { class: 'read-notes muted small' }, YIZHU_NOTE) : null,
+      gloss,
     ];
   };
+  // 注释、译文拿不来 (没网) 就只显示原文
   const draw = () =>
-    Promise.all([loadBook(id), prefs.hant ? loadBook(id, { hant: true }) : null]).then(
-      ([hans, hant]) => {
-        text = { data: hans, p: hans.pieces[i] };
+    Promise.all([loadBook(id), prefs.hant ? loadBook(id, { hant: true }) : null, loadYizhu(id).catch(() => null)]).then(
+      ([hans, hant, yizhu]) => {
+        text = { data: hans, p: hans.pieces[i], yizhu };
+        entry = yizhu?.[hans.pieces[i].t] ?? null;
+        zhuBtn.hidden = yiBtn.hidden = !entry;
+        gloss.hidden = true;
         if (body.isConnected) fill(body, render(hans, hant ?? hans));
       },
       () => body.isConnected && fill(body, offline()),
     );
+  // 注释 (词下面的虚线和号)、译文 (每段下面): 这一篇有才显示, 开关记在这台设备上
+  const toggle = (key, label, desc) => {
+    const btn = h('button', {
+      class: `btn small${prefs[key] ? ' on' : ''}`,
+      type: 'button',
+      hidden: true,
+      title: desc,
+      'aria-pressed': String(prefs[key]),
+      onclick: () => {
+        prefs[key] = !prefs[key];
+        savePrefs(prefs);
+        btn.classList.toggle('on', prefs[key]);
+        btn.setAttribute('aria-pressed', String(prefs[key]));
+        gloss.hidden = true;
+        draw();
+      },
+    }, label);
+    return btn;
+  };
+  const zhuBtn = toggle('zhu', '注释', '在要注释的词下面画线，点一下看解释');
+  const yiBtn = toggle('yi', '译文', '每段下面显示白话译文');
   draw();
   // 做卡片、朗读用简体的
-  const simple = () => (text ? Promise.resolve(text) : loadBook(id).then((data) => ({ data, p: data.pieces[i] })));
+  const simple = () => (text ? Promise.resolve(text) : Promise.all([loadBook(id), loadYizhu(id).catch(() => null)]).then(([data, yizhu]) => ({ data, p: data.pieces[i], yizhu })));
 
   const hantBtn = h('button', { class: 'btn small', type: 'button', title: '简体 / 繁体原文', onclick: () => ((prefs.hant = !prefs.hant), savePrefs(prefs), (body.lang = prefs.hant ? 'zh-Hant' : 'zh-Hans'), (hantBtn.textContent = prefs.hant ? '简体' : '繁体'), draw()) }, prefs.hant ? '简体' : '繁体');
   const sizeBtn = (d, label, name) =>
@@ -358,8 +436,10 @@ export function renderPiece({ store, go }, id, n) {
         'div',
         { class: 'read-tools' },
         favBtn,
-        h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p }) => cardsDialog({ store, go }, book, data, p)) }, '做成卡片背'),
+        h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p, yizhu }) => cardsDialog({ store, go }, book, data, p, yizhu)) }, '做成卡片背'),
         say,
+        zhuBtn,
+        yiBtn,
         hantBtn,
         sizeBtn(-1, 'A−', '字小一点'),
         sizeBtn(1, 'A+', '字大一点'),
@@ -375,23 +455,41 @@ export function renderPiece({ store, go }, id, n) {
 }
 
 // ---- 做成卡片: 接下句 / 整篇, 这一篇 / 整本 ----
-function cardsDialog({ store, go }, book, data, piece) {
+//   有注释的书多一种「字词」: 正面注的词 (带着那一小句), 背面注释; 整本就是有注释的那几篇
+function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   const draft = { style: 'next', all: false };
+  const hasZhu = (p) => Boolean(yizhu?.[p.t]?.notes?.length);
+  const zhuOK = () => (draft.all ? data.pieces.some(hasZhu) : hasZhu(piece));
   const preview = h('p', { class: 'muted small' });
   const choice = (key, value, label, desc) =>
     h('button', { class: `chip-toggle${draft[key] === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(draft[key] === value), title: desc, onclick: () => ((draft[key] = value), draw()) }, label);
   const box = h('div', { class: 'read-cards' });
   const pieces = () => (draft.all ? data.pieces : [piece]);
-  const cards = () => makeCards(book, pieces(), draft.style);
-  const title = () => setTitle(book, draft.all ? null : piece);
+  const cards = () => makeCards(book, pieces(), draft.style, yizhu);
+  const title = () => `${setTitle(book, draft.all ? null : piece)}${draft.style === 'zhu' ? ' · 字词' : ''}`;
   function draw() {
+    if (draft.style === 'zhu' && !zhuOK()) draft.style = 'next';
     const list = cards();
     const sample = list[book.kind === 'poem' && draft.style === 'next' ? Math.min(1, list.length - 1) : 0];
     fill(
       box,
       h('p', { class: 'small' }, '怎么背'),
-      h('div', { class: 'chip-row two' }, choice('style', 'next', '接下句', '正面一句，背面下一句'), choice('style', 'whole', book.kind === 'poem' ? '整首' : '整段', '正面题目，背面全文')),
-      h('p', { class: 'muted small' }, draft.style === 'next' ? '正面是一句，想下一句是什么，翻过来对答案。适合一句一句背熟。' : `正面是题目，背面是全文。适合背完以后整${book.kind === 'poem' ? '首' : '段'}默写、复习。`),
+      h(
+        'div',
+        { class: `chip-row${yizhu && (hasZhu(piece) || data.pieces.some(hasZhu)) ? '' : ' two'}` }, // 三种是三格一行
+        choice('style', 'next', '接下句', '正面一句，背面下一句'),
+        choice('style', 'whole', book.kind === 'poem' ? '整首' : '整段', '正面题目，背面全文'),
+        yizhu && (hasZhu(piece) || data.pieces.some(hasZhu)) ? choice('style', 'zhu', '字词', '正面是注释的词，背面是解释') : null,
+      ),
+      h(
+        'p',
+        { class: 'muted small' },
+        draft.style === 'next'
+          ? '正面是一句，想下一句是什么，翻过来对答案。适合一句一句背熟。'
+          : draft.style === 'zhu'
+            ? `正面是注释里的词（带着它在的那一小句），背面是解释。适合记实词、虚词${draft.all ? '；整本只做有注释的那几篇' : ''}。`
+            : `正面是题目，背面是全文。适合背完以后整${book.kind === 'poem' ? '首' : '段'}默写、复习。`,
+      ),
       book.count > 1
         ? [
             h('p', { class: 'small' }, '做哪些'),
@@ -420,7 +518,7 @@ function cardsDialog({ store, go }, book, data, piece) {
             const list = cards();
             const set = makeSet({
               title: name,
-              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${draft.style === 'next' ? '接下句' : `整${book.unit}`}。`,
+              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${draft.style === 'next' ? '接下句' : draft.style === 'zhu' ? '字词（注释）' : `整${book.unit}`}。`,
               termLang: 'zh-CN',
               defLang: 'zh-CN',
               cards: list.map((c) => makeCard(c.term, c.def)),

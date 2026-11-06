@@ -63,10 +63,11 @@ export function poemsOf(p) {
   return p.k.map(([from, label], j) => ({ ...p, t: `${p.t}·${label}`, p: p.p.slice(from, p.k[j + 1]?.[0] ?? p.p.length), k: undefined }));
 }
 
-// 做成卡片: style 'next' 接下句 (正面一句, 背面下一句), 'whole' 整篇 (正面题目, 背面全文)。返回 [{ term, def }]
+// 做成卡片: style 'next' 接下句 (正面一句, 背面下一句), 'whole' 整篇 (正面题目, 背面全文), 'zhu' 字词 (正面注的词, 背面注释; 要有 yizhu)。返回 [{ term, def }]
 //   诗一首一首分开接 (组诗也拆开), 第一张是「《题目》（作者）第一句」(题目里就有第一句的不要, 像宋词「水调歌头·明月几时有」);
 //   文章看书的 chain: 'book' 整本连着接 (三字经切成的几段, 上一段的末句接下一段的头一句), 'line' 一行一行接 (论语一章、增广贤文一句, 互不相干), 别的一篇里连着接
-export function makeCards(book, pieces, style = 'next') {
+export function makeCards(book, pieces, style = 'next', yizhu = null) {
+  if (style === 'zhu') return pieces.flatMap((p) => noteCards(p, yizhu?.[p.t]));
   if (style === 'whole') return pieces.flatMap(poemsOf).map((p) => ({ term: p.a ? poemName(p) : `${book.title} · ${p.t}`, def: p.p.join('\n') }));
   const cards = [];
   const chain = (list) => {
@@ -140,6 +141,63 @@ export function spokenText(bookId, piece) {
       .map((x) => x.mark?.say ?? x.text)
       .join('');
   return { title: line(piece.t, -1), lines: piece.p.map(line) };
+}
+
+// ---- 注释和译文 (library/yizhu/<书>.js, 手写的; 现在只有《古文观止》的名篇有) ----
+//   { '篇名': { notes: [{ at, w, note }], yi: [译文, 跟原文一段对一段] } }
+//   一条注释: at 在哪几个字里 (简体), w 注哪几个字 (at 里的, 不写就是 at 整个), note 解释。
+//   按原文的顺序写, 每条从上一条注的字后面往下找 (同一个词出现几次也标得对)
+export const YIZHU_BOOKS = ['guwen'];
+const yizhuLoaded = new Map();
+export function loadYizhu(id) {
+  if (!YIZHU_BOOKS.includes(id)) return Promise.resolve(null);
+  if (!yizhuLoaded.has(id)) {
+    const p = import(`./library/yizhu/${id}.js`).then((m) => m.default);
+    p.catch(() => yizhuLoaded.delete(id));
+    yizhuLoaded.set(id, p);
+  }
+  return yizhuLoaded.get(id);
+}
+
+// 一篇 (简体) 的注释标在哪: [{ n 第几条 (从 1 数), line (-1 题目, 0 起正文第几行), at 第几个字, len, w, note }]; 找不到的那条跳过 (测试会查)
+export function notesOf(piece, entry) {
+  const texts = [piece.t, ...piece.p];
+  const out = [];
+  let k = 0;
+  let from = 0;
+  (entry?.notes ?? []).forEach((x, j) => {
+    const w = x.w ?? x.at;
+    const off = x.at.indexOf(w);
+    if (off < 0) return;
+    for (let kk = k; kk < texts.length; kk++) {
+      const i = texts[kk].indexOf(x.at, kk === k ? Math.max(0, from - off) : 0);
+      if (i === -1) continue;
+      out.push({ n: j + 1, line: kk - 1, at: i + off, len: w.length, w, note: x.note });
+      k = kk;
+      from = i + off + w.length;
+      return;
+    }
+  });
+  return out;
+}
+
+// 注的词在哪一小句里 (按标点断): 「间」→「又何间焉」; 做字词卡片用
+export function clauseAround(text, at, len) {
+  const stop = (ch) => MARKS.includes(ch) || /[“”‘’「」『』]/.test(ch);
+  let a = at;
+  let b = at + len;
+  while (a > 0 && !stop(text[a - 1])) a--;
+  while (b < text.length && !stop(text[b])) b++;
+  return text.slice(a, b);
+}
+
+// 字词卡片: 正面「间（又何间焉）」, 背面注释
+export function noteCards(piece, entry) {
+  return notesOf(piece, entry).map((m) => {
+    const text = m.line < 0 ? piece.t : piece.p[m.line];
+    const clause = clauseAround(text, m.at, m.len);
+    return { term: clause === m.w ? m.w : `${m.w}（${clause}）`, def: m.note };
+  });
 }
 
 // ---- 每日一首 (《千家诗》里挑): 每天换一首, 哪台设备上都一样 ----

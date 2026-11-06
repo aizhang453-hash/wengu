@@ -9641,3 +9641,102 @@ button.pick-row:hover {
   font-size: 0.5em;
   letter-spacing: 0;
 }
+
+/* 注释的词: 下面画虚线, 右上角标号, 点一下在页面底下显示解释 (reading.js 的 notesOf) */
+.read-term {
+  cursor: pointer;
+  border-radius: 3px;
+  text-decoration: underline dotted color-mix(in srgb, var(--accent) 60%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.3em;
+}
+
+.read-term:hover,
+.read-term.on {
+  background: var(--accent-soft);
+}
+
+.read-term:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.read-term-n {
+  margin-left: 1px;
+  color: var(--accent);
+  font-family: var(--font);
+  font-size: 0.5em;
+  line-height: 0;
+}
+
+/* 译文: 跟在每段原文下面 */
+.read-piece .read-text p.read-yi {
+  margin: -0.2em 0 1em;
+  padding: 6px 12px;
+  border-left: 3px solid var(--accent-soft);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 0.72em;
+  line-height: 1.8;
+  text-indent: 0;
+  text-align: left;
+}
+
+.read-zhu {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.read-zhu h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.read-zhu ol {
+  margin: 0;
+  padding-left: 2em;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.read-zhu li::marker {
+  color: var(--accent);
+}
+
+.read-gloss {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+  line-height: 1.7;
+}
+
+.read-gloss[hidden] {
+  display: none;
+}
+
+.read-gloss > span {
+  flex: 1;
+}
+
+.read-gloss-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px -4px 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+}

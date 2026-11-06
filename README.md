@@ -26,7 +26,7 @@
 | **卡片集** | 单词卡、学习（选择、判断、拼写、听写）、测试、学习游戏、标注图；支持格式、图片、录音与在线词典 |
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **错题集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
-| **阅读** | 古诗文原文免费读，书架分三层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）；每日一首、搜索、收藏、接着读、简体 / 繁体、朗读；一键做成「接下句」卡片集来背 |
+| **阅读** | 古诗文原文免费读，书架分三层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）；每日一首、搜索、收藏、接着读、简体 / 繁体、朗读；《古文观止》里课本选的 20 篇名篇有注释和译文；一键做成「接下句」「字词」卡片集来背 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -70,7 +70,8 @@
 - 搜索：在书架上按题目、作者或句子找。
 - 收藏：读一篇时点「收藏」，在书架下方找到。收藏和读到哪会跟着多设备同步、备份。
 - 读音：通假字、古文多音字、姓的特别读音在字上方标拼音（照现在的语文课本），朗读也按这个念；清单在 `js/library/readings.js`，手写的。
-- 做成卡片背：「接下句」是正面一句、背面下一句（诗的第一张是「题目第一句」），「整首 / 整段」是正面题目、背面全文；可以只做这一篇，也可以整本做成一个卡片集。
+- 注释和译文：《古文观止》里语文课本选的 20 篇名篇（《出师表》《桃花源记》《岳阳楼记》《师说》《前赤壁赋》《滕王阁序》等），要注释的词下面画虚线、标号，点一下在页面底下看解释，正文下面列出全部注释；「译文」打开后每段下面跟着白话译文。注释照课本的讲法，有两种讲法的写「一说」；译文是温故自己写的，不抄别人的。在 `js/library/yizhu/guwen.js`，手写的。「注释」「译文」开关记在这台设备上。
+- 做成卡片背：「接下句」是正面一句、背面下一句（诗的第一张是「题目第一句」），「整首 / 整段」是正面题目、背面全文，有注释的篇还能做「字词」（正面是注释的词和它在的那一小句，背面是解释）；可以只做这一篇，也可以整本做成一个卡片集。
 
 ### 导入
 
@@ -114,7 +115,7 @@
 
 ## 更新记录
 
-当前版本 **v1.53**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.54**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -145,7 +146,7 @@ node tools/library.mjs <原文文件夹> <opencc-js 的 full.js>   # 重新生�
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
-  - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补）
+  - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
   - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
