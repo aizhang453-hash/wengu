@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { guessLang, guessLangOf, autoLang, setLang, LANGS, normalizeLang } from '../js/speech.js';
+import { guessLang, guessLangOf, autoLang, setLang, LANGS, normalizeLang, bestVoice } from '../js/speech.js';
 
 test('「自动」朗读时按字猜语言', () => {
   assert.equal(guessLang('apple'), 'en-US');
@@ -51,4 +51,41 @@ test('朗读能选的语言: 代码不重复, 都认得自己', () => {
   assert.ok(LANGS.length >= 25);
   assert.equal(new Set(LANGS.map(([code]) => code)).size, LANGS.length);
   for (const [code] of LANGS) assert.equal(normalizeLang(code), code);
+});
+
+test('挑朗读的声音: 不挑苹果的趣味声音 (Eddy、Grandma 读中文很怪); 默认的、增强版的、本机的优先; 念普通话时台湾的比粤语的好', () => {
+  const v = (name, lang, extra = {}) => ({ name, lang, localService: true, default: false, ...extra });
+  // 苹果电脑上的 Chrome: 中文列表里 Eddy 排第一, 婷婷排最后 (以前挑的是 Eddy)
+  const mac = [
+    ...['Eddy', 'Flo', 'Grandma', 'Grandpa', 'Reed', 'Rocko', 'Sandy', 'Shelley'].map((n) => v(`${n} (Chinese (China mainland))`, 'zh-CN')),
+    v('Tingting', 'zh-CN'),
+    v('Google 普通话（中国大陆）', 'zh-CN', { localService: false }),
+    v('Meijia', 'zh-TW'),
+    v('Sinji', 'zh-HK'),
+    v('Albert', 'en-US'),
+    v('Bad News', 'en-US'),
+    v('Samantha', 'en-US', { default: true }),
+  ];
+  assert.equal(bestVoice(mac, 'zh-CN').name, 'Tingting');
+  assert.equal(bestVoice(mac, 'en-US').name, 'Samantha');
+  assert.equal(bestVoice(mac, 'zh-TW').name, 'Meijia');
+  assert.equal(bestVoice(mac, 'zh-HK').name, 'Sinji');
+  // 粤语写成 yue-HK 也认; 念普通话时不挑它
+  const yue = [v('Meijia', 'zh-TW'), v('Sinji', 'yue-HK')];
+  assert.equal(bestVoice(yue, 'zh-HK').name, 'Sinji');
+  assert.equal(bestVoice(yue, 'zh-CN').name, 'Meijia');
+  // 没有大陆的正常声音: 台湾的 > 粤语的 > 趣味声音
+  const noMainland = mac.filter((x) => x.lang !== 'zh-CN' || x.name.startsWith('Eddy'));
+  assert.equal(bestVoice(noMainland, 'zh-CN').name, 'Meijia');
+  assert.equal(bestVoice(noMainland.filter((x) => x.name !== 'Meijia'), 'zh-CN').name, 'Sinji');
+  // 只有趣味声音也比没声音好
+  assert.equal(bestVoice([v('Eddy (Chinese (China mainland))', 'zh-CN')], 'zh-CN').name, 'Eddy (Chinese (China mainland))');
+  // 增强版、系统默认的优先; 本机的比联网的好
+  assert.equal(bestVoice([v('Tingting', 'zh-CN'), v('Tingting (Enhanced)', 'zh-CN')], 'zh-CN').name, 'Tingting (Enhanced)');
+  assert.equal(bestVoice([v('Lili', 'zh-CN'), v('Tingting', 'zh-CN', { default: true })], 'zh-CN').name, 'Tingting');
+  assert.equal(bestVoice([v('Google 普通话（中国大陆）', 'zh-CN', { localService: false }), v('Microsoft Huihui', 'zh-CN')], 'zh-CN').name, 'Microsoft Huihui');
+  // 安卓写成 zh_CN; 没有这种语言返回 null; 名字像但不是趣味声音的不误伤
+  assert.equal(bestVoice([v('普通话', 'zh_CN')], 'zh-CN').name, '普通话');
+  assert.equal(bestVoice([v('Samantha', 'en-US')], 'zh-CN'), null);
+  assert.equal(bestVoice([v('Flora', 'en-US'), v('Albert', 'en-US')], 'en-US').name, 'Flora');
 });
