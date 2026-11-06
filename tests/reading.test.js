@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -343,8 +343,11 @@ test('注释和译文: 每篇都在书里、注释都找得到 (按顺序)、译
   assert.ok(titles.length >= 20);
   for (const t of ['曹刿论战', '前出师表', '桃花源记', '陋室铭', '岳阳楼记', '醉翁亭记', '师说', '前赤壁赋', '滕王阁序']) assert.ok(yizhu[t], t);
   for (const [t, e] of Object.entries(yizhu)) {
-    const list = guwen.pieces.filter((p) => p.t === t);
+    // 键是「篇名」或者「篇名|作者」(同名的两篇要写作者)
+    const [title, author] = t.split('|');
+    const list = guwen.pieces.filter((p) => p.t === title && (!author || p.a === author));
     assert.equal(list.length, 1, `「${t}」在古文观止里不是正好一篇`);
+    assert.equal(entryOf(yizhu, list[0]), e);
     const p = list[0];
     const i = guwen.pieces.indexOf(p);
     assert.equal(e.yi.length, p.p.length, `「${t}」译文 ${e.yi.length} 段, 原文 ${p.p.length} 段`);
@@ -374,6 +377,18 @@ test('注释和译文: 每篇都在书里、注释都找得到 (按顺序)、译
       }
     });
   }
+
+  // 同名的两篇 (《左传》《谷梁传》的《郑伯克段于鄢》) 按「篇名|作者」分开: 只有《左传》那篇有注释
+  const zb = guwen.pieces.filter((p) => p.t === '郑伯克段于鄢');
+  assert.equal(zb.length, 2);
+  assert.ok(entryOf(yizhu, zb.find((p) => p.a === '左丘明'))?.notes.length);
+  assert.equal(entryOf(yizhu, zb.find((p) => p.a === '谷梁赤')), null);
+  // 对照维基文库改掉的错字 (tools/library.mjs 的 GUWEN_FIX)
+  const gwText = guwen.pieces.flatMap((p) => p.p).join('');
+  for (const ok of ['一旦山陵崩', '当此时也，世非无深谋', '冯谖曰：“君之']) assert.ok(gwText.includes(ok), ok);
+  assert.ok(!/—旦|也非无深谋|冯谖曰；/.test(gwText));
+  const allT = hant.pieces.flatMap((p) => p.p).join('');
+  assert.ok(allT.includes('一旦山陵崩') && allT.includes('世非無深謀') && !allT.includes('—旦'));
 
   // 标在对的字上: 同一个词出现几次, 按顺序往下找
   const ms = guwen.pieces.find((p) => p.t === '杂说·马说');
@@ -409,7 +424,7 @@ test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书�
   const yizhu = await loadYizhu('guwen');
   let count = 0;
   for (const [t, e] of Object.entries(yizhu)) {
-    const p = guwen.pieces.find((x) => x.t === t);
+    const p = guwen.pieces.find((x) => entryOf(yizhu, x) === e);
     assert.ok(e.cy?.length, `「${t}」没写成语、名句`);
     const ws = new Set();
     for (const x of idiomsOf(p, e)) {
@@ -434,10 +449,12 @@ test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书�
         continue;
       }
       assert.ok(z.text && /[。！？」]$/.test(z.text), `「${t}」知道吗: ${z.text}`);
-      const [bookId, title] = z.go;
+      const [bookId, key] = z.go;
+      const [title, author] = key.split('|');
       const data = await loadBook(bookId);
-      assert.ok(data?.pieces.some((x) => x.t === title), `「${t}」知道吗链接的《${title}》不在 ${bookId} 里`);
-      assert.notEqual(title, t);
+      const hits = data?.pieces.filter((x) => x.t === title && (!author || x.a === author)) ?? [];
+      assert.equal(hits.length, 1, `「${t}」知道吗链接的《${key}》在 ${bookId} 里不是正好一篇`);
+      assert.ok(entryOf(yizhu, hits[0]) !== e, `「${t}」知道吗链接到了自己`);
     }
   }
   assert.ok(count >= 100);
@@ -472,6 +489,8 @@ test('成语和名句、知道吗: 每条原文里找得到, 链接的篇在书�
   assert.equal(hits[0].line, '成语「世外桃源」出自这里');
   assert.equal((await searchLibrary('勾心斗角'))[0].piece.t, '阿房宫赋');
   assert.ok((await searchLibrary('东道主')).some((x) => x.piece.t === '烛之武退秦师' && x.line === '词语「东道主」出自这里'));
+  assert.equal((await searchLibrary('狡兔三窟'))[0].piece.t, '冯谖客孟尝君');
+  assert.equal((await searchLibrary('焚膏继晷'))[0].piece.t, '进学解');
   // 名句里带标点的, 不打标点也找得到
   assert.ok((await searchLibrary('先天下之忧而忧后天下之乐而乐')).some((x) => x.piece.t === '岳阳楼记'));
   // 原来的搜法照旧

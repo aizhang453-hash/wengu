@@ -6,7 +6,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, notesOf, idiomsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { speak, canSpeak } from '../speech.js';
@@ -346,7 +346,7 @@ export function renderPiece({ store, go }, id, n) {
     const lines = p.p.map((l, j) => [
       p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null,
       h('p', { 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0' }, marked(l, j, hp.p[j] ?? '')),
-      yi?.[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null,
+      yi?.[j] && yi[j] !== hp.p[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null, // 跟原文一样的 (《过秦论》的「上篇」) 不重复
     ]);
     return [
       title,
@@ -401,7 +401,7 @@ export function renderPiece({ store, go }, id, n) {
     Promise.all([loadBook(id), prefs.hant ? loadBook(id, { hant: true }) : null, loadYizhu(id).catch(() => null)]).then(
       ([hans, hant, yizhu]) => {
         text = { data: hans, p: hans.pieces[i], yizhu };
-        entry = yizhu?.[hans.pieces[i].t] ?? null;
+        entry = entryOf(yizhu, hans.pieces[i]);
         idioms = idiomsOf(hans.pieces[i], entry);
         zhuBtn.hidden = yiBtn.hidden = !entry;
         gloss.hidden = true;
@@ -503,8 +503,8 @@ export function renderPiece({ store, go }, id, n) {
 //   有注释的书多两种: 「字词」正面注的词 (带着那一小句), 背面注释; 「成语」正面成语, 背面意思和出处。整本就是有的那几篇
 function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   const draft = { style: 'next', all: false };
-  const hasZhu = (p) => Boolean(yizhu?.[p.t]?.notes?.length);
-  const hasCy = (p) => Boolean(yizhu?.[p.t]?.cy?.length);
+  const hasZhu = (p) => Boolean(entryOf(yizhu, p)?.notes?.length);
+  const hasCy = (p) => Boolean(entryOf(yizhu, p)?.cy?.length);
   const zhuOK = () => (draft.all ? data.pieces.some(hasZhu) : hasZhu(piece));
   const cyOK = () => (draft.all ? data.pieces.some(hasCy) : hasCy(piece));
   const canZhu = Boolean(yizhu) && (hasZhu(piece) || data.pieces.some(hasZhu));
@@ -592,14 +592,15 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   });
 }
 
-// 「知道吗」的一条: 一句话, 或者带一个去书库里另一篇的链接 ({ text, go: [书, 篇名] }; 拿到那本书才知道是第几篇)
+// 「知道吗」的一条: 一句话, 或者带一个去书库里另一篇的链接 ({ text, go: [书, 篇名 或 篇名|作者] }; 拿到那本书才知道是第几篇)
 function zhiItem(z) {
   if (typeof z === 'string') return h('li', {}, z);
-  const [bookId, title] = z.go;
+  const [bookId, key] = z.go;
+  const [title, author] = key.split('|'); // 同名的两篇写「篇名|作者」
   const a = h('a', { class: 'read-zhi-go', href: `#/read/${bookId}` }, `读《${title}》→`);
   loadBook(bookId).then(
     (d) => {
-      const i = d.pieces.findIndex((p) => p.t === title);
+      const i = d.pieces.findIndex((p) => p.t === title && (!author || p.a === author));
       if (i >= 0) a.href = pieceHref(bookId, i);
     },
     () => {},

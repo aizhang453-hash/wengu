@@ -67,8 +67,8 @@ export function poemsOf(p) {
 //   诗一首一首分开接 (组诗也拆开), 第一张是「《题目》（作者）第一句」(题目里就有第一句的不要, 像宋词「水调歌头·明月几时有」);
 //   文章看书的 chain: 'book' 整本连着接 (三字经切成的几段, 上一段的末句接下一段的头一句), 'line' 一行一行接 (论语一章、增广贤文一句, 互不相干), 别的一篇里连着接
 export function makeCards(book, pieces, style = 'next', yizhu = null) {
-  if (style === 'zhu') return pieces.flatMap((p) => noteCards(p, yizhu?.[p.t]));
-  if (style === 'cy') return pieces.flatMap((p) => idiomCards(p, yizhu?.[p.t]));
+  if (style === 'zhu') return pieces.flatMap((p) => noteCards(p, entryOf(yizhu, p)));
+  if (style === 'cy') return pieces.flatMap((p) => idiomCards(p, entryOf(yizhu, p)));
   if (style === 'whole') return pieces.flatMap(poemsOf).map((p) => ({ term: p.a ? poemName(p) : `${book.title} · ${p.t}`, def: p.p.join('\n') }));
   const cards = [];
   const chain = (list) => {
@@ -149,6 +149,8 @@ export function spokenText(bookId, piece) {
 //   一条注释: at 在哪几个字里 (简体), w 注哪几个字 (at 里的, 不写就是 at 整个), note 解释。
 //   按原文的顺序写, 每条从上一条注的字后面往下找 (同一个词出现几次也标得对)
 export const YIZHU_BOOKS = ['guwen'];
+// 一篇的注释: 按「篇名|作者」找 (书里有同名的两篇, 像《左传》和《谷梁传》的《郑伯克段于鄢》), 没有再按篇名找
+export const entryOf = (yizhu, piece) => yizhu?.[`${piece.t}|${piece.a}`] ?? yizhu?.[piece.t] ?? null;
 const yizhuLoaded = new Map();
 export function loadYizhu(id) {
   if (!YIZHU_BOOKS.includes(id)) return Promise.resolve(null);
@@ -267,7 +269,7 @@ export async function searchLibrary(query, { limit = 60 } = {}) {
     const book = BOOKS[bi];
     data.pieces.forEach((piece, i) => {
       const line = piece.p.find((l) => l.replace(/\s+/g, '').includes(q));
-      const cy = extra[bi]?.[piece.t]?.cy?.find((x) => x.w.replace(/[，。；：？！、\s]/g, '').includes(q.replace(/[，。；：？！、]/g, '')));
+      const cy = entryOf(extra[bi], piece)?.cy?.find((x) => x.w.replace(/[，。；：？！、\s]/g, '').includes(q.replace(/[，。；：？！、]/g, '')));
       const where = piece.t.includes(q) ? 'title' : piece.a?.includes(q) ? 'author' : cy ? 'idiom' : line ? 'line' : '';
       if (where) hits.push({ book: book.id, i, piece, where, line: where === 'idiom' ? `${cy.kind ?? '成语'}「${cy.w}」出自这里` : (line ?? piece.p[0] ?? '') });
     });
