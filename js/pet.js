@@ -1,7 +1,7 @@
 // 小乌龟温温: 待在网页右下角, 跟着学习长大。这里是它的「脑子」(长到哪了、心情、解锁的装扮、该说什么、论语), 画它在 views/pet.js。
 //   喂它 = 学习: 答一题、重做一道错题、玩一局游戏都算一口。一共吃了几口就是打卡记录 (activity) 里每天的数加起来,
 //   以前学过的也算; 打卡记录只留一年多, 去掉的那几天先记在 bank 里 (since 以前的都算进 bank 了)
-//   data.pet = { name, bank, since 'YYYY-MM-DD', unlocked 解锁了的装扮, wear 现在戴的,
+//   data.pet = { name, bank, since 'YYYY-MM-DD', unlocked 解锁了的装扮, wears 现在戴的 (好几件, 一个地方一件), wear 其中一件 (给 v1.50 以前的版本看),
 //                cheer { from 这次连续打卡从哪天开始, days 这次庆祝过的天数 } (断了重新连, 到了又放烟花), stageSeen 见过的最大的样子 (长大了庆祝一次), at 改名字、换装扮的时间 }
 //   同步: bank 听 since 晚的, 解锁、庆祝过的合起来, 名字和装扮听后改的。没见过温温是 null
 
@@ -30,16 +30,41 @@ export function growth(xp) {
   return { stage, from, to, progress: to === null ? 1 : (xp - from) / (to - from) };
 }
 
-// 装扮: 达到了就解锁, 解锁了一直有
+// 装扮: 达到了就解锁, 解锁了一直有。戴在哪 (spot): 同一个地方只能戴一件 (帽子、学士帽、皇冠都戴头顶), 不同地方的可以一起戴
+export const SPOTS = { head: '头顶', pin: '头饰', face: '脸上', neck: '脖子' };
 export const OUTFITS = [
-  { key: 'scarf', name: '围巾', need: '连续打卡 3 天', test: (c) => c.streak >= 3 },
-  { key: 'flower', name: '小红花', need: '把一天的复习全背完', test: (c) => c.cleared },
-  { key: 'hat', name: '毛线帽', need: '连续打卡 7 天', test: (c) => c.streak >= 7 },
-  { key: 'glasses', name: '眼镜', need: '一共学了 1000 次', test: (c) => c.xp >= 1000 },
-  { key: 'cap', name: '学士帽', need: '连续打卡 30 天', test: (c) => c.streak >= 30 },
-  { key: 'crown', name: '皇冠', need: '一共学了 10000 次', test: (c) => c.xp >= 10000 },
+  { key: 'scarf', name: '围巾', spot: 'neck', need: '连续打卡 3 天', test: (c) => c.streak >= 3 },
+  { key: 'flower', name: '小红花', spot: 'pin', need: '把一天的复习全背完', test: (c) => c.cleared },
+  { key: 'hat', name: '毛线帽', spot: 'head', need: '连续打卡 7 天', test: (c) => c.streak >= 7 },
+  { key: 'glasses', name: '眼镜', spot: 'face', need: '一共学了 1000 次', test: (c) => c.xp >= 1000 },
+  { key: 'cap', name: '学士帽', spot: 'head', need: '连续打卡 30 天', test: (c) => c.streak >= 30 },
+  { key: 'crown', name: '皇冠', spot: 'head', need: '一共学了 10000 次', test: (c) => c.xp >= 10000 },
 ];
 const OUTFIT_KEYS = new Set(OUTFITS.map((o) => o.key));
+const SPOT_OF = Object.fromEntries(OUTFITS.map((o) => [o.key, o.spot]));
+export const spotOf = (key) => SPOT_OF[key] ?? '';
+
+// 戴着的: 认识的、不重复, 一个地方只留一件 (后戴的)
+export function cleanWears(list) {
+  const taken = new Set();
+  const keep = [];
+  for (const key of [...(Array.isArray(list) ? list : [])].reverse()) {
+    if (!OUTFIT_KEYS.has(key) || taken.has(SPOT_OF[key])) continue;
+    taken.add(SPOT_OF[key]);
+    keep.unshift(key);
+  }
+  return keep;
+}
+
+// 点一下: 戴着就摘下; 没戴就戴上, 同一个地方原来戴的换下来。返回 { wears, off 换下来的 (没有是 '') }
+export function toggleWear(wears, key) {
+  if (wears.includes(key)) return { wears: wears.filter((k) => k !== key), off: '' };
+  const off = wears.find((k) => SPOT_OF[k] === SPOT_OF[key]) ?? '';
+  return { wears: cleanWears([...wears.filter((k) => k !== off), key]), off };
+}
+
+// 给 v1.50 以前的版本看的那一件 (它们只认一件): 头顶的, 没有就第一件
+const mainWear = (wears) => wears.find((k) => SPOT_OF[k] === 'head') ?? wears[0] ?? '';
 
 // 这次新解锁了哪些 (c: { streak, xp, cleared })
 export function newUnlocks(pet, c) {
@@ -67,6 +92,12 @@ export function milestoneDue(cheer, from, days) {
 // 记下放过了 (到了的都算, 一次连到 30 天只放一次)
 export const cheered = (from, days) => ({ from, days: MILESTONES.filter((n) => n <= days) });
 
+// { wears 戴着的, wear 给老版本看的一件 }。老版本存的、同步来的只有 wear
+function wearsOf(raw) {
+  const wears = cleanWears(Array.isArray(raw.wears) ? raw.wears : [raw.wear]);
+  return { wears, wear: mainWear(wears) };
+}
+
 export function cleanPet(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const name = String(raw.name ?? '').trim().slice(0, 12);
@@ -75,7 +106,7 @@ export function cleanPet(raw) {
     bank: Math.max(0, Math.floor(Number(raw.bank) || 0)),
     since: DAY_RE.test(raw.since) ? raw.since : '',
     unlocked: [...new Set((Array.isArray(raw.unlocked) ? raw.unlocked : []).filter((k) => OUTFIT_KEYS.has(k)))],
-    wear: OUTFIT_KEYS.has(raw.wear) ? raw.wear : '',
+    ...wearsOf(raw),
     cheer: cleanCheer(raw.cheer),
     stageSeen: Math.min(STAGES.length - 1, Math.max(0, Math.floor(Number(raw.stageSeen) || 0))),
     at: Number(raw.at) > 0 ? Number(raw.at) : 0,
@@ -104,7 +135,7 @@ export function mergePet(a, b) {
   const banked = b.since > a.since ? b : a.since > b.since ? a : b.bank > a.bank ? b : a;
   return cleanPet({
     name: newer.name,
-    wear: newer.wear,
+    wears: newer.wears,
     at: newer.at,
     bank: banked.bank,
     since: banked.since,

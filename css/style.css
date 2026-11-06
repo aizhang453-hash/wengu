@@ -7028,14 +7028,141 @@ body.has-pet main {
   }
 }
 
-/* 温温的小窝 */
+/* 温温的小窝: 一间小书房 (views/pet.js 的 homeSvg) */
+:root {
+  --home-wall: #f7efe0;
+  --home-wall-2: #ecdcc0;
+  --home-floor: #dcb98a;
+  --home-plank: #c9a273;
+  --home-wood: #c08a58;
+  --home-wood-2: #95653d;
+  --home-line: #7a5636;
+  --home-curtain: #f2a59b;
+  --home-rug: #f2d9a2;
+  --home-rug-2: #e0b867;
+  --home-paper: #fffdf8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --home-wall: #2c2925;
+    --home-wall-2: #37312a;
+    --home-floor: #4a3b2c;
+    --home-plank: #3a2e23;
+    --home-wood: #7d5939;
+    --home-wood-2: #5f422a;
+    --home-line: #1d1712;
+    --home-curtain: #8e4d46;
+    --home-rug: #5d4b2f;
+    --home-rug-2: #75603b;
+    --home-paper: #e8e1d3;
+  }
+}
+
 .pet-home {
-  display: grid;
-  place-items: center;
-  margin: -4px 0 8px;
-  padding: 14px 0 6px;
+  margin: -4px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: linear-gradient(var(--surface-2), var(--surface));
+}
+
+.turtle.pet-scene {
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+}
+
+.pet-scene .h-o { stroke: var(--home-line); stroke-width: 1.4; stroke-linejoin: round; }
+.pet-scene .h-wall { fill: var(--home-wall); }
+.pet-scene .h-wall2 { fill: var(--home-wall-2); }
+.pet-scene .h-floor { fill: var(--home-floor); }
+.pet-scene .h-plank { fill: none; stroke: var(--home-plank); stroke-width: 1.4; }
+.pet-scene .h-wood { fill: var(--home-wood); }
+.pet-scene .h-wood2 { fill: var(--home-wood-2); }
+.pet-scene .h-bar { fill: none; stroke: var(--home-wood); stroke-width: 4; }
+.pet-scene .h-curtain { fill: var(--home-curtain); }
+.pet-scene .h-sky-day { fill: #bfe3ff; }
+.pet-scene .h-sky-dusk { fill: #ffc79c; }
+.pet-scene .h-sky-night { fill: #27336a; }
+.pet-scene .h-sun { fill: #ffd45a; }
+.pet-scene .h-sun-low { fill: #ff935e; }
+.pet-scene .h-cloud { fill: #fff; }
+.pet-scene .h-cloud-dusk { fill: none; stroke: #ffe2c6; stroke-width: 2.4; stroke-linecap: round; }
+.pet-scene .h-moon { fill: #f6e7a1; }
+.pet-scene .h-star { fill: #fff; }
+.pet-scene .h-string { fill: none; stroke: var(--home-wood-2); stroke-width: 1; }
+.pet-scene .h-paper { fill: var(--home-paper); }
+.pet-scene .h-red { fill: #d9534f; }
+.pet-scene .h-cal-t,
+.pet-scene .h-cal-n,
+.pet-scene .h-cal-d { font-family: var(--font); text-anchor: middle; }
+.pet-scene .h-cal-t { fill: #fff; font-size: 7px; font-weight: 700; }
+.pet-scene .h-cal-n { fill: #2b2b2b; font-size: 15px; font-weight: 800; }
+.pet-scene .h-cal-n.small { font-size: 11px; }
+.pet-scene .h-cal-d { fill: #6b6258; font-size: 6px; }
+.pet-scene .h-leaf { fill: #6aa84f; }
+.pet-scene .h-leaf2 { fill: #8cc46d; }
+.pet-scene .h-pot { fill: #c96f4a; }
+.pet-scene .h-pot2 { fill: #b55d3a; }
+.pet-scene .h-rug { fill: var(--home-rug); }
+.pet-scene .h-rug2 { fill: none; stroke: var(--home-rug-2); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.pet-scene .h-bowl { fill: #dde9f4; }
+.pet-scene .h-bowl2 { fill: none; stroke: #7fa8cf; stroke-width: 1.6; stroke-linecap: round; }
+.pet-scene .h-b1 { fill: #d9534f; }
+.pet-scene .h-b2 { fill: #4f86c6; }
+.pet-scene .h-b3 { fill: #6aa84f; }
+.pet-scene .h-b4 { fill: #e9a23b; }
+.pet-scene .h-gold { fill: #f2c94c; }
+.pet-scene .h-gold-line { fill: none; stroke: #d9a92a; stroke-width: 1.6; stroke-linecap: round; }
+.pet-scene .h-cup { fill: #8a7fbf; }
+.pet-scene .h-pencil { fill: none; stroke: #e9a23b; stroke-width: 1.8; stroke-linecap: round; }
+.pet-scene .h-pole { fill: #6f6a63; }
+.pet-scene .h-lamp { fill: #f0b443; }
+.pet-scene .h-glow { fill: #ffe9a6; opacity: 0.45; }
+.pet-scene .h-nest { fill: #c99a4e; }
+.pet-scene .h-tick { fill: none; stroke: var(--home-wood-2); stroke-width: 1.4; stroke-linecap: round; }
+.pet-scene .h-hand { fill: none; stroke: #3a332c; stroke-width: 2; stroke-linecap: round; }
+.pet-scene .h-hand.thin { stroke-width: 1.3; }
+.pet-scene .h-cushion { fill: #9cc3e6; }
+.pet-scene .h-cushion2 { fill: #c6ddf1; }
+.pet-scene .h-straw { fill: none; stroke: #e7c47c; stroke-width: 1.5; stroke-linecap: round; }
+
+/* 小窝里的温温也会眨眼、蛋晃一晃、z 往上飘 */
+.pet-scene.mood-normal .p-face,
+.pet-scene.mood-worried .p-face {
+  animation: pet-blink 5s infinite;
+}
+
+.pet-scene .p-egg-g {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: pet-wobble 4s ease-in-out infinite;
+}
+
+.pet-scene .p-z {
+  animation: pet-z 2.4s ease-in-out infinite;
+}
+
+.pet-scene .p-z2 {
+  animation-delay: 0.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-scene * {
+    animation: none !important;
+  }
+}
+
+.pet-h3-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.pet-panel .pet-h3-row h3 {
+  margin: 0;
 }
 
 .pet-title {
@@ -7105,6 +7232,7 @@ body.has-pet main {
 }
 
 .outfit {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7123,6 +7251,31 @@ body.has-pet main {
   border-color: var(--good);
   box-shadow: 0 0 0 2px var(--good-soft);
   font-weight: 700;
+}
+
+/* 戴着的打个勾 (可以好几件一起戴) */
+.outfit.on::after {
+  content: '✓';
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--good);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.outfit-spot {
+  align-self: flex-start;
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 400;
 }
 
 .outfit.locked {
