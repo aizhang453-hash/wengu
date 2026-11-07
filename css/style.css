@@ -9315,18 +9315,6 @@ button.pick-row:hover {
   line-height: 1.7;
 }
 
-.read-recent {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0;
-}
-
-.read-recent .chip {
-  text-decoration: none;
-}
-
 .read-search {
   margin: 14px 0 6px;
 }

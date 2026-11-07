@@ -1,12 +1,13 @@
 // 阅读 (书库): 唐诗宋词、论语、古文观止和古代启蒙读物的原文 (想法在 ../reading.js)
-//   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首 (节日那天是节日的诗)、接着读、搜索、所有的书、节日的诗、收藏
+//   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首 (节日那天是节日的诗)、搜索、所有的书、节日的诗、收藏
+//                         (书斋页上原来有一行「接着读」, 用户说没用, v1.60.1 去掉了; 每本书目录页的「接着读」按钮还在)
 //   #/read/<书>           一本书的目录
 //   #/read/<书>/<第几篇>  读一篇 (从 1 数): 收藏、做成卡片背、朗读、简体 / 繁体、字号; ← → 换篇
 //   首页「今日」的「每日一首」也在这里画 (dailyCard)
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { FESTIVALS, festivalOn, upcoming } from '../festival.js';
@@ -136,7 +137,6 @@ function festivalRow({ festival: f, day, days }, data, today, open) {
 // ---- 书架 ----
 export function renderLibrary({ store }) {
   const reading = store.data.reading;
-  const recent = recentBooks(reading).slice(0, 3);
   const favs = favList(reading);
   const results = h('div', { class: 'read-results', 'aria-live': 'polite' });
   let searchN = 0;
@@ -205,16 +205,8 @@ export function renderLibrary({ store }) {
     el: h(
       'section',
       { class: 'read-page' },
-      h('div', { class: 'page-head' }, h('h1', {}, '书斋'), h('span', { class: 'muted' }, '唐诗宋词、古文和古代启蒙读物，原文免费读')),
+      h('div', { class: 'page-head' }, h('h1', {}, '书斋'), h('span', { class: 'muted' }, '唐诗宋词、古文、启蒙读物和古典小说，原文免费读')),
       dailyCard(),
-      recent.length
-        ? h(
-            'div',
-            { class: 'read-recent' },
-            h('span', { class: 'muted small' }, '接着读'),
-            recent.map((r) => h('a', { class: 'chip', href: pieceHref(r.book, r.i) }, `${bookOf(r.book).title}${unitOf(bookOf(r.book), r.i) ? ` · ${unitOf(bookOf(r.book), r.i)}` : ''}`)),
-          )
-        : null,
       h('div', { class: 'read-search' }, search),
       results,
       h('div', { class: 'list-head' }, h('h2', {}, '书架'), h('span', { class: 'muted small' }, `${BOOKS.length} 本 · 点书看简介和目录`)),
