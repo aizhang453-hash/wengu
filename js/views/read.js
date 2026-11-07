@@ -1,6 +1,6 @@
 // 阅读 (书库): 唐诗宋词、论语、古文观止和古代启蒙读物的原文 (想法在 ../reading.js)
-//   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首 (节日那天是节日的诗)、搜索、所有的书、节日的诗、收藏
-//                         (书斋页上原来有一行「接着读」, 用户说没用, v1.60.1 去掉了; 每本书目录页的「接着读」按钮还在)
+//   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首 (节日那天是节日的诗)、搜索、所有的书、收藏
+//                         (书斋页上原来有一行「接着读」、一栏「节日的诗」, 用户说没用, v1.60.1、v1.60.2 去掉了; 每本书目录页的「接着读」按钮还在)
 //   #/read/<书>           一本书的目录
 //   #/read/<书>/<第几篇>  读一篇 (从 1 数): 收藏、做成卡片背、朗读、简体 / 繁体、字号; ← → 换篇
 //   首页「今日」的「每日一首」也在这里画 (dailyCard)
@@ -10,7 +10,7 @@ import { h, fill, toast, icon, openDialog } from '../dom.js';
 import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
-import { FESTIVALS, festivalOn, upcoming } from '../festival.js';
+import { festivalOn } from '../festival.js';
 import { speak, canSpeak } from '../speech.js';
 
 // 这台设备上的: hant 看繁体原文, size 字号 (0 小 1 中 2 大), zhu 标注释 (默认标), yi 每段下面显示译文 (默认不显示)
@@ -79,59 +79,6 @@ function dailyBox({ compact, id, i, tag, label, note = '', festive = false }) {
     () => box.remove(),
   );
   return box;
-}
-
-// ---- 节日的诗 (书架下面): 从今天起最近的节日排前面, 点开看这个节日的诗; 最近的那个先打开 ----
-function festivalShelf() {
-  const today = dayKey();
-  const list = upcoming(today);
-  if (!list.length) return null; // 表里没有这一年 (2100 年以后)
-  const box = h('div', { class: 'read-fests' });
-  const ids = [...new Set(FESTIVALS.flatMap((f) => f.poems.map(([id]) => id)))];
-  Promise.all(ids.map((id) => loadBook(id))).then(
-    (books) => {
-      if (!box.isConnected) return;
-      const data = Object.fromEntries(ids.map((id, k) => [id, books[k]]));
-      fill(box, list.map((x, k) => festivalRow(x, data, today, k === 0)));
-    },
-    () => box.isConnected && fill(box, offline()),
-  );
-  return [h('div', { class: 'list-head' }, h('h2', {}, '节日的诗'), h('span', { class: 'muted small' }, '节日那天，「每日一首」换成这个节日的诗')), box];
-}
-
-// 「12月22日」; 不是今年的写上年份
-const dateText = (day, today) => {
-  const [y, m, d] = day.split('-').map(Number);
-  return `${y === Number(today.slice(0, 4)) ? '' : `${y}年`}${m}月${d}日`;
-};
-
-function festivalRow({ festival: f, day, days }, data, today, open) {
-  const left = days === 0 ? '就是今天' : days === 1 ? '明天' : `还有 ${days} 天`;
-  return h(
-    'details',
-    { class: `read-fest${days === 0 ? ' today' : ''}`, ...(open ? { open: true } : {}) },
-    h(
-      'summary',
-      {},
-      h('strong', { class: 'read-fest-name' }, f.name),
-      h('span', { class: 'muted small' }, `${f.when} · ${dateText(day, today)}`),
-      h('span', { class: 'read-fest-left' }, left),
-    ),
-    h('p', { class: 'muted small read-fest-about' }, f.about),
-    h(
-      'ul',
-      { class: 'read-fest-poems' },
-      f.poems.map(([id, n, , note]) => {
-        const p = data[id].pieces[n - 1];
-        return h(
-          'li',
-          {},
-          h('a', { href: pieceHref(id, n - 1) }, h('strong', {}, p.t), h('span', { class: 'muted small' }, ` ${byline(p)}`), h('span', { class: 'read-hit' }, p.p[0])),
-          note ? h('span', { class: 'muted small read-fest-note' }, note) : null,
-        );
-      }),
-    ),
-  );
 }
 
 // ---- 书架 ----
@@ -211,7 +158,6 @@ export function renderLibrary({ store }) {
       results,
       h('div', { class: 'list-head' }, h('h2', {}, '书架'), h('span', { class: 'muted small' }, `${BOOKS.length} 本 · 点书看简介和目录`)),
       h('div', { class: 'read-shelves' }, SHELVES.map((s, row) => shelf(s, BOOKS.filter((b) => b.cat === s.key), row))),
-      festivalShelf(),
       favs.length ? [h('div', { class: 'list-head' }, h('h2', {}, '收藏'), h('span', { class: 'muted small' }, `${favs.length} 篇`)), favBox] : null,
       sourceNote(),
     ),

@@ -31,6 +31,7 @@ export function festivalOn(day, list = FESTIVALS) {
 }
 
 // 从这天起 (含这天), 每个节日下一次是哪天: [{ festival, day, days 还有几天 }], 近的在前; 表里没有的年份不列
+// (原来书斋的「节日的诗」一栏用, v1.60.2 那一栏去掉了, 现在页面上没用到)
 export function upcoming(from, list = FESTIVALS) {
   const year = Number(String(from).slice(0, 4));
   const out = [];
