@@ -14,13 +14,14 @@ function memoryStorage() {
 const TRAD = /[們這個來時為爲說國學對開後裏雲風東書詩長門見無與會從問間點總義聖訓謹愛親餘歲禮將學經憂樂聲啓興龍鳥]/;
 
 test('书库: 每本书都拿得到, 篇数跟书目一样; 简体、繁体一篇对一篇; 简体里没有繁体字', async () => {
-  assert.equal(BOOKS.length, 13);
+  assert.equal(BOOKS.length, 14);
   assert.deepEqual(BOOKS.slice(0, 4).map((b) => b.title), ['唐诗三百首', '宋词三百首', '论语', '古文观止']);
   // 书架每层都有书, 每本书都在一层上
   for (const b of BOOKS) assert.ok(SHELVES.some((x) => x.key === b.cat), b.id);
   for (const x of SHELVES) assert.ok(BOOKS.some((b) => b.cat === x.key), x.key);
   assert.deepEqual(BOOKS.filter((b) => b.cat === 'poetry').map((b) => b.id), ['tangshi', 'songci', 'qianjiashi']);
   for (const b of BOOKS) {
+    if (b.kind === 'novel') continue; // 小说一回一个文件, 另外测 (tests/novel.test.js)
     const hans = await loadBook(b.id);
     const hant = await loadBook(b.id, { hant: true });
     assert.equal(hans.id, b.id);
@@ -194,7 +195,7 @@ test('做卡片: 接下句 (诗一首一首, 第一张问第一句; 文章连着
   assert.equal(setTitle(book, poems.pieces[0]), '春眠（孟浩然）');
   assert.equal(setTitle(sbook, szj.pieces[0]), `三字经 · ${szj.pieces[0].t}`);
   // 每本书每篇都做得出卡片, 卡片两面都不空
-  for (const b of BOOKS) {
+  for (const b of BOOKS.filter((x) => x.kind !== 'novel')) { // 小说不做卡片
     const data = await loadBook(b.id);
     for (const style of ['next', 'whole']) {
       const cards = makeCards(b, data.pieces, style);
@@ -278,20 +279,21 @@ test('收藏、读到哪: 存、洗、同步合并 (听后改的)、备份', () 
 
 test('读音特别的字: 清单每条都在书里找得到; 标在对的字上 (繁体一样长的也标); 朗读换成同音字', async () => {
   const PINYIN = /^[a-zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü]+$/;
-  const data = Object.fromEntries(await Promise.all(BOOKS.map(async (b) => [b.id, await loadBook(b.id)])));
-  const hant = Object.fromEntries(await Promise.all(BOOKS.map(async (b) => [b.id, await loadBook(b.id, { hant: true })])));
+  const LIB = BOOKS.filter((b) => b.kind !== 'novel'); // 小说的正文一回一个文件, 读音在 tests/novel.test.js 里查
+  const data = Object.fromEntries(await Promise.all(LIB.map(async (b) => [b.id, await loadBook(b.id)])));
+  const hant = Object.fromEntries(await Promise.all(LIB.map(async (b) => [b.id, await loadBook(b.id, { hant: true })])));
   for (const r of READINGS) {
     assert.ok(r.at.includes(r.ch), `${r.at} 里没有 ${r.ch}`);
     assert.ok(PINYIN.test(r.py), `${r.at}: 拼音 ${r.py}`);
     assert.ok(r.note, `${r.at}: 没写说明`);
     if (r.say) assert.equal([...r.say].length, [...r.ch].length, `${r.at}: 换的字数不对`);
     if (r.book) assert.ok(bookOf(r.book), r.book);
-    const where = (r.book ? [r.book] : BOOKS.map((b) => b.id)).filter((id) => data[id].pieces.some((p) => [p.t, ...p.p].some((l) => l.includes(r.at))));
+    const where = (r.book ? [r.book] : LIB.map((b) => b.id)).filter((id) => data[id].pieces.some((p) => [p.t, ...p.p].some((l) => l.includes(r.at))));
     assert.ok(where.length, `「${r.at}」在书里找不到`);
   }
   // 标出来的那几行, 繁体一样长 (位置对得上)
   let marked = 0;
-  for (const b of BOOKS) {
+  for (const b of LIB) {
     data[b.id].pieces.forEach((p, i) => {
       for (const m of readingsOf(b.id, p)) {
         marked++;
@@ -539,7 +541,7 @@ test('繁体原文里转错的字改过来了 (只改繁体, 简体不变)', asy
   assert.ok((await hant('baijiaxing')).includes('鍾離'));
   // 这些都是转错的写法, 哪本书里都不该有
   const wrong = ['北鬥', '南鬥', '孤鬆', '長幹', '妾發', '《詩》雲', '《書》雲', '樑王', '鹹集', '趙威後', '慾斷魂', '吉孰兇', '餘讀'];
-  for (const { id } of BOOKS) {
+  for (const { id } of BOOKS.filter((b) => b.kind !== 'novel')) {
     const text = await hant(id);
     for (const w of wrong) assert.ok(!text.includes(w), `${id} 里还有「${w}」`);
   }

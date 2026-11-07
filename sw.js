@@ -52,6 +52,7 @@ const FILES = [
   'js/library/hant/shenglvqimeng.js',
   'js/library/hant/songci.js',
   'js/library/hant/tangshi.js',
+  'js/library/hant/xiyouji.js',
   'js/library/hant/youxueqionglin.js',
   'js/library/hant/zengguangxianwen.js',
   'js/library/hant/zhuzijiaxun.js',
@@ -63,6 +64,7 @@ const FILES = [
   'js/library/shenglvqimeng.js',
   'js/library/songci.js',
   'js/library/tangshi.js',
+  'js/library/xiyouji.js',
   'js/library/yizhu/guwen.js',
   'js/library/yizhu/qianjiashi.js',
   'js/library/yizhu/songci.js',
@@ -154,6 +156,10 @@ const FILES = [
   'js/zip.js',
 ];
 
+// 很大的书 (长篇小说) 一回一个文件, 第一次打开时不全存 (几 MB): 读过哪回就存哪回, 换版本时也不删。
+// App 里照样全部放进去 (ios/copy-web.sh 照这一行复制整个文件夹)
+const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/'];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -163,14 +169,15 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 换新版本时: 存着的不在名单里的 (以前版本的文件、带 ? 的网址) 删掉, 不会越存越多
+// 换新版本时: 存着的不在名单里的 (以前版本的文件、带 ? 的网址) 删掉, 不会越存越多; 读过的小说章节 (LAZY) 留着
 self.addEventListener('activate', (event) => {
   const keep = new Set(FILES.map((f) => new URL(f, self.location).href));
+  const lazy = LAZY.map((d) => new URL(d, self.location).href);
   event.waitUntil(
     caches
       .open(CACHE)
       .then(async (cache) => {
-        for (const req of await cache.keys()) if (!keep.has(req.url)) await cache.delete(req);
+        for (const req of await cache.keys()) if (!keep.has(req.url) && !lazy.some((d) => req.url.startsWith(d) && !req.url.includes('?'))) await cache.delete(req);
       })
       .catch(() => {})
       .then(() => self.clients.claim()),

@@ -552,10 +552,28 @@ for (const b of BOOKS) {
   console.log(`${hans.title}: ${hans.pieces.length} ${b.unit}`);
 }
 
+// ---- 长篇小说: tools/novel.mjs 生成 (一回一个文件), 这里只写进书目。先跑 novel.mjs, 再跑这个 ----
+const NOVELS = [
+  {
+    id: 'xiyouji',
+    era: '明',
+    intro: '写唐僧师徒四人去西天取经、一路降妖除魔的故事，一百回，作者一般认为是明代吴承恩。这里用的是清代流传的本子：第九回「陈光蕊赴任逢灾」讲唐僧的身世，是清代加进去的；现在常见的人民文学出版社版以明代世德堂本为底本，把这一回放在附录。原文来自维基文库，对照古登堡计划核对过。',
+    src: [
+      { name: '维基文库', url: 'https://zh.wikisource.org/wiki/西遊記' },
+      { name: '古登堡计划', url: 'https://www.gutenberg.org/ebooks/23962' },
+    ],
+  },
+];
+for (const nv of NOVELS) {
+  const index = (await import(pathToFileURL(join(root, `js/library/${nv.id}.js`)).href)).default;
+  catalog.push({ id: nv.id, title: index.title, author: index.author, era: nv.era, kind: 'novel', unit: '回', cat: 'novel', count: index.pieces.length, intro: nv.intro, src: nv.src });
+  console.log(`${index.title}: ${index.pieces.length} 回 (tools/novel.mjs 生成的)`);
+}
+
 writeFileSync(
   join(root, 'js/library/books.js'),
   `// 书库的书目: tools/library.mjs 生成, 别手改。书的正文在 js/library/<id>.js (简体)、js/library/hant/<id>.js (繁体)\n` +
-    `// kind: poem 一首一首的诗 (有作者、朝代), text 文章; unit: 一篇叫什么 (首、段、章、篇); chain: 文章做「接下句」卡片时怎么接 (见 tools/library.mjs); cat: 放在书架哪一层 (reading.js 的 SHELVES)\n` +
+    `// kind: poem 一首一首的诗 (有作者、朝代), text 文章, novel 长篇小说 (一回一个文件, 见 tools/novel.mjs); unit: 一篇叫什么 (首、段、章、篇、回); chain: 文章做「接下句」卡片时怎么接 (见 tools/library.mjs); cat: 放在书架哪一层 (reading.js 的 SHELVES); src: 原文另有来源的 (小说)\n` +
     `export const BOOKS = [\n${catalog.map((c) => `  ${JSON.stringify(c)},`).join('\n')}\n];\n` +
     `export const SOURCE = ${JSON.stringify({ name: 'chinese-poetry', url: 'https://github.com/chinese-poetry/chinese-poetry', license: 'MIT' })};\n`,
 );

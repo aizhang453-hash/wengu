@@ -6,7 +6,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, recentBooks, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { FESTIVALS, festivalOn, upcoming } from '../festival.js';
@@ -192,7 +192,7 @@ export function renderLibrary({ store }) {
           favs.map((f) => {
             const book = bookOf(f.book);
             const p = data[f.book].pieces[f.i];
-            return h('li', {}, h('a', { href: pieceHref(f.book, f.i) }, h('strong', {}, p.t), h('span', { class: 'muted small' }, ` ${book.title}${byline(p) ? ` · ${byline(p)}` : ''}`), h('span', { class: 'read-hit' }, p.p[0] ?? '')));
+            return h('li', {}, h('a', { href: pieceHref(f.book, f.i) }, h('strong', {}, p.t), h('span', { class: 'muted small' }, ` ${book.title}${byline(p) ? ` · ${byline(p)}` : ''}`), h('span', { class: 'read-hit' }, p.p?.[0] ?? unitOf(book, f.i))));
           }),
         );
       },
@@ -266,14 +266,21 @@ const yizhuNote = (entry) =>
     ? '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。原文和讲法对照维基文库、古诗文网核对过，难免还有疏漏，欢迎指出。'
     : '注释和译文是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」。讲法对照古诗文网等资料核对过，难免还有疏漏，欢迎指出。';
 
-const sourceNote = () =>
-  h(
+// 原文从哪来: 诗词、古文和启蒙读物是 chinese-poetry; 小说 (书目里写了 src 的) 是维基文库、古登堡计划
+const link = (x) => h('a', { href: x.url, target: '_blank', rel: 'noopener' }, x.name);
+const sourceNote = () => {
+  const novels = BOOKS.filter((b) => b.src?.length);
+  const others = [...new Map(novels.flatMap((b) => b.src).map((x) => [x.url, x])).values()];
+  return h(
     'p',
     { class: 'muted small read-source' },
     '原文来自开源项目 ',
-    h('a', { href: SOURCE.url, target: '_blank', rel: 'noopener' }, SOURCE.name),
-    `（${SOURCE.license} 许可），原书是繁体，简体是自动转换的，个别字可能有出入，读一篇时可以切换成繁体看原文。`,
+    link(SOURCE),
+    `（${SOURCE.license} 许可）`,
+    novels.length ? ['；', novels.map((b) => `《${b.title}》`).join(''), '来自', others.map((x, k) => [k ? '、' : '', link(x)]), '（古书，版权早已过期）'] : null,
+    '。原书是繁体，简体是自动转换的，个别字可能有出入，读一篇时可以切换成繁体看原文。',
   );
+};
 
 // ---- 一本书的目录 ----
 export function renderBook({ store }, id) {
@@ -412,13 +419,16 @@ export function renderPiece({ store, go }, id, n) {
     const title = h('h1', { class: 'read-title', 'data-line': '-1', 'data-same': p.t.length === hp.t.length ? '1' : '0' }, marked(p.t, -1, hp.t));
     const lines = p.p.map((l, j) => [
       p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null,
-      h('p', { 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0' }, marked(l, j, hp.p[j] ?? '')),
+      // 小说里夹的诗句 (v: 第几段是诗) 居中排, 不缩进
+      h('p', { class: hp.v?.includes(j) ? 'read-verse' : null, 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0' }, marked(l, j, hp.p[j] ?? '')),
       yi?.[j] && yi[j] !== hp.p[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null, // 跟原文一样的 (《过秦论》的「上篇」) 不重复
     ]);
     return [
       title,
       // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
       h('p', { class: 'read-by muted' }, [byline(p) || `《${data.title}》`, data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).join(' · ')),
+      // 这一回的说明 (《西游记》第九回是清代加进去的)
+      hp.note ? h('p', { class: 'read-note muted small' }, hp.note) : null,
       // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
       // 组诗在每首前面写「其一」「其二」
       h('div', { class: `read-text${p.p.every((l) => l.length <= 24) ? ' verse' : ''}` }, lines),
@@ -488,7 +498,8 @@ export function renderPiece({ store, go }, id, n) {
   };
   // 注释、译文拿不来 (没网) 就只显示原文
   const draw = () =>
-    Promise.all([loadBook(id), prefs.hant ? loadBook(id, { hant: true }) : null, loadYizhu(id).catch(() => null)]).then(
+    // 小说 (一回一个文件) 要另外拿这一回的正文 (loadWithPiece); 别的书整本拿
+    Promise.all([loadWithPiece(id, i), prefs.hant ? loadWithPiece(id, i, { hant: true }) : null, loadYizhu(id).catch(() => null)]).then(
       ([hans, hant, yizhu]) => {
         text = { data: hans, p: hans.pieces[i], yizhu };
         entry = entryOf(yizhu, hans.pieces[i]);
@@ -522,7 +533,7 @@ export function renderPiece({ store, go }, id, n) {
   const yiBtn = toggle('yi', '译文', '每段下面显示白话译文');
   draw();
   // 做卡片、朗读用简体的
-  const simple = () => (text ? Promise.resolve(text) : Promise.all([loadBook(id), loadYizhu(id).catch(() => null)]).then(([data, yizhu]) => ({ data, p: data.pieces[i], yizhu })));
+  const simple = () => (text ? Promise.resolve(text) : Promise.all([loadWithPiece(id, i), loadYizhu(id).catch(() => null)]).then(([data, yizhu]) => ({ data, p: data.pieces[i], yizhu })));
 
   const hantBtn = h('button', { class: 'btn small', type: 'button', title: '简体 / 繁体原文', onclick: () => ((prefs.hant = !prefs.hant), savePrefs(prefs), (body.lang = prefs.hant ? 'zh-Hant' : 'zh-Hans'), (hantBtn.textContent = prefs.hant ? '简体' : '繁体'), draw()) }, prefs.hant ? '简体' : '繁体');
   const sizeBtn = (d, label, name) =>
@@ -571,7 +582,8 @@ export function renderPiece({ store, go }, id, n) {
         'div',
         { class: 'read-tools' },
         favBtn,
-        h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p, yizhu }) => cardsDialog({ store, go }, book, data, p, yizhu)) }, '做成卡片背'),
+        // 小说先只放原文, 不做卡片
+        book.kind === 'novel' ? null : h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p, yizhu }) => cardsDialog({ store, go }, book, data, p, yizhu)) }, '做成卡片背'),
         say,
         zhuBtn,
         yiBtn,

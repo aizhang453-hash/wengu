@@ -68,7 +68,11 @@ test('App 的网页文件: 照 sw.js 的名单复制, 一个不少, 别的不带
     const copied = list('').sort();
     const sw = readFileSync(join(root, 'sw.js'), 'utf8');
     const files = [...sw.matchAll(/^\s+'([^']+)',$/gm)].map((m) => m[1]).filter((f) => f !== './');
-    assert.deepEqual(copied, [...files].sort());
+    // 小说一回一个文件 (sw.js 的 LAZY 文件夹), App 里整个文件夹都放进去
+    const lazy = JSON.parse(/^const LAZY = (\[.*\]);$/m.exec(sw)[1].replace(/'/g, '"'));
+    const lazyFiles = lazy.flatMap((d) => readdirSync(join(root, d)).map((f) => join(d, f)));
+    assert.ok(lazyFiles.length >= 200);
+    assert.deepEqual(copied, [...files, ...lazyFiles].sort());
     assert.equal(readFileSync(join(web, 'index.html'), 'utf8'), readFileSync(join(root, 'index.html'), 'utf8'));
   } finally {
     rmSync(out, { recursive: true, force: true });

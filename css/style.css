@@ -9640,6 +9640,16 @@ button.pick-row:hover {
   text-align: center;
 }
 
+/* 一回的说明 (《西游记》第九回是清代加的): 作者下面一个淡色的小框 */
+.read-note {
+  max-width: 34em;
+  margin: -8px auto 20px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  line-height: 1.6;
+}
+
 .read-text {
   font-family: var(--font-serif);
   line-height: 2;
@@ -9653,8 +9663,20 @@ button.pick-row:hover {
   text-align: center;
 }
 
-.read-piece.text .read-text p {
+.read-piece.text .read-text p,
+.read-piece.novel .read-text p {
   text-indent: 2em;
+}
+
+/* 小说里夹的诗句: 居中, 不缩进, 一句跟一句挨得近一点 */
+.read-piece .read-text p.read-verse {
+  text-indent: 0;
+  text-align: center;
+  margin-bottom: 0.2em;
+}
+
+.read-piece .read-text p.read-verse + p:not(.read-verse) {
+  margin-top: 0.8em;
 }
 
 .read-text.verse {

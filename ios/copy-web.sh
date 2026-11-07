@@ -16,6 +16,13 @@ for f in $(sed -n "s/^[[:space:]]*'\([^']*\)',\$/\1/p" "$SRC/sw.js"); do
   count=$((count + 1))
 done
 
+# 长篇小说一回一个文件, 网页上读到才下载 (sw.js 的 LAZY), App 里整个文件夹都放进去
+for d in $(sed -n "s/^const LAZY = \[\(.*\)\];\$/\1/p" "$SRC/sw.js" | tr -d "' " | tr ',' ' '); do
+  mkdir -p "$DEST/$d"
+  cp "$SRC/$d"*.js "$DEST/$d"
+  count=$((count + $(ls "$SRC/$d" | wc -l)))
+done
+
 if [ ! -f "$DEST/index.html" ]; then
   echo "error: 没复制到 index.html, 看看 sw.js 里的名单" >&2
   exit 1

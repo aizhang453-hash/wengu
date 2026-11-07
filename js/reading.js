@@ -23,6 +23,29 @@ export function loadBook(id, { hant = false } = {}) {
   return loaded.get(key);
 }
 
+// 长篇小说 (kind: 'novel', tools/novel.mjs 生成) 太大, 一回一个文件: loadBook 拿到的只是目录 (每回只有回目 t),
+// 正文用 loadChapter 拿 (读到哪回才下载哪回): { p 一段一段, v? 哪几段是诗句, n? 版本不同的字, note? 说明 }
+const chapters = new Map();
+export function loadChapter(id, i, { hant = false } = {}) {
+  const b = bookOf(id);
+  if (!b || b.kind !== 'novel' || !(i >= 0 && i < b.count)) return Promise.resolve(null);
+  const key = `${hant ? 'hant/' : ''}${id}/${String(i + 1).padStart(3, '0')}`;
+  if (!chapters.has(key)) {
+    const p = import(`./library/${key}.js`).then((m) => m.default);
+    p.catch(() => chapters.delete(key));
+    chapters.set(key, p);
+  }
+  return chapters.get(key);
+}
+
+// 读一篇用: 跟 loadBook 一样的 { ...书, pieces }, 第 i 篇保证带正文 (小说要另外拿那一回, 别的书本来就有)
+export async function loadWithPiece(id, i, opts = {}) {
+  const data = await loadBook(id, opts);
+  if (!data || bookOf(id).kind !== 'novel') return data;
+  const ch = await loadChapter(id, i, opts);
+  return { ...data, pieces: data.pieces.map((p, k) => (k === i ? { ...p, ...ch } : p)) };
+}
+
 export const pieceId = (book, i) => `${book}:${i}`;
 const PIECE_ID = /^([a-z]+):(\d+)$/;
 // '书:第几篇' → { book, i }; 不是书库里有的返回 null
@@ -94,6 +117,7 @@ export const SHELVES = [
   { key: 'poetry', name: '诗词' },
   { key: 'classic', name: '经典与古文' },
   { key: 'primer', name: '启蒙读物' },
+  { key: 'novel', name: '古典小说' },
 ];
 
 // ---- 读音特别的字 (library/readings.js) ----
@@ -281,10 +305,11 @@ export async function searchLibrary(query, { limit = 60 } = {}) {
   books.forEach((data, bi) => {
     const book = BOOKS[bi];
     data.pieces.forEach((piece, i) => {
-      const line = piece.p.find((l) => l.replace(/\s+/g, '').includes(q));
+      // 小说的目录里没有正文 (只搜回目), 正文太大不搜
+      const line = (piece.p ?? []).find((l) => l.replace(/\s+/g, '').includes(q));
       const cy = entryOf(extra[bi], piece)?.cy?.find((x) => x.w.replace(/[，。；：？！、\s]/g, '').includes(q.replace(/[，。；：？！、]/g, '')));
       const where = piece.t.includes(q) ? 'title' : piece.a?.includes(q) ? 'author' : cy ? 'idiom' : line ? 'line' : '';
-      if (where) hits.push({ book: book.id, i, piece, where, line: where === 'idiom' ? `${cy.kind ?? '成语'}「${cy.w}」出自这里` : (line ?? piece.p[0] ?? '') });
+      if (where) hits.push({ book: book.id, i, piece, where, line: where === 'idiom' ? `${cy.kind ?? '成语'}「${cy.w}」出自这里` : (line ?? piece.p?.[0] ?? `第 ${i + 1} ${book.unit}`) });
     });
   });
   const rank = { title: 0, author: 1, idiom: 2, line: 3 };
