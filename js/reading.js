@@ -46,6 +46,20 @@ export async function loadWithPiece(id, i, opts = {}) {
   return { ...data, pieces: data.pieces.map((p, k) => (k === i ? { ...p, ...ch } : p)) };
 }
 
+// 一本书读的次序 (目录、上一篇下一篇): 平常就是编号次序; 后来拆出来、放在书最后的篇 (书目的 after: [[第几篇, 排在第几篇后面]]) 排到该在的地方
+// (千家诗的林洪《宫词》放在最后, 读的时候排在王建《宫词》后面。编号不动, 收藏、读到哪都不受影响)
+export function orderOf(book) {
+  const moved = new Map((book?.after ?? []).map(([i, at]) => [at, i]));
+  const skip = new Set((book?.after ?? []).map(([i]) => i));
+  const out = [];
+  for (let i = 0; i < (book?.count ?? 0); i++) {
+    if (skip.has(i)) continue;
+    out.push(i);
+    if (moved.has(i)) out.push(moved.get(i));
+  }
+  return out;
+}
+
 export const pieceId = (book, i) => `${book}:${i}`;
 const PIECE_ID = /^([a-z]+):(\d+)$/;
 // '书:第几篇' → { book, i }; 不是书库里有的返回 null
@@ -304,7 +318,8 @@ export async function searchLibrary(query, { limit = 60 } = {}) {
   const hits = [];
   books.forEach((data, bi) => {
     const book = BOOKS[bi];
-    data.pieces.forEach((piece, i) => {
+    orderOf(book).forEach((i) => {
+      const piece = data.pieces[i];
       // 小说的目录里没有正文 (只搜回目), 正文太大不搜
       const line = (piece.p ?? []).find((l) => l.replace(/\s+/g, '').includes(q));
       const cy = entryOf(extra[bi], piece)?.cy?.find((x) => x.w.replace(/[，。；：？！、\s]/g, '').includes(q.replace(/[，。；：？！、]/g, '')));

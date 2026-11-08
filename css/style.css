@@ -9784,6 +9784,16 @@ button.pick-row:hover {
   list-style: disc;
 }
 
+.read-bg p {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.read-bg p:last-child {
+  margin-bottom: 0;
+}
+
 .read-zhi li::marker {
   color: var(--accent);
 }

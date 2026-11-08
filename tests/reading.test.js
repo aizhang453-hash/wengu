@@ -76,27 +76,28 @@ test('论语、古文观止: 篇数、名句、作者和出处、注, 资料里�
 
 test('千家诗: 组诗 (其一、其二) 正常显示、拆开做卡片; 跟唐诗三百首对出来的错字改了, 原来的写法在注里', async () => {
   const qj = await loadBook('qianjiashi');
-  const gongci = qj.pieces.find((p) => p.t === '宫词' && p.k);
-  assert.deepEqual(gongci.k, [
+  const xuemei = qj.pieces.find((p) => p.t === '雪梅' && p.k);
+  assert.deepEqual(xuemei.k, [
     [0, '其一'],
     [2, '其二'],
   ]);
-  assert.deepEqual(poemsOf(gongci).map((p) => [p.t, p.p.length]), [
-    ['宫词·其一', 2],
-    ['宫词·其二', 2],
+  assert.deepEqual(poemsOf(xuemei).map((p) => [p.t, p.p.length]), [
+    ['雪梅·其一', 2],
+    ['雪梅·其二', 2],
   ]);
-  const cards = makeCards(bookOf('qianjiashi'), [gongci]);
+  const cards = makeCards(bookOf('qianjiashi'), [xuemei]);
   assert.equal(cards.filter((c) => c.term.includes('第一句')).length, 2);
-  assert.deepEqual(cards[0], { term: `《宫词·其一》（${gongci.a}）第一句`, def: '金殿当头紫阁重' });
-  assert.equal(qj.pieces.filter((p) => p.k).length, 5);
+  assert.deepEqual(cards[0], { term: '《雪梅·其一》（卢梅坡）第一句', def: '梅雪争春未肯降' });
+  assert.equal(qj.pieces.filter((p) => p.k).length, 4);
   const friend = qj.pieces.find((p) => p.t === '送友人');
   assert.ok(friend.p.join('').includes('孤蓬万里征') && friend.p.join('').includes('萧萧班马鸣'));
   assert.deepEqual(friend.n, ['孤蓬万里征 一作：孤篷万里征', '萧萧班马鸣 一作：萧萧斑马鸣']);
   // 只是字形不同的 (静夜思「牀 / 床」) 不改、不加注
   assert.equal(qj.pieces.find((p) => p.t === '静夜思').n, undefined);
-  // 每首的篇号没变 (v1.51 收藏、读到哪记的是第几篇)
+  // 每首的篇号没变 (v1.51 收藏、读到哪记的是第几篇); v1.61 拆出来的林洪《宫词》加在最后, 是第 220 首
   assert.equal(qj.pieces[0].t, '春眠');
-  assert.equal(qj.pieces.length, 219);
+  assert.equal(qj.pieces[218].t, '送毛伯温');
+  assert.equal(qj.pieces.length, 220);
 });
 
 test('唐诗三百首: 版本注释拿到正文外面; 宋词三百首: 题目是「词牌·第一句」, 按词人分组, 资料丢的字补回来了', async () => {

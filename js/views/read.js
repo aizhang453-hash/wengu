@@ -7,7 +7,7 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { festivalOn } from '../festival.js';
@@ -34,7 +34,12 @@ function savePrefs(p) {
 const pieceHref = (book, i) => `#/read/${book}/${i + 1}`;
 // 「〔唐〕孟浩然」「〔先秦〕左丘明 《左传》」; 没有作者的 (三字经的一段) 是空的
 const byline = (p) => (p.a ? `${p.e ? `〔${p.e}〕` : ''}${p.a}${p.s ? ` ${p.s}` : ''}` : '');
-const unitOf = (book, i) => (book.count > 1 ? `第 ${i + 1} ${book.unit}` : '');
+// 第几篇按读的次序数 (后来拆出来、放在书最后的篇, 排在它该在的地方; 见 reading.js 的 orderOf)
+const posOf = (book, i) => {
+  const k = orderOf(book).indexOf(i);
+  return k < 0 ? i : k;
+};
+const unitOf = (book, i) => (book.count > 1 ? `第 ${posOf(book, i) + 1} ${book.unit}` : '');
 
 // 正文拿不来 (第一次打开时没网)
 const offline = () => h('p', { class: 'muted' }, '没能打开这本书，请连上网再试一次（打开过一次以后断网也能读）。');
@@ -198,11 +203,16 @@ function shelf(s, books, row) {
   );
 }
 
-// 注释和译文是温故自己写的 (原文的资料里没有); 没有成语的 (唐诗宋词) 不提成语
+// 创作背景 (yizhu 的 bg): 一段话, 或者几段 (数组)
+const bgOf = (entry) => [entry?.bg ?? []].flat().filter(Boolean);
+
+// 注释和译文是温故自己写的 (原文的资料里没有); 没有成语的 (唐诗宋词) 不提成语; 有创作背景的提一句什么时候写的拿不准就不写
 const yizhuNote = (entry) =>
   entry.cy?.length
     ? '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。原文和讲法对照维基文库、古诗文网核对过，难免还有疏漏，欢迎指出。'
-    : '注释和译文是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」。讲法对照古诗文网等资料核对过，难免还有疏漏，欢迎指出。';
+    : bgOf(entry).length
+      ? '注释、译文和创作背景是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；哪年写的、为什么写，没有可靠说法的就不写。讲法对照古诗文网和维基文库上的古书（像仇兆鳌的《杜诗详注》、计有功的《唐诗纪事》）核对过，难免还有疏漏，欢迎指出。'
+      : '注释和译文是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」。讲法对照古诗文网等资料核对过，难免还有疏漏，欢迎指出。';
 
 // 原文从哪来: 诗词、古文和启蒙读物是 chinese-poetry; 小说 (书目里写了 src 的) 是维基文库、古登堡计划
 const link = (x) => h('a', { href: x.url, target: '_blank', rel: 'noopener' }, x.name);
@@ -231,9 +241,9 @@ export function renderBook({ store }, id) {
       h(
         'li',
         { class: last?.i === i ? 'on' : '' },
-        h('a', { href: pieceHref(id, i) }, book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${i + 1}`), h('span', {}, p.t), p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null),
+        h('a', { href: pieceHref(id, i) }, book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${posOf(book, i) + 1}`), h('span', {}, p.t), p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null),
       );
-    const items = data.pieces.map((p, i) => ({ p, i }));
+    const items = orderOf(book).map((i) => ({ p: data.pieces[i], i }));
     if (!data.groups.length) return h('ol', { class: `read-list read-toc-list ${book.kind}` }, items.map(({ p, i }) => item(p, i)));
     return data.groups.map((g, gi) => [h('h2', {}, g), h('ol', { class: `read-list read-toc-list ${book.kind}` }, items.filter(({ p }) => p.g === gi).map(({ p, i }) => item(p, i)))]);
   });
@@ -408,6 +418,9 @@ export function renderPiece({ store, go }, id, n) {
             ),
           )
         : null,
+      bgOf(entry).length
+        ? h('section', { class: 'read-cy read-bg', lang: 'zh-Hans', 'aria-label': '创作背景' }, h('h2', {}, '创作背景'), bgOf(entry).map((x) => h('p', {}, x)))
+        : null,
       idioms.length
         ? h(
             'section',
@@ -495,8 +508,11 @@ export function renderPiece({ store, go }, id, n) {
     });
   const say = canSpeak() ? h('button', { class: 'btn small', type: 'button', onclick: readAloud }, icon('volume', 16), ' 朗读') : null;
 
-  const prev = i > 0 ? i - 1 : null;
-  const next = i + 1 < book.count ? i + 1 : null;
+  // 上一篇、下一篇照读的次序 (orderOf)
+  const order = orderOf(book);
+  const pos = order.indexOf(i);
+  const prev = order[pos - 1] ?? null;
+  const next = order[pos + 1] ?? null;
   const onKey = (e) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || document.querySelector('dialog[open]')) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '')) return;
@@ -514,7 +530,7 @@ export function renderPiece({ store, go }, id, n) {
     el: h(
       'section',
       { class: 'read-page' },
-      h('div', { class: 'read-top' }, h('a', { class: 'back', href: `#/read/${id}` }, `← 《${book.title}》目录`), h('span', { class: 'muted small' }, `${i + 1} / ${book.count}`)),
+      h('div', { class: 'read-top' }, h('a', { class: 'back', href: `#/read/${id}` }, `← 《${book.title}》目录`), h('span', { class: 'muted small' }, `${pos + 1} / ${book.count}`)),
       body,
       h(
         'div',
@@ -553,7 +569,7 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   const choice = (key, value, label, desc) =>
     h('button', { class: `chip-toggle${draft[key] === value ? ' on' : ''}`, type: 'button', 'aria-pressed': String(draft[key] === value), title: desc, onclick: () => ((draft[key] = value), draw()) }, label);
   const box = h('div', { class: 'read-cards' });
-  const pieces = () => (draft.all ? data.pieces : [piece]);
+  const pieces = () => (draft.all ? orderOf(book).map((i) => data.pieces[i]) : [piece]);
   const cards = () => makeCards(book, pieces(), draft.style, yizhu);
   const title = () => `${setTitle(book, draft.all ? null : piece)}${draft.style === 'zhu' ? ' · 字词' : draft.style === 'cy' ? ' · 成语' : ''}`;
   function draw() {

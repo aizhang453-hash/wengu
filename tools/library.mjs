@@ -204,13 +204,61 @@ const TITLE_FIX = {
     ['范成大', '绿遍山原白满川', '', { by: ['翁卷', '宋'] }], // 千家诗原书就写成范成大 (维基文库「鄉村四月」页注明); 其实是翁卷的《乡村四月》, 题目照书里的
     ['韩愈', '天街小雨润如酥', '', { by: ['韓愈', '唐'] }], // 朝代写成了宋
     ['谢枋得', '子规啼彻四更时', '', { by: ['謝枋得', '宋'] }], // 朝代写成了唐
+    ['王维', '游人五陵去', '', { by: ['孟浩然', '唐'] }], // 《送朱大入秦》是孟浩然的 (《全唐诗》卷一六〇), 资料写成了王维
+    // 卷二 五言律诗 (v1.61 对照维基文库、古诗文网):
+    ['杜审言', '独有宦游人', '', { base: '和晉陵陸丞早春遊望' }], // 资料写成「和晉陵陸承相」, 少了半截; 陆丞是晋陵县丞 (有的千家诗误作「陆丞相」)
+    ['王勃', '城阙辅三秦', '', { base: '送杜少府之任蜀州' }], // 资料丢了「送」字
+    ['高适', '浩劫因王造', '', { by: ['杜甫', '唐'] }], // 《玉台观》是杜甫的 (《全唐诗》卷二二八), 资料写成了高适
+    ['张佑', '山色远含空', '', { by: ['張祜', '唐'] }], // 张祜 (hù) 写成了张佑
+    ['李白', '江城如画里', '', { base: '秋登宣城謝朓北樓' }], // 谢朓 (tiǎo) 写成了谢眺
+    ['张说', '凉风吹夜雨', '', { base: '幽州夜飲' }], // 写成了「幽州夜歌」
+    // 卷三 七言绝句 (v1.61 对照维基文库、古诗文网): 作者、题目
+    ['晁无咎', '阊阖千门', '', { by: ['晁說之', '宋'] }], // 《打球图》一般认为是晁说之的 (原题《题明王打球图》), 千家诗写成晁无咎 (晁补之)
+    ['王建', '行尽江南', '', { by: ['杜常', '宋'] }], // 《咏华清宫》是北宋杜常的, 资料写成王建
+    ['张演', '鹅湖山下', '', { by: ['王駕', '唐'] }], // 《社日》一般认为是晚唐王驾的
+    ['僧志安', '古木阴中', '', { by: ['僧志南', '宋'] }], // 南宋诗僧志南 (朱熹称赞过这首)
+    ['王驾', '雨前初见', '', { by: ['王駕', '唐'] }], // 王驾是唐人, 朝代写成了宋
+    ['朱淑贞', '连理枝头', '', { by: ['朱淑真', '宋'] }],
+    ['朱淑贞', '竹摇清影', '', { by: ['朱淑真', '宋'] }],
+    ['司马光', '黄梅时节', '', { by: ['趙師秀', '宋'] }], // 其实是赵师秀《约客》
+    ['王安石', '四顾山光', '', { by: ['黃庭堅', '宋'] }], // 黄庭坚《鄂州南楼书事》(一名《晚楼闲坐》)
+    ['朱熹', '五月榴花', '', { by: ['韓愈', '唐'] }], // 韩愈《题张十一旅舍三咏·榴花》
+    ['李嘉佑', '傲吏身闲', '', { by: ['李嘉祐', '唐'] }], // 李嘉祐 (祐) 写成了佑
+    ['李白', '一为迁客', '', { base: '與史郎中飲聽黃鶴樓上吹笛' }], // 郎中写成了「朗中」
+    ['洪咨夔', '禁门深锁', '', { base: '直玉堂作' }], // 直 (值班) 写成了「真」
+    // 卷四 七言律诗
+    ['王淇', '雪消华月', '', { by: ['王珪', '宋'] }], // 第二首《上元应制》是王珪的 (原题《恭和御制上元观灯》)
+    ['高菊卿', '南北山头', '', { by: ['高翥', '宋'] }], // 高翥号菊磵, 写成了「高菊卿」
   ],
 };
-// 资料 (繁体) 里地名「长干」成了「長幹」、「长干里」成了「長幹裏」; 千家诗《黄鹤楼》「鹦鹉洲」写成了「鹦鹉州」(维基文库的千家诗是「洲」)
+// 资料 (繁体) 里地名「长干」成了「長幹」、「长干里」成了「長幹裏」; 千家诗《黄鹤楼》「鹦鹉洲」写成了「鹦鹉州」(维基文库的千家诗是「洲」);
+// 《送朱大入秦》「游人五陵去」写成了「避人」(维基文库的千家诗是「遊人」); 《洛阳道》「双双鸣玉珂」写成了「嗚」(口字旁的「呜」, 维基文库也错了; 珂是马笼头上的玉饰, 响的是「鸣」)
 const POEM_FIX = [
   ['長幹裏', '長干里'],
   ['長幹', '長干'],
   ['鸚鵡州', '鸚鵡洲'],
+  ['避人五陵去', '遊人五陵去'],
+  ['雙雙嗚玉珂', '雙雙鳴玉珂'],
+  // 卷二 五言律诗: 维基文库 (《全唐诗》)、古诗文网都是右边的写法
+  ['雲標金闕回', '雲標金闕迥'], // 迥: 远
+  ['升沈應已定', '升沉應已定'], // 简体要显示「升沉」
+  ['澧水映園林', '灃水映園林'], // 沣水在长安南边; 澧水在湖南
+  ['滿壁畫滄州', '滿壁畫滄洲'], // 沧洲: 水边, 隐士住的地方 (不是河北的沧州)
+  ['坐覺煙塵少', '坐覺煙塵掃'],
+  ['老去限空聞', '老去恨空聞'],
+  ['行矣順風波', '行矣慎風波'],
+  ['江深走白沙', '江聲走白沙'],
+  ['有客歸歟嘆', '客有歸歟嘆'],
+  ['叢青藹', '叢青靄'], // 青霭: 青色的云雾
+  // 卷三 七言绝句
+  ['夜沈沈', '夜沉沉'], // 简体要显示「沉沉」
+  ['與梅井作', '與梅並作'],
+  ['夭棘', '天棘'], // 天棘: 天门冬
+  // 卷四 七言律诗
+  ['花皮潤沾', '花板潤沾'], // 秋千的踏板
+  ['落落疏廉', '落落疏簾'],
+  ['拂署流', '拂曙流'],
+  ['傳與風光', '傳語風光'], // 杜甫《曲江》「传语风光共流转」
 ];
 function fixPoems(id, pieces) {
   const fixes = TITLE_FIX[id];
@@ -231,6 +279,28 @@ function fixPoems(id, pieces) {
     if (!used.has(i)) throw new Error(`${id}: 要改题目的「${a} ${first}」没找到`);
   });
   return out;
+}
+
+// ---- 资料把两首不同作者的诗合成了一篇 (当成组诗的其一、其二): 拆开 ----
+// 千家诗的《宮詞》: 其一「金殿當頭紫閣重」是唐代王建的, 其二「殿上袞衣明日月」才是宋代林洪的 (资料都写成林洪; 对照维基文库《千家詩/卷三》)。
+// 拆出来的后一首放到书的最后 (编号不动: 收藏、读到哪记的是「书:第几篇」, 原来的都不受影响), 书目里记上 after: 目录、翻页时排在前一首后面 (reading.js 的 orderOf)
+// [题目 (繁体), 第一句开头 (繁体), 前一首改成的 { a 作者, e 朝代 }, 后一首的 { a, e }]
+const SPLIT = {
+  qianjiashi: [['宮詞', '金殿當頭', { a: '王建', e: '唐' }, { a: '林洪', e: '宋' }]],
+};
+function splitPoems(id, pieces) {
+  const after = [];
+  const out = pieces.map((x) => ({ ...x }));
+  for (const [t, first, one, two] of SPLIT[id] ?? []) {
+    const i = out.findIndex((x) => x.t === t && x.p[0].startsWith(first) && x.k?.length === 2);
+    if (i < 0) throw new Error(`${id}: 要拆开的「${t}」没找到`);
+    const { k, ...x } = out[i];
+    const cut = k[1][0];
+    out[i] = { ...x, ...one, p: x.p.slice(0, cut) };
+    out.push({ ...x, ...two, p: x.p.slice(cut) });
+    after.push([out.length - 1, i]);
+  }
+  return { pieces: out, after };
 }
 
 // 繁体里转错的字 (表在 tools/hant-fix.mjs): 每条是一小段原文和改成的样子, 题目和正文都找; 有一条没用上就报错 (资料变了要重新看)
@@ -538,7 +608,7 @@ for (const b of BOOKS) {
     x.p = x.p.map(prose);
   }
   // 组诗标上「其几」(上面 TITLE_FIX); builtById 里的不动, 千家诗对照唐诗三百首时用的是资料原来的题目
-  const pieces = fixPoems(b.id, built.pieces);
+  const { pieces, after } = splitPoems(b.id, fixPoems(b.id, built.pieces));
   // 原文是繁体: 繁体照原样, 简体转; 原文是简体: 简体也过一遍 (夹着的「後」这种改过来), 繁体转回去
   const title = tidy(b.title ?? d.title);
   const hantOf = b.source === 'hans' ? s2t : (s) => s;
@@ -548,7 +618,7 @@ for (const b of BOOKS) {
   const head = `// 《${hans.title}》: tools/library.mjs 从 chinese-poetry (MIT, 见 LICENSE-chinese-poetry.txt) 生成, 别手改`;
   writeFileSync(join(root, `js/library/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文' : '繁体原文自动转的简体'}`, hans));
   writeFileSync(join(root, `js/library/hant/${b.id}.js`), moduleText(`${head}。${b.source === 'hans' ? '简体原文自动转的繁体' : '繁体原文'}`, hant));
-  catalog.push({ id: b.id, title: hans.title, author: hans.author, era: b.era, kind: b.kind ?? 'text', unit: b.unit, cat: b.cat ?? 'primer', ...(b.chain ? { chain: b.chain } : {}), count: hans.pieces.length, intro: b.intro });
+  catalog.push({ id: b.id, title: hans.title, author: hans.author, era: b.era, kind: b.kind ?? 'text', unit: b.unit, cat: b.cat ?? 'primer', ...(b.chain ? { chain: b.chain } : {}), count: hans.pieces.length, ...(after.length ? { after } : {}), intro: b.intro });
   console.log(`${hans.title}: ${hans.pieces.length} ${b.unit}`);
 }
 
@@ -573,7 +643,8 @@ for (const nv of NOVELS) {
 writeFileSync(
   join(root, 'js/library/books.js'),
   `// 书库的书目: tools/library.mjs 生成, 别手改。书的正文在 js/library/<id>.js (简体)、js/library/hant/<id>.js (繁体)\n` +
-    `// kind: poem 一首一首的诗 (有作者、朝代), text 文章, novel 长篇小说 (一回一个文件, 见 tools/novel.mjs); unit: 一篇叫什么 (首、段、章、篇、回); chain: 文章做「接下句」卡片时怎么接 (见 tools/library.mjs); cat: 放在书架哪一层 (reading.js 的 SHELVES); src: 原文另有来源的 (小说)\n` +
+    `// kind: poem 一首一首的诗 (有作者、朝代), text 文章, novel 长篇小说 (一回一个文件, 见 tools/novel.mjs); unit: 一篇叫什么 (首、段、章、篇、回); chain: 文章做「接下句」卡片时怎么接 (见 tools/library.mjs); cat: 放在书架哪一层 (reading.js 的 SHELVES); src: 原文另有来源的 (小说);\n` +
+    `// after: [[第几篇, 排在第几篇后面]] 后来拆出来、放在书最后的篇, 目录和翻页时排在哪 (reading.js 的 orderOf)\n` +
     `export const BOOKS = [\n${catalog.map((c) => `  ${JSON.stringify(c)},`).join('\n')}\n];\n` +
     `export const SOURCE = ${JSON.stringify({ name: 'chinese-poetry', url: 'https://github.com/chinese-poetry/chinese-poetry', license: 'MIT' })};\n`,
 );
