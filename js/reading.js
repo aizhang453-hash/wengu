@@ -332,7 +332,9 @@ export async function searchLibrary(query, { limit = 60 } = {}) {
   return hits.sort((a, b) => rank[a.where] - rank[b.where]).slice(0, limit);
 }
 
-// ---- 收藏、读到哪 (存在 data.reading, 跟着同步、备份) ----
+// ---- 收藏、读到哪、书签 (存在 data.reading, 跟着同步、备份) ----
+// last: 每本书最后打开的一篇 (自动记; 从搜索、收藏跳过去也会变)
+// marks: 每本书一张书签 (v1.66, 自己夹的, 只有自己挪才动): { 书: { i 夹在第几篇, on 拿掉了是 0, at } }
 const time = (v) => (Number(v) > 0 ? Number(v) : 0);
 
 export function cleanReading(raw) {
@@ -347,7 +349,13 @@ export function cleanReading(raw) {
     const i = Math.floor(Number(r?.i));
     if (b && i >= 0 && i < b.count && time(r?.at)) last[id] = { i, at: time(r.at) };
   }
-  return Object.keys(favs).length || Object.keys(last).length ? { favs, last } : null;
+  const marks = {};
+  for (const [id, m] of Object.entries(raw.marks && typeof raw.marks === 'object' ? raw.marks : {})) {
+    const b = bookOf(id);
+    const i = Math.floor(Number(m?.i));
+    if (b && i >= 0 && i < b.count && time(m?.at)) marks[id] = { i, on: m.on ? 1 : 0, at: time(m.at) };
+  }
+  return Object.keys(favs).length || Object.keys(last).length || Object.keys(marks).length ? { favs, last, marks } : null;
 }
 
 export function mergeReading(a, b) {
@@ -358,10 +366,15 @@ export function mergeReading(a, b) {
   for (const [pid, f] of Object.entries(b.favs)) favs[pid] = later(favs[pid], f);
   const last = { ...a.last };
   for (const [id, r] of Object.entries(b.last)) last[id] = later(last[id], r);
-  return { favs, last };
+  const marks = { ...a.marks };
+  for (const [id, m] of Object.entries(b.marks ?? {})) marks[id] = later(marks[id], m);
+  return { favs, last, marks };
 }
 
 export const isFav = (reading, pid) => Boolean(reading?.favs[pid]?.on);
+
+// 这本书的书签夹在第几篇 (没夹、拿掉了: null)
+export const markOf = (reading, book) => (reading?.marks?.[book]?.on ? reading.marks[book].i : null);
 
 // 收藏的, 后收藏的在前: [{ pid, book, i, at }]
 export function favList(reading) {

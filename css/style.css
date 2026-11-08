@@ -9622,6 +9622,21 @@ button.pick-row:hover {
   color: var(--accent);
 }
 
+/* 目录里夹着书签的那一篇 */
+.read-mark-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.read-mark-tag svg {
+  flex: none;
+}
+
 /* 换篇: 左边上一篇, 中间目录, 右边下一篇 (没有的那格空着) */
 .read-nav {
   display: grid;

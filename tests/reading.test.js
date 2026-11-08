@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, variantsOf, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, variantsOf, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, markOf, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -233,11 +233,43 @@ test('搜: 题目、作者、句子都能找到, 题目对上的排前面; 空�
   assert.ok((await searchLibrary('之', { limit: 5 })).length <= 5);
 });
 
+test('书签: 一本书一张, 夹、挪、拿掉; 打开别的篇 (搜索跳过去) 书签不动; 同步听后改的', () => {
+  assert.equal(markOf(null, 'xiyouji'), null);
+  const r = cleanReading({ marks: { xiyouji: { i: 4, on: 1, at: 10 }, tangshi: { i: 2, on: 0, at: 20 }, nope: { i: 1, on: 1, at: 5 }, qianjiashi: { i: 9999, on: 1, at: 5 } } });
+  assert.deepEqual(r, { favs: {}, last: {}, marks: { xiyouji: { i: 4, on: 1, at: 10 }, tangshi: { i: 2, on: 0, at: 20 } } });
+  assert.equal(markOf(r, 'xiyouji'), 4);
+  assert.equal(markOf(r, 'tangshi'), null); // 拿掉了
+  // 合并: 每本书听后改的 (拿掉也算改)
+  const other = cleanReading({ marks: { xiyouji: { i: 9, on: 1, at: 5 }, tangshi: { i: 7, on: 1, at: 30 } } });
+  const m = mergeReading(r, other);
+  assert.equal(markOf(m, 'xiyouji'), 4);
+  assert.equal(markOf(m, 'tangshi'), 7);
+  // 老版本存的没有 marks: 合并时不丢
+  assert.equal(markOf(mergeReading(r, { favs: {}, last: {} }), 'xiyouji'), 4);
+  assert.equal(markOf(mergeReading({ favs: {}, last: {} }, r), 'xiyouji'), 4);
+
+  const store = new Store(memoryStorage());
+  store.setMark('xiyouji', 5, true, 1000);
+  store.markRead('xiyouji', 5, 1000);
+  store.markRead('xiyouji', 40, 2000); // 搜索跳到第 41 回: 「接着读」跟着变, 书签不动
+  assert.equal(store.data.reading.last.xiyouji.i, 40);
+  assert.equal(markOf(store.data.reading, 'xiyouji'), 5);
+  store.setMark('xiyouji', 6, true, 3000); // 挪到下一回
+  assert.equal(markOf(store.data.reading, 'xiyouji'), 6);
+  store.setMark('xiyouji', 6, false, 4000); // 拿掉
+  assert.equal(markOf(store.data.reading, 'xiyouji'), null);
+  store.setMark('xiyouji', 8, true, 10); // 时间比上次早 (几台设备钟不准): 也要比上次晚, 同步才认
+  assert.ok(store.data.reading.marks.xiyouji.at > 4000);
+  // 跟着备份、同步: 存进去再读出来还在
+  const again = new Store(store.storage);
+  assert.equal(markOf(again.data.reading, 'xiyouji'), 8);
+});
+
 test('收藏、读到哪: 存、洗、同步合并 (听后改的)、备份', () => {
   assert.equal(cleanReading(null), null);
   assert.equal(cleanReading({ favs: { 'nope:1': { on: 1, at: 5 } }, last: { qianjiashi: { i: 9999, at: 5 } } }), null);
   const r = cleanReading({ favs: { 'qianjiashi:0': { on: true, at: 10 }, 'sanzijing:1': { on: 0, at: 20 }, bad: { on: 1, at: 1 } }, last: { qianjiashi: { i: 5, at: 30 }, dizigui: { i: -1, at: 1 } } });
-  assert.deepEqual(r, { favs: { 'qianjiashi:0': { on: 1, at: 10 }, 'sanzijing:1': { on: 0, at: 20 } }, last: { qianjiashi: { i: 5, at: 30 } } });
+  assert.deepEqual(r, { favs: { 'qianjiashi:0': { on: 1, at: 10 }, 'sanzijing:1': { on: 0, at: 20 } }, last: { qianjiashi: { i: 5, at: 30 } }, marks: {} });
   assert.equal(isFav(r, 'qianjiashi:0'), true);
   assert.equal(isFav(r, 'sanzijing:1'), false);
   assert.deepEqual(favList(r), [{ pid: 'qianjiashi:0', book: 'qianjiashi', i: 0, at: 10 }]);

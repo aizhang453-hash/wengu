@@ -1,13 +1,13 @@
 // 阅读 (书库): 唐诗宋词、论语、古文观止和古代启蒙读物的原文 (想法在 ../reading.js)
 //   #/read                书架 (按 SHELVES 分层, 书竖着立着露出书脊): 每日一首 (节日那天是节日的诗)、搜索、所有的书、收藏
 //                         (书斋页上原来有一行「接着读」、一栏「节日的诗」, 用户说没用, v1.60.1、v1.60.2 去掉了; 每本书目录页的「接着读」按钮还在)
-//   #/read/<书>           一本书的目录
-//   #/read/<书>/<第几篇>  读一篇 (从 1 数): 收藏、做成卡片背、朗读、简体 / 繁体、字号; ← → 换篇
+//   #/read/<书>           一本书的目录 (夹了书签: 「翻到书签」代替「接着读」)
+//   #/read/<书>/<第几篇>  读一篇 (从 1 数): 夹书签 (一本书一张, v1.66)、收藏、做成卡片背、朗读、简体 / 繁体、字号; ← → 换篇
 //   首页「今日」的「每日一首」也在这里画 (dailyCard)
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, markOf, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { festivalOn } from '../festival.js';
@@ -251,13 +251,23 @@ export function renderBook({ store }, id) {
   const book = bookOf(id);
   if (!book) return notFound();
   const last = store.data.reading?.last[id];
+  // 夹了书签: 「翻到书签」代替「接着读」(接着读跟着最后打开的走, 从搜索、收藏跳到别的篇也会变; 书签只有自己挪才动)
+  const mark = markOf(store.data.reading, id);
+  const here = mark ?? last?.i;
   const list = h('div', { class: 'read-toc' }, h('p', { class: 'muted' }, '正在打开……'));
   whenLoaded(list, id, {}, (data) => {
     const item = (p, i) =>
       h(
         'li',
-        { class: last?.i === i ? 'on' : '' },
-        h('a', { href: pieceHref(id, i) }, book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${posOf(book, i) + 1}`), h('span', {}, p.t), p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null),
+        { class: here === i ? 'on' : '' },
+        h(
+          'a',
+          { href: pieceHref(id, i) },
+          book.kind === 'poem' ? null : h('span', { class: 'read-no' }, `${posOf(book, i) + 1}`),
+          h('span', {}, p.t),
+          p.a ? h('span', { class: 'muted small' }, ` ${p.a}`) : null,
+          mark === i ? h('span', { class: 'read-mark-tag' }, icon('bookmark', 13), '书签') : null,
+        ),
       );
     const items = orderOf(book).map((i) => ({ p: data.pieces[i], i }));
     if (!data.groups.length) return h('ol', { class: `read-list read-toc-list ${book.kind}` }, items.map(({ p, i }) => item(p, i)));
@@ -275,10 +285,12 @@ export function renderBook({ store }, id) {
       h(
         'div',
         { class: 'row' },
-        last
-          ? h('a', { class: 'btn primary', href: pieceHref(id, last.i) }, `接着读${unitOf(book, last.i) ? `（${unitOf(book, last.i)}）` : ''}`)
-          : h('a', { class: 'btn primary', href: pieceHref(id, 0) }, '从头读'),
-        last ? h('a', { class: 'btn', href: pieceHref(id, 0) }, '从头读') : null,
+        mark !== null
+          ? h('a', { class: 'btn primary', href: pieceHref(id, mark) }, icon('bookmark', 16), ` 翻到书签${unitOf(book, mark) ? `（${unitOf(book, mark)}）` : ''}`)
+          : last
+            ? h('a', { class: 'btn primary', href: pieceHref(id, last.i) }, `接着读${unitOf(book, last.i) ? `（${unitOf(book, last.i)}）` : ''}`)
+            : h('a', { class: 'btn primary', href: pieceHref(id, 0) }, '从头读'),
+        mark !== null || last ? h('a', { class: 'btn', href: pieceHref(id, 0) }, '从头读') : null,
       ),
       list,
     ),
@@ -309,6 +321,27 @@ export function renderPiece({ store, go }, id, n) {
     toast(on ? '收藏了，在「书斋」页能找到' : '取消收藏了');
   };
   drawFav();
+
+  // 书签: 一本书一张, 夹在这一篇 / 拿掉 / 从别的篇挪过来
+  const markBtn = h('button', { class: 'btn small', type: 'button', 'aria-pressed': 'false', onclick: () => toggleMark() });
+  const drawMark = () => {
+    const on = markOf(store.data.reading, id) === i;
+    markBtn.setAttribute('aria-pressed', String(on));
+    markBtn.classList.toggle('on', on);
+    fill(markBtn, icon('bookmark', 16), on ? ' 书签在这' : ' 夹书签');
+  };
+  const toggleMark = () => {
+    const at = markOf(store.data.reading, id);
+    if (at === i) {
+      store.setMark(id, i, false);
+      toast('书签拿掉了');
+    } else {
+      store.setMark(id, i, true);
+      toast(at === null ? '书签夹好了，在目录页点「翻到书签」就能回到这里' : `书签从${unitOf(book, at) || '别处'}挪到这里了`);
+    }
+    drawMark();
+  };
+  drawMark();
 
   let text = null; // 拿到的这一篇 (简体), 做卡片、朗读用
   let entry = null; // 这一篇的注释、译文、成语 (有的才有)
@@ -551,6 +584,7 @@ export function renderPiece({ store, go }, id, n) {
       h(
         'div',
         { class: 'read-tools' },
+        markBtn,
         favBtn,
         // 小说先只放原文, 不做卡片
         book.kind === 'novel' ? null : h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p, yizhu }) => cardsDialog({ store, go }, book, data, p, yizhu)) }, '做成卡片背'),

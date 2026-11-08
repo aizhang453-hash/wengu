@@ -1073,16 +1073,24 @@ export class Store {
 
   // 阅读: 收藏 / 取消收藏一篇 (pid: '书:第几篇')
   setFav(pid, on, now = Date.now()) {
-    const r = this.data.reading ?? { favs: {}, last: {} };
+    const r = this.data.reading ?? { favs: {}, last: {}, marks: {} };
     this.data.reading = cleanReading({ ...r, favs: { ...r.favs, [pid]: { on: on ? 1 : 0, at: Math.max(now, (r.favs[pid]?.at ?? 0) + 1) } } });
     this.save();
   }
 
   // 阅读: 记下这本书读到第几篇 (打开一篇就记)
   markRead(book, i, now = Date.now()) {
-    const r = this.data.reading ?? { favs: {}, last: {} };
+    const r = this.data.reading ?? { favs: {}, last: {}, marks: {} };
     if (r.last[book]?.i === i && now - r.last[book].at < 60e3) return; // 一分钟里同一篇不用再存 (省得同步来回推)
     this.data.reading = cleanReading({ ...r, last: { ...r.last, [book]: { i, at: Math.max(now, (r.last[book]?.at ?? 0) + 1) } } });
+    this.save();
+  }
+
+  // 阅读: 把这本书的书签夹在第 i 篇 (on: false 拿掉书签)。一本书只有一张, 夹到别处就是挪过去
+  setMark(book, i, on = true, now = Date.now()) {
+    const r = this.data.reading ?? { favs: {}, last: {}, marks: {} };
+    const old = r.marks?.[book];
+    this.data.reading = cleanReading({ ...r, marks: { ...r.marks, [book]: { i, on: on ? 1 : 0, at: Math.max(now, (old?.at ?? 0) + 1) } } });
     this.save();
   }
 
