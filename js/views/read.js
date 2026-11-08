@@ -549,6 +549,8 @@ export function renderPiece({ store, go }, id, n) {
         'nav',
         { class: 'read-nav', 'aria-label': '换篇' },
         prev !== null ? h('a', { class: 'btn', href: pieceHref(id, prev) }, `← 上一${book.unit}`) : h('span'),
+        // 读到底下也能回目录 (不用再滑回最上面); 最后一篇右边就是「读完了，回目录」
+        next !== null ? h('a', { class: 'btn', href: `#/read/${id}` }, '目录') : h('span'),
         next !== null ? h('a', { class: 'btn', href: pieceHref(id, next) }, `下一${book.unit} →`) : h('a', { class: 'btn', href: `#/read/${id}` }, '读完了，回目录'),
       ),
     ),

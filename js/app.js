@@ -13,6 +13,7 @@
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
 //   #/settings            设置 (复习、同步、备份、温温)
+//   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
 //   #/review              今天的复习 (#/review/<卡片集或 folder:文件夹>: 只复习那里的; #/review/practice:leech 直接练难记卡、:starred 星标的)
 //   #/stats               统计 (#/stats/<卡片集或 folder:文件夹>: 只看那里的)
@@ -80,7 +81,7 @@ document.addEventListener('visibilitychange', () => {
 
 // 数据变了 (别的标签页存了、别的设备同步来了、过了一夜): 首页、卡片集页这些重画, 停在原来的地方;
 // 正在背、正在编辑的不打断。开着窗口 (正在改卡片、定计划) 时先不画, 关了再画, 免得打了一半的字没了
-const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'qset', 'stats', 'arcade', 'settings', 'read', 'read-book'];
+const REFRESHABLE = ['home', 'set', 'folder', 'search', 'games', 'mistakes', 'qset', 'stats', 'arcade', 'settings', 'read', 'read-book', 'pet'];
 let refreshLater = null;
 function refreshPage(pages = REFRESHABLE) {
   if (!pages.includes(current?.page)) return;
@@ -146,6 +147,7 @@ function parse(hash) {
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'settings') return { page: 'settings' };
+  if (parts[0] === 'pet') return { page: 'pet' };
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
@@ -219,6 +221,7 @@ function render() {
   else if (route.page === 'review') view = renderReview(ctx, route.id, { practice: route.practice });
   else if (route.page === 'stats') view = renderStats(ctx, route.id);
   else if (route.page === 'settings') view = renderSettings(ctx);
+  else if (route.page === 'pet') view = pet.renderPage();
   else if (route.page === 'read') view = renderLibrary(ctx);
   else if (route.page === 'read-book') view = renderBook(ctx, route.id);
   else if (route.page === 'read-piece') view = renderPiece(ctx, route.id, route.n);

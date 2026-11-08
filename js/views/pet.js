@@ -4,9 +4,9 @@
 //   自己说话: 每天第一次见面打个招呼 (隔一个星期说说这 7 天学得怎么样); 过一阵念一句《论语》(挑合适现在的);
 //            长大了、解锁了装扮、连续打卡到了天数 (放烟花)、今天的背完了、有新的难记卡的时候说一声
 //   只在首页、卡片集页这些地方; 背卡、测试、游戏、编辑、打字的时候不出来 (不挡按钮、不打扰)
-//   「温温的小窝」: 长到哪了、心情、装扮、起名字, 这台设备上显示不显示、自己说不说话、缩成小圆点
+//   「温温的小窝」(一整页, #/pet): 长到哪了、心情、装扮、起名字, 这台设备上显示不显示、自己说不说话、缩成小圆点
 
-import { h, fill, toast, openDialog, askText, switchRow, dialogOpen } from '../dom.js';
+import { h, fill, toast, askText, switchRow, dialogOpen } from '../dom.js';
 import { todayAll } from './plan.js';
 import { editCardDialog } from './cardedit.js';
 import { openExamList } from './examlist.js';
@@ -895,12 +895,20 @@ export function setupPet({ store }) {
     ];
   }
 
+  // 小窝是一整页 (#/pet), 不是弹出的窗口: 菜单、设置、温温说的「去小窝」都是去这一页
   function openPanel() {
     hideBubble(false);
-    const box = h('div', { class: 'pet-panel' });
-    const refresh = () => fill(box, panelBody(refresh));
+    location.hash = '#/pet';
+  }
+  function renderPage() {
+    hideBubble(false);
+    const page = h('section', { class: 'pet-page' });
+    const refresh = () => {
+      fill(page, h('h1', {}, `${petData().name}的小窝`), h('div', { class: 'pet-panel' }, panelBody(refresh)));
+      document.title = `${petData().name}的小窝 · 温故`;
+    };
     refresh();
-    openDialog({ title: `${petData().name}的小窝`, body: box });
+    return { title: `${petData().name}的小窝`, el: page };
   }
 
   return {
@@ -917,6 +925,7 @@ export function setupPet({ store }) {
       changeTimer = setTimeout(() => shown() && update(), 1200);
     },
     openPanel,
+    renderPage,
     name: () => petData().name,
     summary: () => {
       const xp = xpOf(store.data.pet, store.data.activity);

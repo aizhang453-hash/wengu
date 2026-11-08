@@ -245,6 +245,15 @@ test('几天没学了; 发生的事说什么', () => {
   assert.equal(eventLine({ kind: 'leech', n: 1 }).action.href, '#/stats');
 });
 
+test('温温的小窝是一整页 (#/pet), 不是弹出的窗口; 菜单、设置、「去小窝」都去这一页', () => {
+  const app = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /parts\[0\] === 'pet'\) return \{ page: 'pet' \}/);
+  assert.match(app, /route\.page === 'pet'\) view = pet\.renderPage\(\)/);
+  const view = readFileSync(new URL('../js/views/pet.js', import.meta.url), 'utf8');
+  assert.match(view, /function openPanel\(\) \{\s*hideBubble\(false\);\s*location\.hash = '#\/pet';/);
+  assert.doesNotMatch(view, /openDialog/);
+});
+
 test('温温说的话里不写别的网站、软件的名字', () => {
   for (const f of ['js/pet.js', 'js/views/pet.js']) {
     const text = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');

@@ -9199,6 +9199,16 @@ button.pick-row:hover {
   max-width: 720px;
 }
 
+/* 温温的小窝 (#/pet): 一整页 */
+.pet-page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.pet-page h1 {
+  margin: 0 0 14px;
+}
+
 .settings-group h2 {
   margin: 28px 0 10px;
   color: var(--muted);
@@ -9609,11 +9619,21 @@ button.pick-row:hover {
   color: var(--accent);
 }
 
+/* 换篇: 左边上一篇, 中间目录, 右边下一篇 (没有的那格空着) */
 .read-nav {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   gap: 8px;
   margin: 16px 0 8px;
+}
+
+.read-nav > :first-child {
+  justify-self: start;
+}
+
+.read-nav > :last-child {
+  justify-self: end;
 }
 
 .chip-row.two {
