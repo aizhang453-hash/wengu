@@ -4,7 +4,7 @@ import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, o
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
-const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 80]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80
+const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 160]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80, 卷三 五言律诗 81–160
 const KEBEN = {
   tangshi: [71, 277, 2, 18, 34, 278, 30, 6, 282, 33, 11, 39, 40, 68, 61, 319, 313, 95, 20, 24, 81, 272, 91, 290, 202, 227, 117, 254, 57, 58, 46, 173, /* 高中 */ 89, 298, 257, 293, 314, 192, 193, 190, 109, 251, 179],
   qianjiashi: [6, 145, 29, 98, 166, 114, 27, 101, 104, 90, 156, 134, 85, 162, 154, 89, 139, 140, 155, 48, 192, 173, /* 高中 */ 64],
@@ -173,6 +173,22 @@ test('唐诗三百首卷二 七言绝句: 资料放错的两首换回原书选�
   const [s1, s2] = book.pieces.filter((p) => p.t === '隋宫');
   assert.equal(entryOf(ts, s1), ts['隋宫|乘兴南游']);
   assert.equal(entryOf(ts, s2), null);
+});
+
+test('唐诗三百首卷三 五言律诗: 截断的长题目补全; 改过的字', async () => {
+  const ts = await loadYizhu('tangshi');
+  const book = await loadBook('tangshi');
+  const juan3 = book.pieces.slice(80, 160);
+  assert.ok(juan3.every((p) => p.g === 2));
+  assert.ok(juan3.filter((p) => entryOf(ts, p).bg).length >= 55);
+  assert.ok(juan3.filter((p) => entryOf(ts, p).cy?.length).length >= 50);
+  const du = book.pieces[112];
+  assert.equal(du.t, '至德二载甫自京金光门出间道归凤翔乾元初从左拾遗移华州掾与亲故别因出此门有悲往事'); // 资料只有「至德二载甫自京金光门」
+  assert.deepEqual(du.p.slice(1, 3), ['至今犹破胆，应有未招魂。', '近侍归京邑，移官岂至尊。']);
+  assert.ok(book.pieces[122].p[0].startsWith('山暝听猿愁'));
+  assert.ok(book.pieces[141].p[1].startsWith('大漠无兵阻'));
+  assert.ok(book.pieces[144].p[1].startsWith('残萤栖玉露'));
+  assert.ok(ts['赋得古原草送别'].bg.includes('唐摭言'));
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {
