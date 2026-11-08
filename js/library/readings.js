@@ -223,6 +223,9 @@ export const READINGS = [
   // 课本要背的诗 (v1.58 加了注释的)
   { book: 'tangshi', at: '鹿柴', ch: '柴', py: 'zhài', note: '同「寨」，栅栏', say: '寨' },
   { book: 'tangshi', at: '返景', ch: '景', py: 'yǐng', note: '同「影」，日光', say: '影' },
+  { book: 'tangshi', at: '寒梅著花未', ch: '著', py: 'zhuó', note: '开（花）', say: '酌' },
+  { book: 'tangshi', at: '荷笠', ch: '荷', py: 'hè', note: '背、扛', say: '贺' },
+  { book: 'tangshi', at: '乐游原', ch: '乐', py: 'lè', note: '快乐的乐', say: '勒' },
   { book: 'tangshi', at: '朝辞白帝', ch: '朝', py: 'zhāo', note: '早晨', say: '招' },
   { book: 'tangshi', at: '单于', ch: '单', py: 'chán', note: '单于，匈奴的首领', say: '蝉' },
   { book: 'tangshi', at: '将登太行', ch: '行', py: 'háng', note: '太行山', say: '杭' },

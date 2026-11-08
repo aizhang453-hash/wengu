@@ -4,7 +4,7 @@ import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, o
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
-const DONE = { qianjiashi: [[1, 220]] };
+const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 29]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29
 const KEBEN = {
   tangshi: [71, 277, 2, 18, 34, 278, 30, 6, 282, 33, 11, 39, 40, 68, 61, 319, 313, 95, 20, 24, 81, 272, 91, 290, 202, 227, 117, 254, 57, 58, 46, 173, /* 高中 */ 89, 298, 257, 293, 314, 192, 193, 190, 109, 251, 179],
   qianjiashi: [6, 145, 29, 98, 166, 114, 27, 101, 104, 90, 156, 134, 85, 162, 154, 89, 139, 140, 155, 48, 192, 173, /* 高中 */ 64],
@@ -140,6 +140,19 @@ test('唐诗千家诗的成语和名句: 每条在原文里找得到 (两本书�
   // 搜成语找得到出处
   const hits = await searchLibrary('平分秋色');
   assert.ok(hits.some((x) => x.book === 'qianjiashi' && x.piece?.t === '中秋'), JSON.stringify(hits.slice(0, 3)));
+});
+
+test('唐诗三百首卷一 五言绝句: 大多有创作背景和名句; 资料改过的、作者有别的说法的写清楚', async () => {
+  const ts = await loadYizhu('tangshi');
+  const book = await loadBook('tangshi');
+  const juan1 = book.pieces.slice(0, 29);
+  assert.ok(juan1.every((p) => p.g === 0));
+  assert.ok(juan1.filter((p) => entryOf(ts, p).bg).length >= 15);
+  assert.ok(juan1.filter((p) => entryOf(ts, p).cy?.length).length >= 20);
+  assert.equal(book.pieces[10].p[0], '床前明月光，疑是地上霜。'); // 资料第一联末尾是逗号
+  assert.ok(ts['渡汉江'].bg.includes('李频'));
+  assert.ok(ts['听弹琴'].notes[0].note.includes('幽琴'));
+  assert.ok(ts['送上人'].cy.some((x) => x.w === '孤云野鹤'));
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {
