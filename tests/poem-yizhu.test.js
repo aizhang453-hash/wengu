@@ -4,7 +4,7 @@ import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, o
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
-const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 29]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29
+const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 80]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80
 const KEBEN = {
   tangshi: [71, 277, 2, 18, 34, 278, 30, 6, 282, 33, 11, 39, 40, 68, 61, 319, 313, 95, 20, 24, 81, 272, 91, 290, 202, 227, 117, 254, 57, 58, 46, 173, /* 高中 */ 89, 298, 257, 293, 314, 192, 193, 190, 109, 251, 179],
   qianjiashi: [6, 145, 29, 98, 166, 114, 27, 101, 104, 90, 156, 134, 85, 162, 154, 89, 139, 140, 155, 48, 192, 173, /* 高中 */ 64],
@@ -21,7 +21,7 @@ test('唐诗宋词千家诗的注释: 每首都在书里、注释都找得到 (�
     for (const [t, e] of Object.entries(yizhu)) {
       // 键是「题目」或者「题目|作者」(书里有同名的要写作者)
       const [title, author] = t.split('|');
-      const list = book.pieces.filter((p) => p.t === title && (!author || p.a === author));
+      const list = book.pieces.filter((p) => p.t === title && (!author || p.a === author || p.p[0].startsWith(author)));
       assert.equal(list.length, 1, `「${t}」在 ${id} 里不是正好一首`);
       const p = list[0];
       const i = book.pieces.indexOf(p);
@@ -153,6 +153,26 @@ test('唐诗三百首卷一 五言绝句: 大多有创作背景和名句; 资料
   assert.ok(ts['渡汉江'].bg.includes('李频'));
   assert.ok(ts['听弹琴'].notes[0].note.includes('幽琴'));
   assert.ok(ts['送上人'].cy.some((x) => x.w === '孤云野鹤'));
+});
+
+test('唐诗三百首卷二 七言绝句: 资料放错的两首换回原书选的; 改过的字; 同一作者两首同名的分得开', async () => {
+  const ts = await loadYizhu('tangshi');
+  const book = await loadBook('tangshi');
+  const juan2 = book.pieces.slice(29, 80);
+  assert.ok(juan2.every((p) => p.g === 1));
+  assert.ok(juan2.filter((p) => entryOf(ts, p).bg).length >= 25);
+  assert.ok(juan2.filter((p) => entryOf(ts, p).cy?.length).length >= 30);
+  const at = (t, a) => book.pieces.find((p) => p.t === t && (!a || p.a === a));
+  assert.equal(at('金陵图').p[0], '江雨霏霏江草齐，六朝如梦鸟空啼。'); // 资料原来是另一首「谁谓伤心画不成」
+  assert.equal(at('宫词', '顾况').p[0], '玉楼天半起笙歌，风送宫嫔笑语和。'); // 原来是「长乐宫连上苑春」
+  assert.equal(at('遣怀', '杜牧').p[0], '落魄江湖载酒行，楚腰纤细掌中轻。');
+  assert.deepEqual(at('遣怀', '杜牧').n, ['江湖 一作：江南；纤细 一作：肠断']); // 版本注释跟着改
+  assert.ok(at('题金陵渡').p[1].endsWith('是瓜洲。'));
+  assert.ok(at('马嵬坡').p[0].includes('云雨难忘'));
+  // 李商隐两首《隋宫》: 七绝的有注释, 七律的还没做 (卷四)
+  const [s1, s2] = book.pieces.filter((p) => p.t === '隋宫');
+  assert.equal(entryOf(ts, s1), ts['隋宫|乘兴南游']);
+  assert.equal(entryOf(ts, s2), null);
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {

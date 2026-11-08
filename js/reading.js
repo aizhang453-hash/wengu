@@ -188,7 +188,8 @@ export function spokenText(bookId, piece) {
 //   按原文的顺序写, 每条从上一条注的字后面往下找 (同一个词出现几次也标得对)
 export const YIZHU_BOOKS = ['guwen', 'tangshi', 'songci', 'qianjiashi'];
 // 一篇的注释: 按「篇名|作者」找 (书里有同名的两篇, 像《左传》和《谷梁传》的《郑伯克段于鄢》), 没有再按篇名找
-export const entryOf = (yizhu, piece) => yizhu?.[`${piece.t}|${piece.a}`] ?? yizhu?.[piece.t] ?? null;
+// 注释的键: '题目', 或者 '题目|作者' (书里有同名的), 或者 '题目|第一句开头四个字' (同一个作者有两首同名的, 像李商隐的两首《隋宫》)
+export const entryOf = (yizhu, piece) => yizhu?.[`${piece.t}|${piece.a}`] ?? yizhu?.[`${piece.t}|${piece.p?.[0]?.slice(0, 4)}`] ?? yizhu?.[piece.t] ?? null;
 const yizhuLoaded = new Map();
 export function loadYizhu(id) {
   if (!YIZHU_BOOKS.includes(id)) return Promise.resolve(null);
