@@ -97,7 +97,7 @@ test('像 AI 写的又读不出来: 说怎么办, 不拆成一堆怪卡片', () 
   assert.match(parseCardImport('{"title": "空的", "description": "x"}').error, /未包含卡片/);
   assert.match(parseCardImport(JSON.stringify({ app: 'wengu', version: 1, sets: [] })).error, /备份/);
   // 错题和卡片放错了地方: 说该去哪
-  assert.match(parseCardImport('{"wengu": "wengu-mistakes", "mistakes": [{"question": "Q", "answer": "1"}]}').error, /错题集/);
+  assert.match(parseCardImport('{"wengu": "wengu-mistakes", "mistakes": [{"question": "Q", "answer": "1"}]}').error, /题目集/);
   assert.throws(() => parseMistakeImport(`{"wengu": "${FORMAT}", "cards": [{"term": "a", "def": "b"}]}`), (e) => e instanceof ImportError && /卡片集/.test(e.message));
 });
 

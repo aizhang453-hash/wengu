@@ -28,7 +28,7 @@ export function aiPrompt() {
   const kinds = Object.entries(KINDS)
     .map(([exam, list]) => `  ${exam}: ${list.join('、')}`)
     .join('\n');
-  return `请把照片里的题目抄成下面格式的 JSON, 我要导入错题集。
+  return `请把照片里的题目抄成下面格式的 JSON, 我要导入题目集。
 
 照片里的题可能是我做错的, 也可能是还没做过的练习题 (比如老师布置的)。不管做没做过、做对做错, 照片里的每一道题都要抄进来; 不要因为「没有错题」「没有作答」就不抄, 也不要只回一句话。
 

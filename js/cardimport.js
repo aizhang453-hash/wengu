@@ -157,7 +157,7 @@ export function parseCardImport(text) {
   const values = findJson(t);
   const objects = values.filter((v) => v && typeof v === 'object' && !Array.isArray(v));
   if (objects.some((v) => v.app === 'wengu' || Array.isArray(v.sets))) return { error: '这是温故的备份文件，请在「设置 › 备份」中恢复。' };
-  if (objects.some((v) => v.wengu === 'wengu-mistakes' || Array.isArray(v.mistakes))) return { error: '这是错题数据，请在错题集的「拍照录入」中粘贴。' };
+  if (objects.some((v) => v.wengu === 'wengu-mistakes' || Array.isArray(v.mistakes))) return { error: '这是错题数据，请在题目集的「拍照录入」中粘贴。' };
   const out = { title: '', cards: [] };
   for (const v of values) cardsIn(v, out);
   if (!out.cards.length) out.cards = tableCards(t);

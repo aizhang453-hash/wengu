@@ -197,7 +197,7 @@ test('点它说的有用的话: 重要的在前, 带直接去的按钮', () => {
   const list = tips(c);
   assert.match(list[0].text, /今天还有 14 张要背 \(复习 10 张、新词 4 个\)/);
   assert.deepEqual(list[0].action, { label: '去背', href: '#/review' });
-  assert.ok(list.some((t) => /错题集里有 3 道/.test(t.text) && t.action.href === '#/mistakes/review'));
+  assert.ok(list.some((t) => /题目集里有 3 道题/.test(t.text) && t.action.href === '#/mistakes/review'));
   assert.ok(list.some((t) => /离考试还有 137 天/.test(t.text) && !t.action));
   assert.ok(list.some((t) => /2 张老是忘的难记卡/.test(t.text)));
   // 晚上了还没学: 先提醒连续打卡要断了; 很晚了: 先叫你睡觉
@@ -322,7 +322,7 @@ test('学得怎么样: 跟上一个 7 天比, 一条一条说', () => {
     '学了 64 个新词',
     '复习时记住了 88% (你定的是 90%)',
     '记牢了 320 张 (隔 21 天以上才复习的), 一共背过 900 张',
-    '错题集: 掌握了 12 道, 还在重做 30 道',
+    '题目集: 掌握了 12 道, 还在重做 30 道',
     '已经连续打卡 9 天',
     '离考试还有 137 天',
   ]);

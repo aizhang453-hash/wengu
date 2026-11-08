@@ -232,7 +232,7 @@ export function renderHome({ store, go }) {
   };
 }
 
-// 题目集 (错题集里的): 跟卡片集一样摆成方块
+// 题目集: 跟卡片集一样摆成方块; 右边「全部」到题目集页 (#/mistakes: 今天该重做的、在所有题里搜)
 function qsetSection(store) {
   const qsets = store.allQsets();
   if (!qsets.length) return null;
@@ -240,7 +240,7 @@ function qsetSection(store) {
   for (const m of store.data.mistakes) bySet.get(m.set)?.push(m);
   const now = Date.now();
   return [
-    h('div', { class: 'list-head' }, h('h2', {}, '题目集'), h('a', { class: 'muted small', href: '#/mistakes' }, `错题集 · ${qsets.length} 个`)),
+    h('div', { class: 'list-head' }, h('h2', {}, '题目集'), h('a', { class: 'muted small', href: '#/mistakes' }, `全部 · ${qsets.length} 个`)),
     h('ul', { class: 'set-grid qset-grid' }, qsets.map((q) => qsetTile(q, bySet.get(q.id), now))),
   ];
 }

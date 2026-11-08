@@ -153,6 +153,6 @@ test('温温: 考试前一天先说考前清单; 错得最多的题型 (能单�
   assert.ok(!tips({ ...c, bestTime: { ...bt, sure: false } }).some((t) => t.id === 'time'));
   assert.equal(tips({ ...c, examDays: 0 })[0].action.label, '看清单');
   const r = report({ days7: 5, answers7: 100, answersPrev: 90, fresh7: 0, mature: 0, studied: 10, streak: 3, mastered: 1, mistakesLeft: 6, examDays: 1, topKind: { kind: '语法·标点', total: 8 }, bestTime: bt });
-  assert.ok(r.list.includes('错题集: 掌握了 1 道, 还在重做 6 道, 「语法·标点」错得最多 (8 道)'));
+  assert.ok(r.list.includes('题目集: 掌握了 1 道, 还在重做 6 道, 「语法·标点」错得最多 (8 道)'));
   assert.ok(r.list.includes('上午 (8–12 点) 记得最牢: 复习时记住了 93%'));
 });

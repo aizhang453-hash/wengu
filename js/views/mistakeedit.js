@@ -19,7 +19,7 @@ export function queueMistakes(list) {
 export function renderMistakeEdit({ store, go }, id = null, { set = null } = {}) {
   const existing = id ? store.getMistake(id) : null;
   if (id && !existing) {
-    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '题目不存在'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')) };
+    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '题目不存在'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回题目集')) };
   }
   const queue = existing ? [] : queued;
   queued = [];
@@ -33,7 +33,7 @@ export function renderMistakeEdit({ store, go }, id = null, { set = null } = {})
   function drawBack() {
     const q = store.getQset(draft.set);
     backEl.href = backHref();
-    backEl.textContent = `← ${q ? q.title || '题目集' : '错题集'}`;
+    backEl.textContent = `← ${q ? q.title || '题目集' : '全部题目集'}`;
     for (const a of footEl.querySelectorAll('a.cancel')) a.href = backHref();
   }
   let dirty = total > 0; // 导入的还没存

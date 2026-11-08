@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, orderOf, searchLibrary, YIZHU_BOOKS } from '../js/reading.js';
+import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, orderOf, searchLibrary, idiomsOf, CY_KINDS, YIZHU_BOOKS } from '../js/reading.js';
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
@@ -100,6 +100,46 @@ test('千家诗的创作背景: 四卷大多有; 跟唐诗三百首共用的 (�
   // 题目、作者有别的说法的写在注释或创作背景里
   assert.ok(qj['江行望匡庐'].bg.includes('钱珝'));
   assert.ok(ts['寻隐者不遇'].bg.includes('孙革'));
+});
+
+test('唐诗千家诗的成语和名句: 每条在原文里找得到 (两本书都有的两边都找得到)、不重复、有说明; 千家诗够多', async () => {
+  const plain = (str) => str.replace(/[，。；、？！]/g, '');
+  let qjCount = 0;
+  for (const id of ['tangshi', 'songci', 'qianjiashi']) {
+    const book = await loadBook(id);
+    const yizhu = await loadYizhu(id);
+    for (const p of book.pieces) {
+      const e = entryOf(yizhu, p);
+      if (!e?.cy) continue;
+      const ws = new Set();
+      for (const x of idiomsOf(p, e)) {
+        const raw = e.cy[x.n - 1];
+        const t = `${id}《${p.t}》${x.w}`;
+        if (id === 'qianjiashi') qjCount++;
+        assert.ok(x.w && !ws.has(x.w), `${t} 重复或空`);
+        ws.add(x.w);
+        assert.ok(CY_KINDS.includes(x.kind), `${t} 的 kind: ${x.kind}`);
+        assert.ok(/[。！？」]$/.test(x.note), `${t} 的说明没有句末标点`);
+        assert.ok(raw.at, `${t} 没写 at`);
+        assert.notEqual(x.line, null, `${t}: 原文里找不到「${raw.at}」`);
+        assert.equal(p.p[x.line].slice(x.at, x.at + x.len), raw.at);
+        // 名句就是原文; 成语跟原文不一样的, 说明里写清楚从哪句来、原文怎么写
+        if (x.kind === '名句' && plain(raw.at) !== plain(x.w)) assert.ok(x.note.includes('原文'), `${t} 名句跟原文不一样`);
+        if (plain(raw.at) !== plain(x.w)) assert.ok(raw.at.includes(x.w) || x.note.includes(raw.at) || x.note.includes('原文'), `${t} 和原文「${raw.at}」不一样, 说明里要写清楚`);
+      }
+    }
+  }
+  assert.ok(qjCount >= 100, `千家诗只有 ${qjCount} 条成语和名句`);
+  const qj = await loadYizhu('qianjiashi');
+  const ts = await loadYizhu('tangshi');
+  // 两本书题目不一样的共用一份 (黄鹤楼 / 登黄鹤楼), 成语名句也一起带过来
+  assert.deepEqual(qj['黄鹤楼'].cy, ts['登黄鹤楼'].cy);
+  assert.deepEqual(qj['送元二使安西'].cy, ts['渭城曲'].cy);
+  assert.ok(qj['游小园不值'].cy.some((x) => x.w === '春色满园关不住，一枝红杏出墙来'));
+  assert.ok(qj['曲江二首'].cy.some((x) => x.w === '人生七十古来稀'));
+  // 搜成语找得到出处
+  const hits = await searchLibrary('平分秋色');
+  assert.ok(hits.some((x) => x.book === 'qianjiashi' && x.piece?.t === '中秋'), JSON.stringify(hits.slice(0, 3)));
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {

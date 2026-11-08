@@ -110,7 +110,7 @@ export function renderMistakeImport({ store, go }, { set = null } = {}) {
         h('span', { class: 'qi-tag' }, m.type === 'input' ? '填空题' : '选择题'),
         attempted(m) ? null : h('span', { class: 'qi-tag' }, '未作答'),
       ),
-      x.same ? h('p', { class: 'muted small' }, '错题集中已有此题，默认不加入') : null,
+      x.same ? h('p', { class: 'muted small' }, '已经记过这道题，默认不加入') : null,
       m.passage ? h('div', { class: 'mi-passage' }, rich(m.passage)) : null,
       m.question ? h('div', { class: 'mk-question' }, rich(m.question)) : null,
       m.type === 'choice'
@@ -231,7 +231,7 @@ export function renderMistakeImport({ store, go }, { set = null } = {}) {
           read(text);
         },
       },
-      h('a', { class: 'back', href: backHref() }, `← ${store.getQset(picker.value)?.title || '错题集'}`),
+      h('a', { class: 'back', href: backHref() }, `← ${store.getQset(picker.value)?.title || '全部题目集'}`),
       h('h1', {}, '拍照录入错题'),
       h('p', { class: 'muted' }, '将错题或练习题的照片发给 AI 识别，再把结果粘贴到这里，即可批量录入。'),
       h(

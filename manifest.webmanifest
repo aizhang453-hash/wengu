@@ -1,7 +1,7 @@
 {
   "name": "温故",
   "short_name": "温故",
-  "description": "自己的学习中心: 卡片、复习计划、测验、错题集、学习游戏",
+  "description": "自己的学习中心: 卡片、复习计划、测验、题目集、学习游戏",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",

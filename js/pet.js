@@ -224,14 +224,14 @@ export function tips(c) {
     const parts = [c.reviews ? `复习 ${c.reviews} 张` : '', c.fresh ? `新词 ${c.fresh} 个` : ''].filter(Boolean).join('、');
     add('due', `今天还有 ${c.due} 张要背 (${parts})${c.minutes ? `, 照你平时的速度大概 ${c.minutes} 分钟` : ''}。背完我就吃饱了!`, go('去背', '#/review'));
   }
-  if (c.mistakes) add('mistakes', `错题集里有 ${c.mistakes} 道该重做了。过而不改, 是谓过矣!`, go('去重做', '#/mistakes/review'));
+  if (c.mistakes) add('mistakes', `题目集里有 ${c.mistakes} 道题该重做了。过而不改, 是谓过矣!`, go('去重做', '#/mistakes/review'));
   if (c.pace) {
     const p = c.pace;
     add('pace', `最近 7 天「${p.title}」学了 ${p.learned7} 个新词, 按计划该学 ${p.need7} 个左右。少学的会分到以后几天, 现在每天要学 ${p.perDay} 个了, 越拖越多。今天多学几个吧!`, go('去学', '#/review'));
   }
   if (c.rest) add('rest', `「${c.rest.title}」还有 ${c.rest.left} 个新词没学, 已经到了考前只复习的日子, 新词不排了。想学完的话, 在计划里把「最后几天只复习」改少一点。`, go('看计划', c.rest.href));
   if (c.examDays !== null && c.examDays >= 2 && c.examDays <= 7) {
-    add('exam', `离考试只有 ${c.examDays} 天了! 别学太多新的了, 多重做错题集、多过几遍难记卡, 每天早点睡。考试前一天我会给你一份考前清单。`, go('重做错题', '#/mistakes/review/all'));
+    add('exam', `离考试只有 ${c.examDays} 天了! 别学太多新的了, 多重做错题、多过几遍难记卡, 每天早点睡。考试前一天我会给你一份考前清单。`, go('重做错题', '#/mistakes/review/all'));
   }
   if (c.retention && c.retention.n >= 30) {
     const pct = Math.round((c.retention.ok / c.retention.n) * 100);
@@ -282,7 +282,7 @@ export function report(r) {
     list.push(`复习时记住了 ${pct}% (你定的是 ${target}%)${pct < target - 8 ? ', 有点低, 新词先少学一点' : pct >= target ? ', 很好' : ''}`);
   }
   if (r.studied) list.push(`记牢了 ${r.mature} 张 (隔 21 天以上才复习的), 一共背过 ${r.studied} 张`);
-  if (r.mastered || r.mistakesLeft) list.push(`错题集: 掌握了 ${r.mastered} 道, 还在重做 ${r.mistakesLeft} 道${r.topKind ? `, 「${r.topKind.kind}」错得最多 (${r.topKind.total} 道)` : ''}`);
+  if (r.mastered || r.mistakesLeft) list.push(`题目集: 掌握了 ${r.mastered} 道, 还在重做 ${r.mistakesLeft} 道${r.topKind ? `, 「${r.topKind.kind}」错得最多 (${r.topKind.total} 道)` : ''}`);
   const bt = r.bestTime;
   if (bt?.enough && (bt.sure || bt.same)) list.push(`${bt.best.name} (${bt.best.from}–${bt.best.to} 点) 记得最牢: 复习时记住了 ${Math.round((bt.best.ok / bt.best.n) * 100)}%`);
   if (r.streak) list.push(`已经连续打卡 ${r.streak} 天`);
@@ -367,7 +367,7 @@ export const QUOTES = [
   q('十室之邑，必有忠信如丘者焉，不如丘之好学也。', '公冶长', '十户人家的小地方，一定有像我一样忠诚守信的人，只是不如我爱学习罢了。(孔子最得意的是自己好学)', ['joy']),
   // 雍也
   q('贤哉，回也！一箪食，一瓢饮，在陋巷，人不堪其忧，回也不改其乐。贤哉，回也！', '雍也', '颜回真了不起！一竹筐饭，一瓢水，住在破巷子里，别人都受不了那种苦，他却一样快快乐乐地学习。', ['joy', 'persist']),
-  q('有颜回者好学，不迁怒，不贰过。', '雍也', '颜回好学：不拿别人出气，同样的错不犯第二次。(这就是错题集要做的)', ['mistake']),
+  q('有颜回者好学，不迁怒，不贰过。', '雍也', '颜回好学：不拿别人出气，同样的错不犯第二次。(这就是重做错题要做的)', ['mistake']),
   q('知之者不如好之者，好之者不如乐之者。', '雍也', '知道它不如喜欢它，喜欢它不如以它为乐。', ['joy']),
   q('力不足者，中道而废。今女画。', '雍也', '真是力气不够的人，是走到半路才停下的；你现在是还没走就给自己划了界限。', ['persist']),
   q('质胜文则野，文胜质则史。文质彬彬，然后君子。', '雍也', '朴实多于文采就显得粗野，文采多于朴实就显得浮夸。两样配合得恰到好处，才是君子。'),
@@ -419,7 +419,7 @@ export const QUOTES = [
   // 卫灵公
   q('工欲善其事，必先利其器。', '卫灵公', '工匠想把活做好，先要把工具磨快。', ['steady']),
   q('人无远虑，必有近忧。', '卫灵公', '人没有长远的打算，眼前就会有忧愁。(早点定计划)', ['steady', 'time']),
-  q('过而不改，是谓过矣。', '卫灵公', '有了错不改，这才叫真正的错。(所以有错题集)', ['mistake']),
+  q('过而不改，是谓过矣。', '卫灵公', '有了错不改，这才叫真正的错。(所以要重做错题)', ['mistake']),
   q('吾尝终日不食，终夜不寝，以思，无益，不如学也。', '卫灵公', '我曾经整天不吃、整夜不睡地空想，没有用处，还不如去学习。', ['think']),
   q('君子求诸己，小人求诸人。', '卫灵公', '君子要求自己，小人要求别人。', ['self']),
   q('君子病无能焉，不病人之不己知也。', '卫灵公', '君子只担心自己没有本事，不担心别人不了解自己。', ['self']),

@@ -12,6 +12,7 @@ import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { festivalOn } from '../festival.js';
 import { speak, canSpeak } from '../speech.js';
+import { highlight } from '../search.js';
 
 // 这台设备上的: hant 看繁体原文, size 字号 (0 小 1 中 2 大), zhu 标注释 (默认标), yi 每段下面显示译文 (默认不显示)
 const PREFS_KEY = 'wengu:read';
@@ -86,6 +87,29 @@ function dailyBox({ compact, id, i, tag, label, note = '', festive = false }) {
   return box;
 }
 
+// 书库里搜到的 (searchLibrary): 题目、哪本书、谁写的, 下面是搜到的那句; 给 query 的把搜的字标出来 (顶上的搜索页用)
+export function libraryHits(hits, query = '') {
+  return h(
+    'ul',
+    { class: 'read-list' },
+    hits.map((x) => {
+      const book = bookOf(x.book);
+      const mark = (text) => (query ? highlight(text, query).map((part) => (part.hit ? h('mark', {}, part.text) : part.text)) : text);
+      return h(
+        'li',
+        {},
+        h(
+          'a',
+          { href: pieceHref(x.book, x.i) },
+          h('strong', {}, mark(x.piece.t)),
+          h('span', { class: 'muted small' }, ` ${book.title}${byline(x.piece) ? ` · ${byline(x.piece)}` : ''}`),
+          h('span', { class: 'read-hit' }, mark(x.line)),
+        ),
+      );
+    }),
+  );
+}
+
 // ---- 书架 ----
 export function renderLibrary({ store }) {
   const reading = store.data.reading;
@@ -106,26 +130,7 @@ export function renderLibrary({ store }) {
       if (!hits) return fill(results, offline());
       fill(
         results,
-        hits.length
-          ? h(
-              'ul',
-              { class: 'read-list' },
-              hits.map((x) => {
-                const book = bookOf(x.book);
-                return h(
-                  'li',
-                  {},
-                  h(
-                    'a',
-                    { href: pieceHref(x.book, x.i) },
-                    h('strong', {}, x.piece.t),
-                    h('span', { class: 'muted small' }, ` ${book.title}${byline(x.piece) ? ` · ${byline(x.piece)}` : ''}`),
-                    h('span', { class: 'read-hit' }, x.line),
-                  ),
-                );
-              }),
-            )
-          : h('p', { class: 'muted' }, '没找到。可以少打几个字试试。'),
+        hits.length ? libraryHits(hits) : h('p', { class: 'muted' }, '没找到。可以少打几个字试试。'),
         hits.length === 60 ? h('p', { class: 'muted small' }, '只列出前 60 个。') : null,
       );
     },
@@ -206,13 +211,24 @@ function shelf(s, books, row) {
 // 创作背景 (yizhu 的 bg): 一段话, 或者几段 (数组)
 const bgOf = (entry) => [entry?.bg ?? []].flat().filter(Boolean);
 
-// 注释和译文是温故自己写的 (原文的资料里没有); 没有成语的 (唐诗宋词) 不提成语; 有创作背景的提一句什么时候写的拿不准就不写
-const yizhuNote = (entry) =>
-  entry.cy?.length
-    ? '注释、译文和成语是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；成语只收出自这篇的，化用别的书的写明了。原文和讲法对照维基文库、古诗文网核对过，难免还有疏漏，欢迎指出。'
-    : bgOf(entry).length
-      ? '注释、译文和创作背景是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」；哪年写的、为什么写，没有可靠说法的就不写。讲法对照古诗文网和维基文库上的古书（像仇兆鳌的《杜诗详注》、计有功的《唐诗纪事》）核对过，难免还有疏漏，欢迎指出。'
-      : '注释和译文是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」。讲法对照古诗文网等资料核对过，难免还有疏漏，欢迎指出。';
+// 注释和译文是温故自己写的 (原文的资料里没有); 有创作背景、成语名句的也提一句。
+// 古文 (有成语、没有创作背景) 原文也对照维基文库核对过; 有创作背景的诗对照过古人的书
+const yizhuNote = (entry) => {
+  const bg = bgOf(entry).length > 0;
+  const cy = Boolean(entry.cy?.length);
+  const kinds = new Set((entry.cy ?? []).map((x) => x.kind ?? '成语'));
+  const cyWord = kinds.size > 1 ? '成语名句' : kinds.has('名句') ? '名句' : '成语';
+  const what = ['注释', '译文', bg && '创作背景', cy && cyWord].filter(Boolean);
+  const parts = [`${what.slice(0, -1).join('、')}和${what.at(-1)}是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」`];
+  if (bg) parts.push('哪年写的、为什么写，没有可靠说法的就不写');
+  if (cy) parts.push(`${cyWord}只收出自这篇的${kinds.has('成语') ? '，化用别的书的写明了' : ''}`);
+  const checked = bg
+    ? '讲法对照古诗文网和维基文库上的古书（像仇兆鳌的《杜诗详注》、计有功的《唐诗纪事》）核对过'
+    : cy
+      ? '原文和讲法对照维基文库、古诗文网核对过'
+      : '讲法对照古诗文网等资料核对过';
+  return `${parts.join('；')}。${checked}，难免还有疏漏，欢迎指出。`;
+};
 
 // 原文从哪来: 诗词、古文和启蒙读物是 chinese-poetry; 小说 (书目里写了 src 的) 是维基文库、古登堡计划
 const link = (x) => h('a', { href: x.url, target: '_blank', rel: 'noopener' }, x.name);

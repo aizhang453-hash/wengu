@@ -109,7 +109,7 @@ export function renderShareImport({ store, go }, code) {
           }
         },
       },
-      quiz ? `导入到错题集（${data.cards.length} 道）` : `导入（${data.cards.length} 张）`,
+      quiz ? `导入到题目集（${data.cards.length} 道）` : `导入（${data.cards.length} 张）`,
     );
     fill(
       root,

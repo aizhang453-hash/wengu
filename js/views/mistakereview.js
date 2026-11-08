@@ -18,7 +18,7 @@ import { sound } from './match.js';
 export function reviewScope(store, which = null, sub = null) {
   let all = store.allMistakes();
   let back = '#/mistakes';
-  let backText = '错题集';
+  let backText = '全部题目集';
   let mode = which;
   let label = (k) => k;
   if (which?.startsWith('set:')) {

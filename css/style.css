@@ -3318,6 +3318,9 @@ mark {
 .search-results h2 {
   margin-top: 24px;
 }
+.search-more {
+  margin-top: 10px;
+}
 
 a.card-row.search-hit {
   color: var(--text);

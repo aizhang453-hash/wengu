@@ -93,7 +93,7 @@ export function qsetPicker(store, initial = '', onChange = null) {
 
 // 一道题 (列表里): 状态、题型、题目、答案、笔记; 下面重做、编辑、删除。
 // opts: { qset 在题目集里看 (题型去掉科目), setTag 写出在哪个题目集 (搜所有题时), selecting, picked, toggle, onDelete }
-function itemEl(store, m, now, opts = {}) {
+export function itemEl(store, m, now, opts = {}) {
   const st = mistakeStatus(m, now);
   const mine = mineLabel(m);
   const box = opts.selecting ? h('input', { type: 'checkbox', class: 'mk-pick', checked: opts.picked, 'aria-label': '选择这道题', onchange: opts.toggle }) : null;
@@ -203,7 +203,7 @@ const addMenu = (setId = '') =>
     { label: '添加题目', text: '添加题目', cls: setId ? 'btn primary' : 'btn', iconName: 'plus' },
   );
 
-// ---- 错题集首页: 所有题目集 ----
+// ---- 题目集页 (v1.63 以前叫「错题集」): 所有题目集 ----
 export function renderMistakes({ store, go }) {
   const qsets = store.allQsets();
   const all = store.allMistakes();
@@ -233,16 +233,16 @@ export function renderMistakes({ store, go }) {
 
   const newSet = () => newQsetDialog(store, (q) => go(qsetHref(q.id)));
   return {
-    title: '错题集',
+    title: '题目集',
     el: h(
       'section',
       { class: 'mistakes-page' },
       h('a', { class: 'back', href: '#/' }, '← 首页'),
-      h('div', { class: 'page-head' }, h('h1', {}, '错题集'), h('div', { class: 'row' }, qsets.length ? addMenu() : null, h('button', { class: 'btn primary', type: 'button', onclick: newSet }, icon('plus', 18), '新建题目集'))),
+      h('div', { class: 'page-head' }, h('h1', {}, '题目集'), h('div', { class: 'row' }, qsets.length ? addMenu() : null, h('button', { class: 'btn primary', type: 'button', onclick: newSet }, icon('plus', 18), '新建题目集'))),
       all.length ? h('div', { class: 'quiz-hero' }, heroContent(all, { reviewDue: '#/mistakes/review', reviewAll: '#/mistakes/review/all', empty: '' })) : null,
       qsets.length
         ? [
-            h('div', { class: 'list-head' }, h('h2', {}, '题目集'), h('span', { class: 'muted small' }, `${qsets.length} 个`)),
+            h('div', { class: 'list-head' }, h('h2', {}, '全部'), h('span', { class: 'muted small' }, `${qsets.length} 个`)),
             h('ul', { class: 'set-grid qset-grid' }, qsets.map((q) => qsetTile(q, bySet.get(q.id), now))),
             all.length ? h('div', { class: 'mk-search-all' }, search) : null,
             resultsEl,
@@ -262,7 +262,7 @@ export function renderMistakes({ store, go }) {
 export function renderQset({ store, go }, id) {
   const qset = store.getQset(id);
   if (!qset) {
-    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '题目集不存在'), h('p', { class: 'muted' }, '可能已经删除了。'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回错题集')) };
+    return { title: '找不到', el: h('section', { class: 'empty' }, h('h1', {}, '题目集不存在'), h('p', { class: 'muted' }, '可能已经删除了。'), h('a', { class: 'btn primary', href: '#/mistakes' }, '返回题目集')) };
   }
   let all = store.mistakesIn(id);
   let filter = 'all';
@@ -500,7 +500,7 @@ export function renderQset({ store, go }, id) {
     el: h(
       'section',
       { class: 'mistakes-page' },
-      h('a', { class: 'back', href: '#/mistakes' }, '← 错题集'),
+      h('a', { class: 'back', href: '#/mistakes' }, '← 全部题目集'),
       h('div', { class: 'page-head' }, h('div', { class: 'qset-head' }, titleEl, more), addMenu(id)),
       heroEl,
       emptyEl,
