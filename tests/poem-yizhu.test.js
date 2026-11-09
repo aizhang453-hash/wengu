@@ -4,7 +4,7 @@ import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, o
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
-const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 276]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80, 卷三 五言律诗 81–160, 卷四 七言律诗 161–213, 卷五 五言古诗 214–248, 卷六 七言古诗 249–276
+const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 320]] }; // 《唐诗三百首》v1.64 起一卷一卷做, v1.72 七卷全做完: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80, 卷三 五言律诗 81–160, 卷四 七言律诗 161–213, 卷五 五言古诗 214–248, 卷六 七言古诗 249–276, 卷七 乐府 277–320
 const KEBEN = {
   tangshi: [71, 277, 2, 18, 34, 278, 30, 6, 282, 33, 11, 39, 40, 68, 61, 319, 313, 95, 20, 24, 81, 272, 91, 290, 202, 227, 117, 254, 57, 58, 46, 173, /* 高中 */ 89, 298, 257, 293, 314, 192, 193, 190, 109, 251, 179],
   qianjiashi: [6, 145, 29, 98, 166, 114, 27, 101, 104, 90, 156, 134, 85, 162, 154, 89, 139, 140, 155, 48, 192, 173, /* 高中 */ 64],
@@ -245,6 +245,27 @@ test('唐诗三百首卷六 七言古诗: 截断的题目补全; 错字改对', 
   assert.ok(book.pieces[249].p[20].includes('山在虚无缥缈间')); // 资料是「缥渺」
   assert.ok(book.pieces[272].p[7].includes('雨淋日炙野火燎')); // 资料是「日灸」
   assert.ok(entryOf(ts, book.pieces[261]).yi[0].includes('幽燕')); // 李颀《古意》, 不是别人的
+});
+
+test('唐诗三百首卷七 乐府: 《长信怨》只留原书选的那首; 《金缕衣》照原书署杜秋娘; 错字改对', async () => {
+  const ts = await loadYizhu('tangshi');
+  const book = await loadBook('tangshi');
+  const juan7 = book.pieces.slice(276, 320);
+  assert.equal(juan7.length, 44);
+  assert.ok(juan7.every((p) => p.g === 6));
+  assert.ok(juan7.filter((p) => entryOf(ts, p).bg).length >= 30);
+  assert.ok(juan7.filter((p) => entryOf(ts, p).cy?.length).length >= 30);
+  const cx = book.pieces[280];
+  assert.equal(cx.t, '长信怨');
+  assert.deepEqual(cx.p, ['奉帚平明金殿开，暂将团扇共徘徊。', '玉颜不及寒鸦色，犹带昭阳日影来。']); // 资料放的是《长信秋词》五首
+  assert.equal(book.pieces[309].a, '杜秋娘');
+  assert.ok(entryOf(ts, book.pieces[309]).bg.includes('不一定是作者'));
+  assert.ok(book.pieces[311].p[1].startsWith('贞妇贵殉夫'));
+  assert.ok(book.pieces[290].p[1].endsWith('赌梨栗。'));
+  const hant = await loadBook('tangshi', { hant: true });
+  assert.ok(hant.pieces[290].p[1].includes('梨栗')); // 繁体原来是发抖的「慄」
+  assert.ok(book.pieces[305].p[2].includes('骨肉不待'));
+  assert.ok(book.pieces[307].p[3].includes('翠微㔩叶'));
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {
