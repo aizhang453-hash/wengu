@@ -119,7 +119,7 @@
 
 ## 更新记录
 
-当前版本 **v1.69**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.70**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 

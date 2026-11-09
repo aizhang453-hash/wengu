@@ -4,7 +4,7 @@ import { loadBook, loadYizhu, entryOf, notesOf, readingsOf, makeCards, bookOf, o
 
 // 课程标准「古诗文背诵推荐篇目」里小学、初中、高中的, 书库有的 (第几首, 从 1 数): 都要有注释和译文
 // 《千家诗》v1.61 起全书都做, 做完的卷写在 DONE 里 (第几首到第几首, 从 1 数): 这几卷每首都要有
-const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 248]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80, 卷三 五言律诗 81–160, 卷四 七言律诗 161–213, 卷五 五言古诗 214–248
+const DONE = { qianjiashi: [[1, 220]], tangshi: [[1, 276]] }; // 《唐诗三百首》v1.64 起一卷一卷做: 卷一 五言绝句 1–29, 卷二 七言绝句 30–80, 卷三 五言律诗 81–160, 卷四 七言律诗 161–213, 卷五 五言古诗 214–248, 卷六 七言古诗 249–276
 const KEBEN = {
   tangshi: [71, 277, 2, 18, 34, 278, 30, 6, 282, 33, 11, 39, 40, 68, 61, 319, 313, 95, 20, 24, 81, 272, 91, 290, 202, 227, 117, 254, 57, 58, 46, 173, /* 高中 */ 89, 298, 257, 293, 314, 192, 193, 190, 109, 251, 179],
   qianjiashi: [6, 145, 29, 98, 166, 114, 27, 101, 104, 90, 156, 134, 85, 162, 154, 89, 139, 140, 155, 48, 192, 173, /* 高中 */ 64],
@@ -231,6 +231,20 @@ test('唐诗三百首卷五 五言古诗: 截断的题目补全; 《赠卫八处
   assert.equal(hant.pieces[227].p.length, 12);
   assert.ok(book.pieces[238].p[5].includes('慕陶真可庶'));
   assert.ok(book.pieces[245].p[3].startsWith('飞沉理自隔'));
+});
+
+test('唐诗三百首卷六 七言古诗: 截断的题目补全; 错字改对', async () => {
+  const ts = await loadYizhu('tangshi');
+  const book = await loadBook('tangshi');
+  const juan6 = book.pieces.slice(248, 276);
+  assert.ok(juan6.every((p) => p.g === 5));
+  assert.ok(juan6.filter((p) => entryOf(ts, p).bg).length >= 20);
+  assert.ok(juan6.filter((p) => entryOf(ts, p).cy?.length).length >= 20);
+  const titles = [251, 252, 259].map((i) => book.pieces[i].t);
+  assert.deepEqual(titles, ['走马川行奉送封大夫出师西征', '轮台歌奉送封大夫出师西征', '听董大弹胡笳声兼寄语弄房给事']);
+  assert.ok(book.pieces[249].p[20].includes('山在虚无缥缈间')); // 资料是「缥渺」
+  assert.ok(book.pieces[272].p[7].includes('雨淋日炙野火燎')); // 资料是「日灸」
+  assert.ok(entryOf(ts, book.pieces[261]).yi[0].includes('幽燕')); // 李颀《古意》, 不是别人的
 });
 
 test('唐诗宋词千家诗的注释: 做成「字词」卡片; 《千家诗》整本做只做有注释的', async () => {
