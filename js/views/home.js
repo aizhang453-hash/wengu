@@ -181,31 +181,25 @@ export function setTile(set) {
   );
 }
 
-// 文件夹 (像 Anki 的大牌组): 里面的文件夹、卡片集列在下面, 就不再单独摆一遍。
-// 进度算里面所有的卡片集 (连里面文件夹里的)。extra: 方块上另外放的按钮 (文件夹页的上移下移)
+// 文件夹: 跟卡片集一样大的一个方块 (图标、名字、里面几个、多少张、进度), 里面有什么点进去看。
+// 里面的卡片集不在首页另外摆; 进度算里面所有的卡片集 (连里面文件夹里的)。extra: 方块上另外放的按钮 (文件夹页的上移下移)
+// (v1.71 在方块下面列出里面每个卡片集的名字, 多了一长串很难看, v1.71.1 去掉了)
 export function folderTile(store, folder, extra = null) {
   const subs = store.childFolders(folder.id);
   const own = folder.setIds.map((sid) => store.getSet(sid)).filter(Boolean);
   const p = progressOf(store.treeSetIds(folder.id).map((sid) => store.getSet(sid)).filter(Boolean));
-  const meta = [subs.length ? `${subs.length} 个文件夹` : null, own.length || !subs.length ? `${own.length} 个卡片集` : null, `${num(p.total)} 张`].filter(Boolean).join(' · ');
+  const count = [subs.length ? `${subs.length} 个文件夹` : null, own.length || !subs.length ? `${own.length} 个卡片集` : null].filter(Boolean).join('、');
   return h(
     'li',
-    { class: `folder-card${extra ? ' folder-item' : ''}` },
+    { class: extra ? 'folder-item' : null },
     h(
       'a',
       { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(folder.id)}` },
       h('span', { class: 'set-tile-title' }, icon('folder', 18), folder.name || '未命名文件夹'),
-      h('span', { class: 'set-tile-meta' }, meta, h('span', {}, progressText(p))),
+      h('span', { class: 'folder-count muted small' }, count),
+      h('span', { class: 'set-tile-meta' }, `${num(p.total)} 张`, h('span', {}, progressText(p))),
       meter(p),
     ),
-    subs.length || own.length
-      ? h(
-          'ul',
-          { class: 'folder-members' },
-          subs.map((f) => h('li', {}, h('a', { class: 'folder-chip', href: `#/folder/${encodeURIComponent(f.id)}` }, icon('folder', 13), f.name || '未命名文件夹'))),
-          own.map((set) => h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'))),
-        )
-      : null,
     extra,
   );
 }

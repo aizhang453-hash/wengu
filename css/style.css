@@ -3456,41 +3456,18 @@ a.card-row.search-hit:hover {
   margin-top: 28px;
 }
 
-.folder-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
-.folder-card > .folder-tile {
-  flex: 1;
-}
 
-.folder-members {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  margin: 0;
-  padding: 0 4px;
-  list-style: none;
-  font-size: 0.85rem;
-}
 
-.folder-members a {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--muted);
-  text-decoration: none;
-}
 
-.folder-members a:hover {
-  color: var(--text);
-}
 
 .folder-tile {
   background: var(--surface-2);
+}
+
+/* 文件夹方块的底色跟进度条的底一样, 进度条的底换深一点 */
+.folder-tile .meter {
+  background: var(--line);
 }
 
 .folder-item {
@@ -9929,17 +9906,10 @@ button.pick-row:hover {
   color: var(--muted);
 }
 
-.folder-members .folder-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text);
-}
 
-/* 文件夹页里的文件夹方块: 上移下移放在右上角 (下面还列着里面的东西) */
-.folder-card.folder-item > .folder-move {
-  top: 6px;
-  bottom: auto;
+/* 文件夹方块: 名字下面一行「2 个文件夹、9 个卡片集」 */
+.folder-count {
+  margin-top: -2px;
 }
 
 .folder-choices {
