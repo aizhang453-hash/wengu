@@ -1,9 +1,11 @@
-// 文件夹: 几个卡片集放一起, 可以合起来学
+// 文件夹: 几个卡片集放一起, 可以合起来学。v1.71 起文件夹里还能放文件夹 (像「心理学 › 第三单元」),
+// 合起来学、每天背的计划、统计都连里面文件夹里的卡片集一起算
 
 import { h, toast, openDialog, askText, switchRow, menuButton, icon } from '../dom.js';
 import { FOLDER_PREFIX, makeFolder } from '../store.js';
 import { planPanel } from './plan.js';
 import { mode } from './set.js';
+import { folderTile } from './home.js';
 
 export function renderFolder({ store, go }, id) {
   const folder = store.getFolder(id);
@@ -16,8 +18,48 @@ export function renderFolder({ store, go }, id) {
   const combo = store.getSet(FOLDER_PREFIX + folder.id);
   const base = `#/set/${encodeURIComponent(combo.id)}`;
   const sets = folder.setIds.map((sid) => store.getSet(sid)).filter(Boolean);
+  const subs = store.childFolders(folder.id);
+  const parent = store.getFolder(folder.parent);
   const total = combo.cards.length;
   const redraw = () => go(`#/folder/${encodeURIComponent(folder.id)}`);
+
+  // 挪到别的文件夹里 (或者挪回首页); 自己和自己里面的不能选
+  function moveTo() {
+    const inside = new Set(store.descendantIds(folder.id));
+    const pick = (to) => {
+      d.close();
+      if (to === folder.parent) return;
+      store.moveFolder(folder.id, to);
+      toast(to ? `已放进「${store.folderPath(to)}」` : '已挪到首页');
+      redraw();
+    };
+    const choice = (label, to, depth = 0) =>
+      h(
+        'button',
+        { class: `folder-choice${to === folder.parent ? ' on' : ''}`, type: 'button', style: depth ? `padding-left:${12 + depth * 20}px` : null, onclick: () => pick(to) },
+        icon(to ? 'folder' : 'home', 18),
+        h('span', {}, label),
+        to === folder.parent ? h('span', { class: 'muted small' }, '现在在这里') : null,
+      );
+    const d = openDialog({
+      title: `把「${folder.name || '未命名文件夹'}」放到`,
+      body: h(
+        'div',
+        { class: 'folder-choices' },
+        choice('首页（不放进别的文件夹）', ''),
+        store
+          .folderTree()
+          .filter(({ folder: f }) => !inside.has(f.id))
+          .map(({ folder: f, depth }) => choice(f.name || '未命名文件夹', f.id, depth)),
+      ),
+      footer: [h('span', { class: 'spacer' }), h('button', { class: 'btn', onclick: () => d.close() }, '取消')],
+    });
+  }
+
+  // 在这个文件夹里新建一个文件夹
+  function newSub() {
+    newFolder(store, () => redraw(), folder.id);
+  }
 
   function addSets() {
     const others = store.allSets();
@@ -54,6 +96,28 @@ export function renderFolder({ store, go }, id) {
       ],
     });
   }
+
+  // 里面的文件夹: 跟首页一样的方块, 右下角上移下移
+  const subList = subs.length
+    ? h(
+        'ul',
+        { class: 'set-grid' },
+        subs.map((f, i) =>
+          folderTile(
+            store,
+            f,
+            subs.length > 1
+              ? h(
+                  'span',
+                  { class: 'folder-move' },
+                  h('button', { class: 'icon-btn', title: '上移', 'aria-label': `${f.name || '未命名文件夹'} 上移`, disabled: i === 0, onclick: () => (store.moveFolderOrder(f.id, -1), redraw()) }, '↑'),
+                  h('button', { class: 'icon-btn', title: '下移', 'aria-label': `${f.name || '未命名文件夹'} 下移`, disabled: i === subs.length - 1, onclick: () => (store.moveFolderOrder(f.id, 1), redraw()) }, '↓'),
+                )
+              : null,
+          ),
+        ),
+      )
+    : null;
 
   const list = sets.length
     ? h(
@@ -94,11 +158,14 @@ export function renderFolder({ store, go }, id) {
           ),
         ),
       )
-    : h('p', { class: 'muted' }, '文件夹为空。添加卡片集后可合并学习。');
+    : subs.length
+      ? null
+      : h('p', { class: 'muted' }, '文件夹为空。添加卡片集后可合并学习，也可以在里面再建文件夹。');
 
   const more = menuButton(
     [
       { label: '统计', icon: 'chart', href: `#/stats/${encodeURIComponent(combo.id)}` },
+      { label: '放到别的文件夹里', icon: 'folder', onclick: moveTo },
       {
         label: '重命名',
         icon: 'edit',
@@ -119,10 +186,11 @@ export function renderFolder({ store, go }, id) {
         icon: 'trash',
         danger: true,
         onclick: () => {
-          if (!confirm(`删除文件夹「${folder.name}」？其中的卡片集不会被删除。`)) return;
+          const note = subs.length ? `里面的卡片集不会被删除，里面的 ${subs.length} 个文件夹会挪到${parent ? `「${parent.name || '未命名文件夹'}」` : '首页'}。` : '其中的卡片集不会被删除。';
+          if (!confirm(`删除文件夹「${folder.name}」？${note}`)) return;
           store.deleteFolder(folder.id);
           toast('已删除文件夹');
-          go('#/');
+          go(parent ? `#/folder/${encodeURIComponent(parent.id)}` : '#/');
         },
       },
     ],
@@ -134,9 +202,14 @@ export function renderFolder({ store, go }, id) {
     el: h(
       'section',
       { class: 'set-page' },
-      h('a', { class: 'back', href: '#/' }, '← 首页'),
-      h('div', { class: 'set-head' }, h('h1', {}, folder.name || '未命名文件夹'), h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: addSets }, icon('plus', 16), '添加卡片集'), more)),
-      h('p', { class: 'set-meta' }, `${sets.length} 个卡片集 · ${total.toLocaleString('zh-CN')} 张卡片`),
+      parent ? h('a', { class: 'back', href: `#/folder/${encodeURIComponent(parent.id)}` }, `← ${store.folderPath(parent.id)}`) : h('a', { class: 'back', href: '#/' }, '← 首页'),
+      h(
+        'div',
+        { class: 'set-head' },
+        h('h1', {}, folder.name || '未命名文件夹'),
+        h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: addSets }, icon('plus', 16), '添加卡片集'), h('button', { class: 'btn', type: 'button', onclick: newSub }, icon('folder', 16), '新建文件夹'), more),
+      ),
+      h('p', { class: 'set-meta' }, [subs.length ? `${subs.length} 个文件夹` : null, `${sets.length} 个卡片集`, `${total.toLocaleString('zh-CN')} 张卡片`].filter(Boolean).join(' · ')),
       total ? planPanel({ store, go }, combo) : null, // 每天背新词 (整个文件夹一起定)、今天要背的
       h(
         'div',
@@ -145,21 +218,22 @@ export function renderFolder({ store, go }, id) {
         mode('learn', '学习', '选择、拼写，逐张掌握', `${base}/learn`, total > 0),
         mode('test', '测试', '生成试卷并评分', `${base}/test`, total > 0),
       ),
-      h('div', { class: 'list-head' }, h('h2', {}, `卡片集 · ${sets.length}`)),
+      subs.length ? [h('div', { class: 'list-head' }, h('h2', {}, `文件夹 · ${subs.length}`)), subList] : null,
+      sets.length || !subs.length ? h('div', { class: 'list-head' }, h('h2', {}, `卡片集 · ${sets.length}`)) : null,
       list,
     ),
   };
 }
 
-// 新建文件夹 (首页、卡片集页都用); 建好以后调 then(folder)
-export function newFolder(store, then) {
+// 新建文件夹 (首页、卡片集页都用; parent: 建在哪个文件夹里); 建好以后调 then(folder)
+export function newFolder(store, then, parent = '') {
   askText({
-    title: '新建文件夹',
+    title: parent ? `在「${store.folderPath(parent)}」里新建文件夹` : '新建文件夹',
     label: '名称',
     placeholder: '如「期末复习」',
     okText: '创建',
     onOk: (name) => {
-      const folder = store.putFolder(makeFolder(name));
+      const folder = store.putFolder(makeFolder(name, parent));
       if (folder) then(folder);
     },
   });

@@ -55,11 +55,11 @@ export function setupMenu({ store, go, syncer, pet = null }) {
     const mistakes = dueMistakes(store.data.mistakes).length;
 
     // 一行: 图标、字、右边的数; match: 现在在不在这一页
-    const item = (href, ic, text, { badge = 0, note = '', match = (x) => x === href } = {}) => {
+    const item = (href, ic, text, { badge = 0, note = '', match = (x) => x === href, depth = 0 } = {}) => {
       const on = match(hash);
       return h(
         'a',
-        { class: `menu-item${on ? ' on' : ''}`, href, 'aria-current': on ? 'page' : null, onclick: close },
+        { class: `menu-item${on ? ' on' : ''}`, href, 'aria-current': on ? 'page' : null, onclick: close, style: depth ? `padding-left:${14 + depth * 18}px` : null },
         icon(ic, 20),
         h('span', { class: 'menu-text' }, text),
         note ? h('span', { class: 'menu-note' }, note) : null,
@@ -95,8 +95,10 @@ export function setupMenu({ store, go, syncer, pet = null }) {
           ? [
               sep(),
               title('文件夹'),
-              folders.map((f) =>
+              // 文件夹里的文件夹往里缩一点
+              store.folderTree().map(({ folder: f, depth }) =>
                 item(`#/folder/${encodeURIComponent(f.id)}`, 'folder', f.name || '未命名文件夹', {
+                  depth,
                   match: (x) => x === `#/folder/${encodeURIComponent(f.id)}` || x.startsWith(`#/set/folder%3A${encodeURIComponent(f.id)}`),
                 }),
               ),

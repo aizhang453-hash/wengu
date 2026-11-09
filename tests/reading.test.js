@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Store, cleanData } from '../js/store.js';
 import { mergeData } from '../js/merge.js';
 import { READINGS } from '../js/library/readings.js';
-import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, variantsOf, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, cleanReading, mergeReading, isFav, markOf, favList, recentBooks } from '../js/reading.js';
+import { BOOKS, SHELVES, bookOf, loadBook, pieceId, parsePieceId, clauses, poemsOf, makeCards, setTitle, readingsOf, splitMarks, spokenText, variantsOf, loadYizhu, entryOf, notesOf, clauseAround, noteCards, idiomsOf, findText, sentenceAround, idiomCards, CY_KINDS, DAILY_BOOK, dailyIndex, searchLibrary, authorKey, hasAuthorPage, worksOf, searchAuthors, cleanReading, mergeReading, isFav, markOf, favList, recentBooks } from '../js/reading.js';
 
 function memoryStorage() {
   const map = new Map();
@@ -582,4 +582,34 @@ test('繁体原文里转错的字改过来了 (只改繁体, 简体不变)', asy
   assert.ok((await loadBook('lunyu')).pieces.some((p) => p.p.some((l) => l.includes('《诗》云'))));
   const yx = (await loadBook('youxueqionglin')).pieces.flatMap((p) => p.p).join('');
   assert.ok(yx.includes('富人之口厌膏粱') && !yx.includes('膏梁'));
+});
+
+test('作者页 (v1.71): 书斋里一位作者的所有作品按书列; 搜作者; 佚名没有作者页; 「刘向 撰」算刘向', async () => {
+  assert.equal(authorKey('刘向 撰'), '刘向');
+  assert.equal(hasAuthorPage('李白'), true);
+  assert.equal(hasAuthorPage('佚名'), false);
+  assert.equal(hasAuthorPage('无名氏'), false);
+  assert.equal(hasAuthorPage(''), false);
+  const li = await worksOf('李白');
+  assert.deepEqual(li.map((g) => g.book.id), ['tangshi', 'guwen', 'qianjiashi']); // 书架的次序 (古文观止里有《春夜宴从弟桃花园序》《与韩荆州书》)
+  assert.equal(li[0].items.length, 34);
+  assert.ok(li[0].items.some((x) => x.piece.t === '静夜思'));
+  assert.ok(li.every((g) => g.items.every((x) => x.piece.a === '李白')));
+  // 书里的次序 (千家诗的林洪《宫词》排在王建《宫词》后面)
+  const order = (await worksOf('林洪'))[0].items.map((x) => x.i);
+  assert.equal(order.length, 1);
+  assert.deepEqual(await worksOf('佚名'), []);
+  assert.deepEqual(await worksOf('没有这个人'), []);
+  const liuxiang = await worksOf('刘向');
+  assert.equal(liuxiang.reduce((n, g) => n + g.items.length, 0), 4);
+  // 搜作者: 名字一样的在最前面, 再按作品多少
+  const found = await searchAuthors('李白');
+  assert.equal(found[0].name, '李白');
+  assert.equal(found[0].era, '唐');
+  assert.equal(found[0].count, 45);
+  const li2 = await searchAuthors('李');
+  assert.ok(li2.length > 5);
+  assert.ok(li2[0].count >= li2[1].count);
+  assert.deepEqual(await searchAuthors('佚名'), []);
+  assert.deepEqual(await searchAuthors('  '), []);
 });

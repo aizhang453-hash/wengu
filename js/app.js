@@ -12,6 +12,7 @@
 //   #/share/<..>          打开别人分享的卡片集
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
+//   #/read/author/<作者>  作者页: 书斋里他的所有作品
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -51,6 +52,7 @@ import { renderFolder } from './views/folder.js';
 import { renderReview } from './views/review.js';
 import { renderStats } from './views/stats.js';
 import { setupMenu } from './views/menu.js';
+import { setupSuggest } from './views/suggest.js';
 import { setupPet } from './views/pet.js';
 import { renderSync } from './views/sync.js';
 import { renderShareImport } from './views/share.js';
@@ -64,7 +66,7 @@ import { renderMistakeEdit } from './views/mistakeedit.js';
 import { renderMistakeReview } from './views/mistakereview.js';
 import { renderMistakeImport } from './views/mistakeimport.js';
 import { renderSettings } from './views/settings.js';
-import { renderLibrary, renderBook, renderPiece } from './views/read.js';
+import { renderLibrary, renderBook, renderPiece, renderAuthor } from './views/read.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
@@ -148,6 +150,7 @@ function parse(hash) {
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'settings') return { page: 'settings' };
   if (parts[0] === 'pet') return { page: 'pet' };
+  if (parts[0] === 'read' && parts[1] === 'author' && parts[2]) return { page: 'author', name: parts[2] }; // 作者页 (v1.71)
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
@@ -224,6 +227,7 @@ function render() {
   else if (route.page === 'pet') view = pet.renderPage();
   else if (route.page === 'read') view = renderLibrary(ctx);
   else if (route.page === 'read-book') view = renderBook(ctx, route.id);
+  else if (route.page === 'author') view = renderAuthor(ctx, route.name);
   else if (route.page === 'read-piece') view = renderPiece(ctx, route.id, route.n);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
@@ -291,6 +295,7 @@ store.onChange = () => {
   pet.changed();
 };
 setupMenu({ store, go, syncer, pet }); // 左上角 ☰ 的菜单
+setupSuggest({ store, go }); // 顶上搜索框边打字边出结果
 
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)

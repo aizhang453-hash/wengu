@@ -178,6 +178,7 @@ let current = null; // 正在念的那一句 (留着引用: iOS 上不留, 可�
 let watchdog = 0;
 
 function stopAll() {
+  endLines();
   playing?.pause();
   playing = null;
   current = null;
@@ -294,6 +295,7 @@ function say(text, code, rate, retried) {
 export function speak(raw, lang = 'auto', { rate = 1, hint = null } = {}) {
   const text = stripMarks(raw);
   if (!canSpeak() || !text.trim()) return;
+  endLines();
   noteSpeech();
   holdAudio(); // iPhone: 念的时候一直放着无声音频, 静音开关开着也能听到
   playing?.pause();
@@ -325,4 +327,99 @@ export function canSay(card, side) {
 
 export function stopSpeaking() {
   stopAll();
+}
+
+// ---- 一句一句念 (书斋朗读, v1.71) ----
+// 每句一个 utterance, 点的那一下全排进去 (iOS 要在点的那一下里开始念); 念到哪句调 onLine(k), 念完、停了、出错调 onEnd()。
+// 长的一段 (小说) 按句号拆开念 (有的浏览器一口气念太长会念到一半停), k 还是那一段
+let lineRun = null;
+
+function endLines() {
+  const run = lineRun;
+  if (!run || run.done) return;
+  run.done = true;
+  lineRun = null;
+  run.onEnd();
+}
+
+// 一段太长的按句子拆开 (句末的标点留在前一句): 每块不超过 max 个字左右
+export function chunks(text, max = 80) {
+  if (text.length <= max) return [text];
+  const parts = text.match(/[^。！？；!?;]+[。！？；!?;」』”’）)]*|[。！？；!?;」』”’）)]+/g) ?? [text];
+  const out = [];
+  for (const part of parts) {
+    if (out.length && out[out.length - 1].length + part.length <= max) out[out.length - 1] += part;
+    else out.push(part);
+  }
+  return out;
+}
+
+// items: [{ k, text }]
+export function speakLines(items, lang = 'zh-CN', { rate = 1, onLine = () => {}, onEnd = () => {} } = {}) {
+  const list = items.flatMap(({ k, text }) => chunks(stripMarks(text).trim()).map((t) => ({ k, text: t }))).filter((x) => x.text);
+  if (!canSpeak() || !list.length) return false;
+  stopAll();
+  noteSpeech();
+  holdAudio();
+  queue(list, lang, rate, { onLine, onEnd }, false);
+  return true;
+}
+
+function queue(list, code, rate, hooks, retried) {
+  const synth = window.speechSynthesis;
+  let voice = null;
+  try {
+    voice = pickVoice(synth, code);
+  } catch {
+    // 选不了就用默认的声音
+  }
+  const run = { done: false, onEnd: () => (clearTimeout(watchdog), releaseAudio(), hooks.onEnd()), us: [] };
+  let started = false;
+  let last = null;
+  run.us = list.map(({ k, text }, idx) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = code;
+    u.rate = rate;
+    if (voice) u.voice = voice;
+    u.onstart = () => {
+      if (run.done) return;
+      started = true;
+      current = u;
+      if (k !== last) hooks.onLine(k);
+      last = k;
+    };
+    u.onend = () => {
+      if (!run.done && idx === list.length - 1 && lineRun === run) endLines();
+    };
+    u.onerror = (e) => {
+      if (run.done || lineRun !== run) return;
+      endLines();
+      problem(e.error);
+    };
+    return u;
+  });
+  lineRun = run;
+  current = run.us[0];
+  const go = () => {
+    if (lineRun !== run) return; // 这期间又点了别的
+    synth.resume?.(); // iOS 有时会把朗读卡在「暂停」
+    for (const u of run.us) synth.speak(u);
+    // 过了好一会儿还没开始念: 卡住了, 停掉重念一次; 还不行就说一声
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      if (lineRun !== run || started) return;
+      synth.cancel();
+      if (retried) {
+        endLines();
+        problem();
+      } else {
+        run.done = true; // 换成重念的那一批, 不算念完
+        queue(list, code, rate, hooks, true);
+      }
+    }, 3000);
+  };
+  if (synth.speaking || synth.pending) {
+    synth.cancel();
+    setTimeout(go, 80);
+  } else go();
 }

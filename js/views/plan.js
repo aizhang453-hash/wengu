@@ -73,7 +73,7 @@ export function planPanel({ store, go }, set) {
       ? h('a', { class: 'btn', href, title: `已达每日复习上限 ${store.reviewCap} 张` }, `继续复习 · 剩余 ${held}`)
       : null;
   // 卡片集在定了计划的文件夹里: 新词从文件夹一起出, 这里就不单独定了
-  const viaFolder = !set.virtual && !info.on ? store.foldersOf(set.id).find((f) => f.plan?.on) : null;
+  const viaFolder = !set.virtual && !info.on ? store.foldersAbove(set.id).find((f) => f.plan?.on) : null;
   if (viaFolder) {
     return h(
       'section',

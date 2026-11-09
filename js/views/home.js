@@ -2,7 +2,7 @@
 // 备份、同步、复习的设置都在设置页 (settings.js)
 
 import { examBanner } from './examlist.js';
-import { h } from '../dom.js';
+import { h, icon } from '../dom.js';
 import { dueTomorrow, streak, lastDays } from '../srs.js';
 import { reviewedToday, newToday, planOf, shareOf } from '../plan.js';
 import { planLine, todayAll, openCapDialog } from './plan.js';
@@ -85,30 +85,30 @@ function loadCollapsed() {
 // 张数跟上面一样: 先所有卡片集一起排好每天的上限, 最可能忘的先来, 再看各占几张
 function deckList(store, sets, today, go) {
   const decks = sets.filter((s) => s.cards.length);
-  const folders = store.allFolders().filter((f) => f.setIds.some((sid) => decks.some((d) => d.id === sid)));
-  const inFolder = new Set(folders.flatMap((f) => f.setIds));
+  const inFolder = new Set(store.allFolders().flatMap((f) => f.setIds));
   const collapsed = loadCollapsed();
   const planText = (set) => (set.plan?.on ? planLine(newToday(set), planOf(set)) : '');
 
-  function row({ title, href, reviewHref, share, plan, child = false, toggle = null }) {
+  function row({ title, href, reviewHref, share, plan, depth = 0, toggle = null }) {
     const { reviews, fresh, held } = share;
     if (!reviews.length && !fresh.length && !held && !toggle) return null;
     const counts = [fresh.length ? h('span', { class: 'new' }, `新词 ${num(fresh.length)}`) : null, reviews.length ? h('span', { class: 'due' }, `复习 ${num(reviews.length)}`) : null, held ? h('span', { class: 'held' }, `顺延 ${num(held)}`) : null];
     return h(
       'li',
-      { class: `deck-row${child ? ' child' : ''}` },
+      { class: `deck-row${depth ? ' child' : ''}`, style: depth > 1 ? `padding-left:${26 * depth}px` : null },
       h('div', { class: 'deck-name' }, h('div', { class: 'deck-line' }, toggle, h('a', { href }, title)), plan ? h('div', { class: 'deck-plan' }, plan) : null),
       h('div', { class: 'deck-counts' }, counts),
       reviews.length + fresh.length + held ? h('a', { class: 'btn small', href: reviewHref }, '学习') : h('span'),
     );
   }
-  const setRow = (set, child = false) => row({ title: set.title || '未命名卡片集', href: `#/set/${encodeURIComponent(set.id)}`, reviewHref: `#/review/${encodeURIComponent(set.id)}`, share: shareOf(today, [set]), plan: planText(set), child });
+  const setRow = (set, depth = 0) => row({ title: set.title || '未命名卡片集', href: `#/set/${encodeURIComponent(set.id)}`, reviewHref: `#/review/${encodeURIComponent(set.id)}`, share: shareOf(today, [set]), plan: planText(set), depth });
 
   const rows = [];
-  for (const folder of folders) {
-    const members = folder.setIds.map((sid) => decks.find((d) => d.id === sid)).filter(Boolean);
+  // 文件夹一行, 展开了下面是里面的文件夹 (再往里一层一层)、卡片集
+  function folderRows(folder, depth) {
+    const members = store.treeSetIds(folder.id).map((sid) => decks.find((d) => d.id === sid)).filter(Boolean);
     const share = shareOf(today, members);
-    if (!share.reviews.length && !share.fresh.length && !share.held) continue;
+    if (!share.reviews.length && !share.fresh.length && !share.held) return;
     const combo = store.getSet(FOLDER_PREFIX + folder.id);
     const open = !collapsed.has(folder.id);
     const toggle = h(
@@ -131,9 +131,12 @@ function deckList(store, sets, today, go) {
       },
       open ? '−' : '+',
     );
-    rows.push(row({ title: folder.name || '未命名文件夹', href: `#/folder/${encodeURIComponent(folder.id)}`, reviewHref: `#/review/${encodeURIComponent(combo.id)}`, share, plan: planText(combo), toggle }));
-    if (open) rows.push(...members.map((set) => setRow(set, true)));
+    rows.push(row({ title: folder.name || '未命名文件夹', href: `#/folder/${encodeURIComponent(folder.id)}`, reviewHref: `#/review/${encodeURIComponent(combo.id)}`, share, plan: planText(combo), depth, toggle }));
+    if (!open) return;
+    for (const sub of store.childFolders(folder.id)) folderRows(sub, depth + 1);
+    rows.push(...folder.setIds.map((sid) => decks.find((d) => d.id === sid)).filter(Boolean).map((set) => setRow(set, depth + 1)));
   }
+  for (const folder of store.childFolders('')) folderRows(folder, 0);
   rows.push(...decks.filter((s) => !inFolder.has(s.id)).map((set) => setRow(set)));
   const shown = rows.filter(Boolean);
   return shown.length ? h('ul', { class: 'deck-list' }, shown) : null;
@@ -163,7 +166,7 @@ function meter({ total, studied }) {
 
 const progressText = ({ total, studied }) => (!total ? '暂无卡片' : studied ? `已学 ${Math.round((studied / total) * 100)}%` : '未开始');
 
-function setTile(set) {
+export function setTile(set) {
   const p = progressOf([set]);
   return h(
     'li',
@@ -178,27 +181,32 @@ function setTile(set) {
   );
 }
 
-// 文件夹 (像 Anki 的大牌组): 里面的卡片集列在下面, 就不再单独摆一遍
-function folderTile(store, folder) {
-  const members = folder.setIds.map((sid) => store.getSet(sid)).filter(Boolean);
-  const p = progressOf(members);
+// 文件夹 (像 Anki 的大牌组): 里面的文件夹、卡片集列在下面, 就不再单独摆一遍。
+// 进度算里面所有的卡片集 (连里面文件夹里的)。extra: 方块上另外放的按钮 (文件夹页的上移下移)
+export function folderTile(store, folder, extra = null) {
+  const subs = store.childFolders(folder.id);
+  const own = folder.setIds.map((sid) => store.getSet(sid)).filter(Boolean);
+  const p = progressOf(store.treeSetIds(folder.id).map((sid) => store.getSet(sid)).filter(Boolean));
+  const meta = [subs.length ? `${subs.length} 个文件夹` : null, own.length || !subs.length ? `${own.length} 个卡片集` : null, `${num(p.total)} 张`].filter(Boolean).join(' · ');
   return h(
     'li',
-    { class: 'folder-card' },
+    { class: `folder-card${extra ? ' folder-item' : ''}` },
     h(
       'a',
       { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(folder.id)}` },
-      h('span', { class: 'set-tile-title' }, folder.name || '未命名文件夹'),
-      h('span', { class: 'set-tile-meta' }, `${members.length} 个卡片集 · ${num(p.total)} 张`, h('span', {}, progressText(p))),
+      h('span', { class: 'set-tile-title' }, icon('folder', 18), folder.name || '未命名文件夹'),
+      h('span', { class: 'set-tile-meta' }, meta, h('span', {}, progressText(p))),
       meter(p),
     ),
-    members.length
+    subs.length || own.length
       ? h(
           'ul',
           { class: 'folder-members' },
-          members.map((set) => h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'))),
+          subs.map((f) => h('li', {}, h('a', { class: 'folder-chip', href: `#/folder/${encodeURIComponent(f.id)}` }, icon('folder', 13), f.name || '未命名文件夹'))),
+          own.map((set) => h('li', {}, h('a', { href: `#/set/${encodeURIComponent(set.id)}` }, set.title || '未命名卡片集'))),
         )
       : null,
+    extra,
   );
 }
 
@@ -222,7 +230,7 @@ export function renderHome({ store, go }) {
       sets.length
         ? [
             h('div', { class: 'list-head' }, h('h2', {}, '卡片集'), h('span', { class: 'muted small' }, `${sets.length} 个`)),
-            h('ul', { class: 'set-grid' }, folders.map((f) => folderTile(store, f)), loose.map(setTile)),
+            h('ul', { class: 'set-grid' }, store.childFolders('').map((f) => folderTile(store, f)), loose.map(setTile)),
           ]
         : empty
           ? null

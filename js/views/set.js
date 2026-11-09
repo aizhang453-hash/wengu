@@ -201,14 +201,14 @@ export function renderSet({ store, go }, id) {
 
   // 放进哪些文件夹 (可以放进好几个)
   function pickFolders() {
-    const folders = store.allFolders();
+    const folders = store.folderTree().map(({ folder: f }) => f);
     const d = openDialog({
       title: '加入文件夹',
       body: [
         folders.length
           ? folders.map((f) =>
               switchRow({
-                label: f.name || '未命名文件夹',
+                label: store.folderPath(f.id),
                 desc: `${f.setIds.length} 个卡片集`,
                 checked: f.setIds.includes(set.id),
                 onchange: (v) => store.setInFolder(f.id, set.id, v),
@@ -248,7 +248,7 @@ export function renderSet({ store, go }, id) {
     fill(
       progressEl,
       progressLine(set, store.isDaily(set)),
-      inFolders.length ? [' · ', inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, f.name || '未命名文件夹')])] : null,
+      inFolders.length ? [' · ', inFolders.map((f, i) => [i ? '、' : '', h('a', { href: `#/folder/${encodeURIComponent(f.id)}` }, store.folderPath(f.id))])] : null,
     );
     fill(planBox, total ? planPanel({ store, go }, set) : null);
   }

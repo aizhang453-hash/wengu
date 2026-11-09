@@ -78,10 +78,46 @@ function stampCards(next, prev, now, deleted) {
   for (const id of old.keys()) if (!ids.has(id)) deleted[`card:${id}`] = now;
 }
 
-// 文件夹: { id, name, setIds: [卡片集 id...], best: {}, plan: 每天背新词的计划 (plan.js, 没定过是 null), createdAt, updatedAt }
-export function makeFolder(name = '') {
+// 文件夹: { id, name, setIds: [卡片集 id...], best: {}, plan: 每天背新词的计划 (plan.js, 没定过是 null), createdAt, updatedAt,
+//          parent: 放在哪个文件夹里 (v1.71 起文件夹里能再放文件夹; '' 是放在首页), order: 在同一层里排第几 (小的在前) }
+export function makeFolder(name = '', parent = '') {
   const now = Date.now();
-  return { id: newId(), name, setIds: [], best: {}, plan: null, createdAt: now, updatedAt: now };
+  return { id: newId(), name, setIds: [], best: {}, plan: null, parent, order: now, createdAt: now, updatedAt: now };
+}
+
+// 文件夹放在哪 (parent) 理顺: 放进的文件夹没了、放进自己、绕成一圈 (两台设备各挪了一个) 的, 放回首页
+export function fixParents(folders) {
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  for (const f of folders) if (f.parent && (f.parent === f.id || !byId.has(f.parent))) f.parent = '';
+  for (const f of folders) {
+    const seen = new Set([f.id]);
+    for (let p = byId.get(f.parent); p; p = byId.get(p.parent)) {
+      if (seen.has(p.id)) {
+        f.parent = '';
+        break;
+      }
+      seen.add(p.id);
+    }
+  }
+  return folders;
+}
+
+// 同一层的文件夹按 order 排 (一样的按建的先后)
+const byOrder = (a, b) => a.order - b.order || a.createdAt - b.createdAt;
+
+// 文件夹里 (连里面的文件夹) 所有卡片集的 id, 不重复: 先里面文件夹的 (一层一层往下), 再自己直接放的
+export function treeSetIds(folders, id) {
+  const out = [];
+  const walk = (fid, seen) => {
+    if (seen.has(fid)) return;
+    seen.add(fid);
+    const f = folders.find((x) => x.id === fid);
+    if (!f) return;
+    for (const c of folders.filter((x) => x.parent === fid).sort(byOrder)) walk(c.id, seen);
+    for (const sid of f.setIds) if (!out.includes(sid)) out.push(sid);
+  };
+  walk(id, new Set());
+  return out;
 }
 
 export const FOLDER_PREFIX = 'folder:';
@@ -217,6 +253,8 @@ function cleanFolder(raw, setIds) {
     setIds: Array.isArray(raw.setIds) ? [...new Set(raw.setIds.filter((id) => setIds.has(id)))] : [],
     best: cleanBest(raw.best),
     plan: cleanPlan(raw.plan),
+    parent: typeof raw.parent === 'string' ? raw.parent : '',
+    order: Number(raw.order) || Number(raw.createdAt) || now,
     createdAt: Number(raw.createdAt) || now,
     updatedAt: Number(raw.updatedAt) || now,
   };
@@ -308,8 +346,9 @@ export function cleanData(raw) {
     const ids = new Set(data.sets.map((s) => s.id));
     for (const f of raw.folders) {
       const folder = cleanFolder(f, ids);
-      if (folder) data.folders.push(folder);
+      if (folder && !data.folders.some((x) => x.id === folder.id)) data.folders.push(folder);
     }
+    fixParents(data.folders);
   }
   return data;
 }
@@ -468,7 +507,7 @@ export class Store {
   folderSet(folderId) {
     const folder = this.getFolder(folderId);
     if (!folder) return null;
-    const members = () => folder.setIds.map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean);
+    const members = () => this.treeSetIds(folder.id).map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean);
     const sets = members();
     const same = (key) => {
       const values = [...new Set(sets.map((s) => s[key]))];
@@ -506,7 +545,7 @@ export class Store {
 
   // 定了每天背新词计划的文件夹 (合起来的卡片集)
   plannedFolders() {
-    return this.data.folders.filter((f) => f.plan?.on && f.setIds.length).map((f) => this.folderSet(f.id));
+    return this.data.folders.filter((f) => f.plan?.on && this.treeSetIds(f.id).length).map((f) => this.folderSet(f.id));
   }
 
   // 每天背的: 定了每日计划的卡片集, 或者在定了计划的文件夹里 (合起来的看文件夹自己的计划)。
@@ -514,7 +553,7 @@ export class Store {
   isDaily(set) {
     if (!set) return false;
     if (set.plan?.on) return true;
-    return !set.virtual && this.foldersOf(set.id).some((f) => f.plan?.on);
+    return !set.virtual && this.foldersAbove(set.id).some((f) => f.plan?.on);
   }
 
   dailySets() {
@@ -535,7 +574,7 @@ export class Store {
   setsOf(setId) {
     if (typeof setId === 'string' && setId.startsWith(FOLDER_PREFIX)) {
       const folder = this.getFolder(setId.slice(FOLDER_PREFIX.length));
-      return folder ? folder.setIds.map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean) : [];
+      return folder ? this.treeSetIds(folder.id).map((sid) => this.data.sets.find((s) => s.id === sid)).filter(Boolean) : [];
     }
     const set = this.data.sets.find((s) => s.id === setId);
     return set ? [set] : [];
@@ -749,7 +788,16 @@ export class Store {
     return clean;
   }
 
+  // 删文件夹: 里面的卡片集不删; 里面的文件夹挪到外面一层
   deleteFolder(id) {
+    const gone = this.getFolder(id);
+    const now = Date.now();
+    for (const f of this.data.folders) {
+      if (gone && f.parent === id) {
+        f.parent = gone.parent;
+        f.updatedAt = now;
+      }
+    }
     this.data.folders = this.data.folders.filter((f) => f.id !== id);
     this.data.deleted[FOLDER_PREFIX + id] = Date.now();
     this.save();
@@ -780,6 +828,89 @@ export class Store {
 
   foldersOf(setId) {
     return this.data.folders.filter((f) => f.setIds.includes(setId));
+  }
+
+  // 直接放着这个卡片集的文件夹, 连它们外面的 (外面的文件夹定了每天背的计划, 里面的卡片集也算)
+  foldersAbove(setId) {
+    const out = [];
+    for (const f of this.foldersOf(setId)) for (const x of [f, ...this.ancestorsOf(f.id)]) if (!out.includes(x)) out.push(x);
+    return out;
+  }
+
+  // ---- 文件夹里的文件夹 (v1.71) ----
+  // 放在 parent 里的文件夹 ('' 是首页上的), 照顺序
+  childFolders(parent = '') {
+    return this.data.folders.filter((f) => f.parent === parent).sort(byOrder);
+  }
+
+  // 外面一层一层的文件夹 (最近的在前)
+  ancestorsOf(id) {
+    const out = [];
+    for (let f = this.getFolder(this.getFolder(id)?.parent); f && !out.includes(f); f = this.getFolder(f.parent)) out.push(f);
+    return out;
+  }
+
+  // 这个文件夹和它里面一层一层的文件夹的 id
+  descendantIds(id) {
+    const out = [id];
+    for (let i = 0; i < out.length; i++) for (const f of this.data.folders) if (f.parent === out[i] && !out.includes(f.id)) out.push(f.id);
+    return out;
+  }
+
+  treeSetIds(id) {
+    return treeSetIds(this.data.folders, id);
+  }
+
+  // 「心理学 › 第三单元」
+  folderPath(id) {
+    const f = this.getFolder(id);
+    if (!f) return '';
+    return [...this.ancestorsOf(id).reverse(), f].map((x) => x.name || '未命名文件夹').join(' › ');
+  }
+
+  // 整棵树摊平: [{ folder, depth }], 外面的在前、里面的跟在后面 (菜单、选文件夹的框用)
+  folderTree() {
+    const out = [];
+    const walk = (parent, depth) => {
+      for (const f of this.childFolders(parent)) {
+        out.push({ folder: f, depth });
+        walk(f.id, depth + 1);
+      }
+    };
+    walk('', 0);
+    return out;
+  }
+
+  // 把文件夹挪进 parent ('' 是挪到首页); 不能挪进自己或自己里面的。排到那一层的最后
+  moveFolder(id, parent = '') {
+    const folder = this.getFolder(id);
+    if (!folder || (parent && (!this.getFolder(parent) || this.descendantIds(id).includes(parent)))) return false;
+    if (folder.parent === parent) return true;
+    folder.parent = parent;
+    folder.order = Math.max(Date.now(), ...this.childFolders(parent).map((f) => f.order + 1));
+    folder.updatedAt = Date.now();
+    this.save();
+    return true;
+  }
+
+  // 同一层里往前 (-1) / 往后 (1) 挪一个
+  moveFolderOrder(id, delta) {
+    const folder = this.getFolder(id);
+    if (!folder) return;
+    const list = this.childFolders(folder.parent);
+    const i = list.indexOf(folder);
+    const other = list[i + delta];
+    if (!other) return;
+    // 顺序号一样 (同一毫秒建的) 时先拉开
+    list.forEach((f, k) => {
+      if (f.order !== list[0].order + k) {
+        f.order = list[0].order + k;
+        f.updatedAt = Date.now();
+      }
+    });
+    [folder.order, other.order] = [other.order, folder.order];
+    folder.updatedAt = other.updatedAt = Date.now();
+    this.save();
   }
 
   // 学着学着改一张卡片的字。算改了卡片集 (动 updatedAt, 同步时听这边的); 合起来学的时候改回卡片原来的卡片集
@@ -1183,6 +1314,7 @@ export class Store {
         this.data.folders.push(folder);
       } else this.data.folders[i] = cleanFolder(mergeFolder(this.data.folders[i], folder), setIds);
     }
+    fixParents(this.data.folders);
     this.data.undone = mergeLogs(this.data.undone, incoming.undone);
     this.data.revlog = subtractLogs(mergeLogs(this.data.revlog, incoming.revlog), this.data.undone);
     this.data.settings = mergeSettings(this.data.settings, incoming.settings);

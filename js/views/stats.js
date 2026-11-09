@@ -33,7 +33,7 @@ export function renderStats({ store, go }, id = null) {
     'select',
     { class: 'input stats-scope', 'aria-label': '统计范围', onchange: (e) => go(e.target.value ? `#/stats/${encodeURIComponent(e.target.value)}` : '#/stats') },
     h('option', { value: '' }, '全部卡片集'),
-    store.allFolders().map((f) => h('option', { value: FOLDER_PREFIX + f.id, selected: id === FOLDER_PREFIX + f.id }, `文件夹：${f.name || '未命名文件夹'}`)),
+    store.folderTree().map(({ folder: f }) => h('option', { value: FOLDER_PREFIX + f.id, selected: id === FOLDER_PREFIX + f.id }, `文件夹：${store.folderPath(f.id)}`)),
     store
       .allSets()
       .map((s) => h('option', { value: s.id, selected: id === s.id }, s.title || '未命名卡片集')),

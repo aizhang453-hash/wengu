@@ -145,6 +145,7 @@ const FILES = [
   'js/views/read.js',
   'js/views/review.js',
   'js/views/search.js',
+  'js/views/suggest.js',
   'js/views/set.js',
   'js/views/settings.js',
   'js/views/share.js',

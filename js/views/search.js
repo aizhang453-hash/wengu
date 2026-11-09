@@ -2,12 +2,12 @@
 // v1.63 起什么都搜: 卡片集和卡片、题目集和里面的题、书斋里的诗文 (题目、作者、句子、成语), 一栏一栏列出来;
 // 每栏先列前几个, 多的点「显示全部」。书斋页、题目集页里各自的搜索框还在 (只搜那一页里的)。
 
-import { h, fill } from '../dom.js';
+import { h, fill, icon } from '../dom.js';
 import { search, highlight } from '../search.js';
 import { matchesSearch } from '../mistakes.js';
-import { searchLibrary } from '../reading.js';
+import { searchLibrary, searchAuthors } from '../reading.js';
 import { qsetTile, itemEl } from './mistakes.js';
-import { libraryHits } from './read.js';
+import { libraryHits, authorList } from './read.js';
 
 const FIRST = { cards: 10, mistakes: 5, library: 10 }; // 每栏先列几个
 
@@ -60,6 +60,33 @@ export function renderSearch({ store }, query = '') {
     const foundMistakes = mistakes.filter((m) => matchesSearch(m, q));
     const now = Date.now();
     const parts = [];
+    // 文件夹 (v1.71): 名字里有的
+    const folders = store
+      .folderTree()
+      .map((x) => x.folder)
+      .filter((f) => words.every((w) => (f.name || '').toLowerCase().includes(w)));
+    if (folders.length) {
+      parts.push(
+        section('文件夹', folders, Infinity, (list) =>
+          h(
+            'ul',
+            { class: 'set-grid' },
+            list.map((f) =>
+              h(
+                'li',
+                {},
+                h(
+                  'a',
+                  { class: 'set-tile folder-tile', href: `#/folder/${encodeURIComponent(f.id)}` },
+                  h('span', { class: 'set-tile-title' }, icon('folder', 18), marked(f.name || '未命名文件夹', q)),
+                  h('span', { class: 'muted' }, store.ancestorsOf(f.id).length ? store.folderPath(f.id) : `${store.treeSetIds(f.id).length} 个卡片集`),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     if (sets.length) {
       parts.push(
         section('卡片集', sets, Infinity, (list) =>
@@ -127,12 +154,12 @@ export function renderSearch({ store }, query = '') {
     // 书斋要先把书拿来 (第一次搜慢一点), 晚一点到
     const lib = h('div', { 'aria-live': 'polite' }, parts.length ? null : h('p', { class: 'muted' }, '正在搜……'));
     results.replaceChildren(...parts.flat(), lib);
-    searchLibrary(q, { limit: 200 })
-      .catch(() => null)
-      .then((hits) => {
+    Promise.all([searchLibrary(q, { limit: 200 }).catch(() => null), searchAuthors(q).catch(() => [])])
+      .then(([hits, authors]) => {
         if (n !== seq || !lib.isConnected) return;
-        if (hits?.length) fill(lib, section('书斋', hits, FIRST.library, (list) => libraryHits(list, q), hits.length >= 200));
-        else if (parts.length) fill(lib, hits ? null : h('p', { class: 'muted small' }, '书斋没搜成，连上网再试一次。'));
+        const who = authors.length ? section('作者', authors, Infinity, (list) => authorList(list, q)) : null;
+        if (hits?.length) fill(lib, who, section('书斋', hits, FIRST.library, (list) => libraryHits(list, q), hits.length >= 200));
+        else if (parts.length || who) fill(lib, who, hits ? null : h('p', { class: 'muted small' }, '书斋没搜成，连上网再试一次。'));
         else fill(lib, h('p', { class: 'muted' }, hits ? `没找到「${q}」。可以少打几个字试试。` : `卡片和题目里没找到「${q}」；书斋没搜成，连上网再试一次。`));
       });
   }

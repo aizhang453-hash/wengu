@@ -9920,3 +9920,245 @@ button.pick-row:hover {
 .read-yin-note {
   color: var(--muted);
 }
+
+/* ---- 文件夹里的文件夹 (v1.71) ---- */
+.folder-tile .set-tile-title .svg-icon {
+  flex: none;
+  margin-right: 6px;
+  vertical-align: -3px;
+  color: var(--muted);
+}
+
+.folder-members .folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text);
+}
+
+/* 文件夹页里的文件夹方块: 上移下移放在右上角 (下面还列着里面的东西) */
+.folder-card.folder-item > .folder-move {
+  top: 6px;
+  bottom: auto;
+}
+
+.folder-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.folder-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-choice:hover {
+  background: var(--surface-2);
+}
+
+.folder-choice.on {
+  background: var(--accent-soft);
+}
+
+.folder-choice .muted {
+  margin-left: auto;
+}
+
+/* ---- 顶上搜索框下面弹出的结果 (v1.71) ---- */
+.suggest {
+  position: fixed;
+  z-index: 30;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.suggest[hidden] {
+  display: none;
+}
+
+.suggest-group + .suggest-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.suggest-title {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.suggest-item:hover,
+.suggest-item.on {
+  background: var(--surface-2);
+}
+
+.suggest-item .svg-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.suggest-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle, var(--muted) 0 2.5px, transparent 3px);
+}
+
+.suggest-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.suggest-main,
+.suggest-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.suggest-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.suggest-wait {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.suggest-all {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
+  color: var(--accent);
+}
+
+.suggest-all .svg-icon {
+  color: var(--accent);
+}
+
+/* ---- 书斋朗读: 一句一句念 (v1.71) ---- */
+.read-say-row {
+  display: flex;
+  justify-content: center;
+  margin: -4px 0 14px;
+}
+
+.read-say.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 正在念的那一句 */
+.read-text [data-line].read-speaking,
+.read-title.read-speaking,
+.read-by.read-speaking {
+  border-radius: 8px;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+/* 能点一句听一句 (有鼠标的电脑上指着显示小手) */
+@media (hover: hover) {
+  .read-text p[data-line] {
+    cursor: pointer;
+  }
+}
+
+/* 念的时候屏幕下面浮着「停止朗读」 */
+.read-stop {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.read-stop[hidden] {
+  display: none;
+}
+
+/* ---- 作者 (v1.71) ---- */
+.read-author-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+
+.read-author-link:hover {
+  color: var(--accent);
+  text-decoration-color: currentColor;
+}
+
+.read-author h2 {
+  margin-top: 26px;
+}
+
+.read-authors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.read-authors a {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.read-authors a:hover {
+  border-color: var(--accent);
+}

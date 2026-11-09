@@ -7,11 +7,11 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, markOf, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf } from '../reading.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, markOf, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf, authorKey, hasAuthorPage, worksOf, searchAuthors } from '../reading.js';
 import { makeSet, makeCard } from '../store.js';
 import { dayKey } from '../srs.js';
 import { festivalOn } from '../festival.js';
-import { speak, canSpeak } from '../speech.js';
+import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
 import { highlight } from '../search.js';
 
 // 这台设备上的: hant 看繁体原文, size 字号 (0 小 1 中 2 大), zhu 标注释 (默认标), yi 每段下面显示译文 (默认不显示)
@@ -32,9 +32,10 @@ function savePrefs(p) {
   }
 }
 
-const pieceHref = (book, i) => `#/read/${book}/${i + 1}`;
+export const pieceHref = (book, i) => `#/read/${book}/${i + 1}`;
 // 「〔唐〕孟浩然」「〔先秦〕左丘明 《左传》」; 没有作者的 (三字经的一段) 是空的
-const byline = (p) => (p.a ? `${p.e ? `〔${p.e}〕` : ''}${p.a}${p.s ? ` ${p.s}` : ''}` : '');
+export const authorHref = (a) => `#/read/author/${encodeURIComponent(authorKey(a))}`;
+export const byline = (p) => (p.a ? `${p.e ? `〔${p.e}〕` : ''}${p.a}${p.s ? ` ${p.s}` : ''}` : '');
 // 第几篇按读的次序数 (后来拆出来、放在书最后的篇, 排在它该在的地方; 见 reading.js 的 orderOf)
 const posOf = (book, i) => {
   const k = orderOf(book).indexOf(i);
@@ -110,6 +111,48 @@ export function libraryHits(hits, query = '') {
   );
 }
 
+// 找到的作者: 一个个小方块, 点了到作者页 (书斋页、搜索页用)
+export function authorList(authors, query = '') {
+  if (!authors?.length) return null;
+  const mark = (text) => (query ? highlight(text, query).map((part) => (part.hit ? h('mark', {}, part.text) : part.text)) : text);
+  return h(
+    'ul',
+    { class: 'read-authors' },
+    authors.map((x) => h('li', {}, h('a', { href: authorHref(x.name) }, h('strong', {}, mark(x.name)), h('span', { class: 'muted small' }, ` ${x.era ? `〔${x.era}〕` : ''}${x.count} 篇`)))),
+  );
+}
+
+// ---- 作者页 (v1.71): 书斋里这位作者的所有作品, 按书分开列 ----
+export function renderAuthor(ctx, name) {
+  const key = authorKey(name);
+  const box = h('div', { 'aria-live': 'polite' }, h('p', { class: 'muted' }, '正在找……'));
+  worksOf(key).then(
+    (groups) => {
+      if (!box.isConnected) return;
+      if (!groups.length) return fill(box, h('p', { class: 'muted' }, `书斋里没有「${key}」的作品。`));
+      const eras = [...new Set(groups.flatMap((g) => g.items.map((x) => x.piece.e)).filter(Boolean))];
+      const total = groups.reduce((n, g) => n + g.items.length, 0);
+      fill(
+        box,
+        h('p', { class: 'muted' }, [eras.map((e) => `〔${e}〕`).join(''), `书斋里有 ${total} 篇`].filter(Boolean).join(' · ')),
+        groups.map((g) => [
+          h('h2', {}, `《${g.book.title}》`, h('span', { class: 'muted small' }, ` ${g.items.length} ${g.book.unit ?? '篇'}`)),
+          h(
+            'ul',
+            { class: 'read-list' },
+            g.items.map((x) => h('li', {}, h('a', { href: pieceHref(g.book.id, x.i) }, h('strong', {}, x.piece.t), x.piece.s ? h('span', { class: 'muted small' }, ` ${x.piece.s}`) : null, h('span', { class: 'read-hit' }, x.piece.p?.[0] ?? '')))),
+          ),
+        ]),
+      );
+    },
+    () => box.isConnected && fill(box, offline()),
+  );
+  return {
+    title: key,
+    el: h('section', { class: 'read-author' }, h('a', { class: 'back', href: '#/read' }, '← 书斋'), h('h1', {}, key), box),
+  };
+}
+
 // ---- 书架 ----
 export function renderLibrary({ store }) {
   const reading = store.data.reading;
@@ -125,11 +168,12 @@ export function renderLibrary({ store }) {
       const n = ++searchN;
       const q = search.value.trim();
       if (!q) return fill(results);
-      const hits = await searchLibrary(q).catch(() => null);
+      const [hits, authors] = await Promise.all([searchLibrary(q).catch(() => null), searchAuthors(q, { limit: 6 }).catch(() => [])]);
       if (n !== searchN || !results.isConnected) return; // 又打了字
       if (!hits) return fill(results, offline());
       fill(
         results,
+        authorList(authors, q),
         hits.length ? libraryHits(hits) : h('p', { class: 'muted' }, '没找到。可以少打几个字试试。'),
         hits.length === 60 ? h('p', { class: 'muted small' }, '只列出前 60 个。') : null,
       );
@@ -417,13 +461,21 @@ export function renderPiece({ store, go }, id, n) {
     const lines = p.p.map((l, j) => [
       p.k?.find(([from]) => from === j) ? h('h2', { class: 'read-part' }, p.k.find(([from]) => from === j)[1]) : null,
       // 小说里夹的诗句 (v: 第几段是诗) 居中排, 不缩进
-      h('p', { class: hp.v?.includes(j) ? 'read-verse' : null, 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0' }, marked(l, j, hp.p[j] ?? '')),
+      // 点一句 (不是点注释的词) 只念这一句
+      h('p', { class: hp.v?.includes(j) ? 'read-verse' : null, 'data-line': String(j), 'data-same': l.length === (hp.p[j] ?? '').length ? '1' : '0', onclick: say ? (e) => tapLine(e, j) : null }, marked(l, j, hp.p[j] ?? '')),
       yi?.[j] && yi[j] !== hp.p[j] ? h('p', { class: 'read-yi', lang: 'zh-Hans' }, yi[j]) : null, // 跟原文一样的 (《过秦论》的「上篇」) 不重复
     ]);
     return [
       title,
       // 有作者的写作者 (和分组), 没有的写书名、分组、第几篇: 「〔唐〕孟浩然 · 五言绝句」「《三字经》 · 第 1 段」
-      h('p', { class: 'read-by muted' }, [byline(p) || `《${data.title}》`, data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).join(' · ')),
+      // 作者点进去是作者页 (v1.71: 书斋里他的所有作品)
+      h(
+        'p',
+        { class: 'read-by muted', 'data-line': 'by' },
+        p.a && hasAuthorPage(p.a) ? [p.e ? `〔${p.e}〕` : '', h('a', { class: 'read-author-link', href: authorHref(p.a) }, p.a), p.s ? ` ${p.s}` : ''] : byline(p) || `《${data.title}》`,
+        [data.groups[p.g], p.a ? '' : unitOf(book, i)].filter(Boolean).map((x) => ` · ${x}`),
+      ),
+      say ? h('div', { class: 'read-say-row' }, say) : null,
       // 这一回的说明 (《西游记》第九回是清代加进去的)
       hp.note ? h('p', { class: 'read-note muted small' }, hp.note) : null,
       // 一行一行都短的 (三字经、千字文、增广贤文……) 像诗一样居中, 不缩进; 长段落的 (幼学琼林、古文观止) 首行缩进。
@@ -549,13 +601,63 @@ export function renderPiece({ store, go }, id, n) {
         body.classList.add(`size-${prefs.size}`);
       },
     }, label);
+  // 朗读 (v1.71 起一句一句念): 按钮在标题下面; 念到的那句变色, 看不见了就滚过去; 念的时候按钮变成「停」, 屏幕下面也浮着一个「停止朗读」。
   // 读音特别的字换成同音字念 (「不亦说乎」念「不亦悦乎」)
+  let speaking = false;
+  const lit = (k) => {
+    body.querySelectorAll('.read-speaking').forEach((x) => x.classList.remove('read-speaking'));
+    const el = k === null ? null : body.querySelector(`[data-line="${k}"]`);
+    if (!el) return;
+    el.classList.add('read-speaking');
+    const r = el.getBoundingClientRect();
+    if (r.top < 70 || r.bottom > innerHeight - 90) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const drawSay = () => {
+    if (!say) return;
+    fill(say, icon(speaking ? 'stop' : 'volume', 16), speaking ? ' 停' : ' 朗读');
+    say.classList.toggle('on', speaking);
+    say.setAttribute('aria-pressed', String(speaking));
+    stopBar.hidden = !speaking;
+  };
+  const sayItems = (items) => {
+    const ok = speakLines(items, 'zh-CN', {
+      rate: 0.85,
+      onLine: lit,
+      onEnd: () => {
+        speaking = false;
+        lit(null);
+        drawSay();
+      },
+    });
+    if (ok) {
+      speaking = true;
+      drawSay();
+    }
+  };
   const readAloud = () =>
     simple().then(({ p }) => {
       const said = spokenText(id, p);
-      speak(`${said.title}。${p.a ? `${p.a}。` : ''}${said.lines.join('')}`, 'zh-CN', { rate: 0.85 });
+      sayItems([{ k: -1, text: said.title }, ...(p.a ? [{ k: 'by', text: p.a }] : []), ...said.lines.map((text, j) => ({ k: j, text }))]);
+      tapHint();
     });
-  const say = canSpeak() ? h('button', { class: 'btn small', type: 'button', onclick: readAloud }, icon('volume', 16), ' 朗读') : null;
+  // 点一句: 只念这一句 (正在念整篇的就停下来)。点在注释的词上是看注释; 在选字的时候不念
+  const tapLine = (e, j) => {
+    if (e.target.closest('.read-term, a, button') || String(globalThis.getSelection?.() ?? '').trim()) return;
+    simple().then(({ p }) => sayItems([{ k: j, text: spokenText(id, p).lines[j] }]));
+  };
+  // 第一次点朗读时说一声可以点一句听一句 (一台设备说一次)
+  const tapHint = () => {
+    try {
+      if (localStorage.getItem('wengu:read-tap-hint')) return;
+      localStorage.setItem('wengu:read-tap-hint', '1');
+    } catch {
+      return;
+    }
+    toast('点一下哪一句，就只念那一句');
+  };
+  const say = canSpeak() ? h('button', { class: 'btn small read-say', type: 'button', 'aria-pressed': 'false', onclick: () => (speaking ? stopSpeaking() : readAloud()) }) : null;
+  const stopBar = h('button', { class: 'read-stop', type: 'button', hidden: true, onclick: () => stopSpeaking() }, icon('stop', 16), ' 停止朗读');
+  drawSay();
 
   // 上一篇、下一篇照读的次序 (orderOf)
   const order = orderOf(book);
@@ -574,13 +676,14 @@ export function renderPiece({ store, go }, id, n) {
     title: `${book.title}${unitOf(book, i) ? ` ${unitOf(book, i)}` : ''}`,
     cleanup: () => {
       document.removeEventListener('keydown', onKey);
-      globalThis.speechSynthesis?.cancel?.();
+      stopSpeaking();
     },
     el: h(
       'section',
       { class: 'read-page' },
       h('div', { class: 'read-top' }, h('a', { class: 'back', href: `#/read/${id}` }, `← 《${book.title}》目录`), h('span', { class: 'muted small' }, `${pos + 1} / ${book.count}`)),
       body,
+      say ? stopBar : null,
       h(
         'div',
         { class: 'read-tools' },
@@ -588,7 +691,6 @@ export function renderPiece({ store, go }, id, n) {
         favBtn,
         // 小说先只放原文, 不做卡片
         book.kind === 'novel' ? null : h('button', { class: 'btn small primary', type: 'button', onclick: () => simple().then(({ data, p, yizhu }) => cardsDialog({ store, go }, book, data, p, yizhu)) }, '做成卡片背'),
-        say,
         zhuBtn,
         yiBtn,
         hantBtn,

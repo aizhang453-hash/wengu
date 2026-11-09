@@ -209,6 +209,66 @@ test('文件夹: 放进去、拿出来、删卡片集时也从文件夹里拿掉
   assert.equal(store.getFolder(f.id), null);
 });
 
+test('文件夹里放文件夹 (v1.71): 合起来学、每天背连里面的; 挪不进自己里面; 排顺序; 删外面的, 里面的挪出来; 绕圈的放回首页', async () => {
+  const store = new Store(memoryStorage());
+  const a = store.putSet({ ...sampleSet(), title: '3.1' });
+  const b = store.putSet({ ...sampleSet(), title: '3.2' });
+  const c = store.putSet({ ...sampleSet(), title: '4.1' });
+  const psy = store.putFolder({ ...makeFolder('心理学'), setIds: [c.id] });
+  const u3 = store.putFolder({ ...makeFolder('第三单元', psy.id), setIds: [a.id, b.id] });
+  assert.deepEqual(store.childFolders('').map((f) => f.name), ['心理学']);
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第三单元']);
+  assert.equal(store.folderPath(u3.id), '心理学 › 第三单元');
+  assert.deepEqual(store.folderTree().map((x) => [x.folder.name, x.depth]), [['心理学', 0], ['第三单元', 1]]);
+  // 合起来学: 先里面文件夹的, 再自己直接放的
+  assert.deepEqual(store.treeSetIds(psy.id), [a.id, b.id, c.id]);
+  assert.equal(store.getSet(`folder:${psy.id}`).cards.length, 6);
+  assert.deepEqual(store.setsOf(`folder:${psy.id}`).map((s) => s.title), ['3.1', '3.2', '4.1']);
+  // 外面的文件夹定了每天背的计划, 里面文件夹里的卡片集也算
+  assert.equal(store.isDaily(store.getSet(a.id)), false);
+  store.setPlan(`folder:${psy.id}`, { on: true });
+  assert.equal(store.isDaily(store.getSet(a.id)), true);
+  assert.deepEqual(store.foldersAbove(a.id).map((f) => f.name), ['第三单元', '心理学']);
+  assert.deepEqual(store.plannedFolders().map((x) => x.title), ['心理学']);
+  // 不能挪进自己、自己里面的
+  assert.equal(store.moveFolder(psy.id, u3.id), false);
+  assert.equal(store.moveFolder(psy.id, psy.id), false);
+  assert.equal(store.getFolder(psy.id).parent, '');
+  // 同一层排顺序
+  const u4 = store.putFolder(makeFolder('第四单元', psy.id));
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第三单元', '第四单元']);
+  store.moveFolderOrder(u4.id, -1);
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第四单元', '第三单元']);
+  store.moveFolderOrder(u4.id, -1); // 已经在最前面
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第四单元', '第三单元']);
+  // 挪到首页, 再挪回去 (排在最后)
+  assert.equal(store.moveFolder(u4.id, ''), true);
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第三单元']);
+  assert.equal(store.moveFolder(u4.id, psy.id), true);
+  assert.deepEqual(store.childFolders(psy.id).map((f) => f.name), ['第三单元', '第四单元']);
+  // 存了再读还在
+  const again = new Store(store.storage);
+  assert.equal(again.folderPath(u3.id), '心理学 › 第三单元');
+  // 删外面的: 卡片集不删, 里面的文件夹挪到外面一层
+  store.deleteFolder(psy.id);
+  assert.equal(store.getFolder(u3.id).parent, '');
+  assert.deepEqual(store.getFolder(u3.id).setIds, [a.id, b.id]);
+  assert.equal(store.allSets().length, 3);
+  // 两台设备各挪了一个、绕成一圈, 或者放进的文件夹在别的设备删了: 读的时候放回首页
+  const data = cleanData({ ...store.data, folders: [{ ...makeFolder('X'), id: 'x', parent: 'y' }, { ...makeFolder('Y'), id: 'y', parent: 'x' }, { ...makeFolder('Z'), id: 'z', parent: 'gone' }, { ...makeFolder('W'), id: 'w', parent: 'w' }] });
+  const where = Object.fromEntries(data.folders.map((f) => [f.id, f.parent]));
+  assert.deepEqual(where, { x: '', y: 'x', z: '', w: '' });
+  // 老版本存的文件夹没有 parent: 都在首页
+  const old = cleanData({ ...store.data, folders: [{ id: 'o', name: '老的', setIds: [a.id], createdAt: 5, updatedAt: 5 }] });
+  assert.equal(old.folders[0].parent, '');
+  assert.equal(old.folders[0].order, 5);
+  // 同步: 一边挪了文件夹, 合并后听后改的
+  const { mergeData } = await import('../js/merge.js');
+  const here = cleanData({ ...store.data, folders: [{ ...makeFolder('P'), id: 'p', updatedAt: 1 }, { ...makeFolder('Q'), id: 'q', parent: '', updatedAt: 1 }] });
+  const there = cleanData({ ...store.data, folders: [{ ...makeFolder('P'), id: 'p', updatedAt: 1 }, { ...makeFolder('Q'), id: 'q', parent: 'p', updatedAt: 2 }] });
+  assert.equal(cleanData(mergeData(here, there)).folders.find((f) => f.id === 'q').parent, 'p');
+});
+
 test('合起来学: 卡片是各卡片集的, 进度记回原来的卡片集', () => {
   const store = new Store(memoryStorage());
   const a = store.putSet({ ...sampleSet(), title: 'A', termLang: 'en-US' });

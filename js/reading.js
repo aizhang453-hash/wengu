@@ -312,6 +312,48 @@ export function dailyIndex(day, n) {
 // ---- 搜 (题目、作者、成语、句子) ----
 // 返回 [{ book, i, piece, where 'title' | 'author' | 'idiom' | 'line', line 找到的那句 (成语是「成语「世外桃源」出自这里」) }],
 //   题目、作者对上的排前面, 然后是出自这篇的成语 (「世外桃源」原文里没有这几个字也找得到)
+// ---- 作者 (v1.71): 点作者名到作者页, 列出书斋里他的所有作品 ----
+// 资料里有的作者名后面带「撰」(刘向 撰): 去掉; 佚名、无名氏没有作者页
+export const authorKey = (a) => String(a ?? '').replace(/\s*(撰|编)$/, '').trim();
+const NO_AUTHOR = new Set(['', '佚名', '无名氏']);
+export const hasAuthorPage = (a) => !NO_AUTHOR.has(authorKey(a));
+
+// 所有有作者的书 (小说的目录里没有作者) 里, 这位作者的作品: [{ book, items: [{ i, piece }] }], 按书架的次序、书里的次序
+export async function worksOf(name) {
+  const key = authorKey(name);
+  if (!hasAuthorPage(key)) return [];
+  const books = BOOKS.filter((b) => b.kind !== 'novel');
+  const list = await Promise.all(books.map((b) => loadBook(b.id)));
+  const out = [];
+  books.forEach((book, k) => {
+    const data = list[k];
+    const items = orderOf(book)
+      .map((i) => ({ i, piece: data.pieces[i] }))
+      .filter((x) => authorKey(x.piece.a) === key);
+    if (items.length) out.push({ book, items });
+  });
+  return out;
+}
+
+// 名字里有这几个字的作者: [{ name, era, count }], 作品多的在前
+export async function searchAuthors(query, { limit = 20 } = {}) {
+  const q = String(query ?? '').replace(/\s+/g, '');
+  if (!q) return [];
+  const books = BOOKS.filter((b) => b.kind !== 'novel');
+  const list = await Promise.all(books.map((b) => loadBook(b.id)));
+  const found = new Map();
+  for (const data of list) {
+    for (const p of data.pieces) {
+      const name = authorKey(p.a);
+      if (!hasAuthorPage(name) || !name.includes(q)) continue;
+      const x = found.get(name) ?? { name, era: p.e ?? '', count: 0 };
+      x.count++;
+      found.set(name, x);
+    }
+  }
+  return [...found.values()].sort((a, b) => (b.name === q) - (a.name === q) || b.count - a.count).slice(0, limit);
+}
+
 export async function searchLibrary(query, { limit = 60 } = {}) {
   const q = String(query ?? '').replace(/\s+/g, '');
   if (!q) return [];

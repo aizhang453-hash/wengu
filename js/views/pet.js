@@ -8,6 +8,7 @@
 
 import { h, fill, toast, askText, switchRow, dialogOpen } from '../dom.js';
 import { todayAll } from './plan.js';
+import { treeSetIds } from '../store.js';
 import { editCardDialog } from './cardedit.js';
 import { openExamList } from './examlist.js';
 import { reviewedToday, plannedSets, newToday, isNew, nearestExam } from '../plan.js';
@@ -363,7 +364,7 @@ export function insight(store, now = Date.now()) {
 
   // 很久没碰、还有好多新词、也没定计划的卡片集
   let neglect = null;
-  const inPlan = new Set(data.folders.filter((f) => f.plan?.on).flatMap((f) => f.setIds));
+  const inPlan = new Set(data.folders.filter((f) => f.plan?.on).flatMap((f) => treeSetIds(data.folders, f.id)));
   for (const set of sets) {
     if (set.plan?.on || inPlan.has(set.id)) continue;
     let fresh = 0;
