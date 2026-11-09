@@ -95,13 +95,14 @@ export function setupMenu({ store, go, syncer, pet = null }) {
           ? [
               sep(),
               title('文件夹'),
-              // 文件夹里的文件夹往里缩一点
-              store.folderTree().map(({ folder: f, depth }) =>
-                item(`#/folder/${encodeURIComponent(f.id)}`, 'folder', f.name || '未命名文件夹', {
-                  depth,
-                  match: (x) => x === `#/folder/${encodeURIComponent(f.id)}` || x.startsWith(`#/set/folder%3A${encodeURIComponent(f.id)}`),
-                }),
-              ),
+              // 只列最外层的文件夹 (v1.73: 整本做卡片会建很多小文件夹, 宋词按作者有八十多个, 全列出来太长); 里面的点进去看。
+              // 正在看的是里面的文件夹时, 外层那个也亮着
+              store.childFolders('').map((f) => {
+                const inside = new Set(store.descendantIds(f.id).map((id) => encodeURIComponent(id)));
+                return item(`#/folder/${encodeURIComponent(f.id)}`, 'folder', f.name || '未命名文件夹', {
+                  match: (x) => [...inside].some((id) => x === `#/folder/${id}` || x.startsWith(`#/set/folder%3A${id}`)),
+                });
+              }),
             ]
           : null,
         sep(),

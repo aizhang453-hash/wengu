@@ -209,7 +209,7 @@ export function renderFolder({ store, go }, id) {
         h('h1', {}, folder.name || '未命名文件夹'),
         h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: addSets }, icon('plus', 16), '添加卡片集'), h('button', { class: 'btn', type: 'button', onclick: newSub }, icon('folder', 16), '新建文件夹'), more),
       ),
-      h('p', { class: 'set-meta' }, [subs.length ? `${subs.length} 个文件夹` : null, `${sets.length} 个卡片集`, `${total.toLocaleString('zh-CN')} 张卡片`].filter(Boolean).join(' · ')),
+      h('p', { class: 'set-meta' }, [subs.length ? `${subs.length} 个文件夹` : null, sets.length || !subs.length ? `${sets.length} 个卡片集` : null, `${total.toLocaleString('zh-CN')} 张卡片`].filter(Boolean).join(' · ')),
       total ? planPanel({ store, go }, combo) : null, // 每天背新词 (整个文件夹一起定)、今天要背的
       h(
         'div',

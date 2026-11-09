@@ -123,6 +123,38 @@ export function makeCards(book, pieces, style = 'next', yizhu = null) {
   return cards;
 }
 
+// 整本做卡片 (v1.73): 不做成一个超大的卡片集, 改成一个书名文件夹, 书里有分类的 (唐诗三百首的体裁、古文观止的卷、宋词的作者) 按分类建小文件夹,
+// 每篇一个卡片集; 没有卡片的篇 (字词、成语方式下没注释的) 跳过。「整首」方式每篇只有一张卡, 一篇一个卡片集太碎, 改成一个分类一个卡片集;
+// 没有分类的书用「整首」就跟以前一样做成一个卡片集 (single)。
+// 返回 { folder: 文件夹名, groups: [{ name: 小文件夹名 (没分类是 null), sets: [{ piece, title, cards }] }], single?: { title, cards } }
+const STYLE_SUFFIX = { next: '', zhu: ' · 字词', cy: ' · 成语' };
+export function wholeBookPlan(book, data, style = 'next', yizhu = null) {
+  const pieces = orderOf(book).map((i) => data.pieces[i]);
+  const whole = style === 'whole';
+  const suffix = whole ? ` · 整${book.kind === 'poem' ? '首' : '段'}` : STYLE_SUFFIX[style] ?? '';
+  const grouped = (data.groups?.length ?? 0) > 1 && pieces.every((p) => Number.isInteger(p.g));
+  const buckets = new Map();
+  for (const p of pieces) {
+    const g = grouped ? p.g : -1;
+    if (!buckets.has(g)) buckets.set(g, []);
+    buckets.get(g).push(p);
+  }
+  const folder = `${book.title}${suffix}`;
+  if (whole && !grouped) return { folder, groups: [], single: { title: folder, cards: makeCards(book, pieces, 'whole') } };
+  const groups = [...buckets.keys()]
+    .sort((a, b) => a - b)
+    .map((g) => {
+      const list = buckets.get(g);
+      const name = g < 0 ? null : data.groups[g];
+      const sets = whole
+        ? [{ piece: null, title: `${book.title} · ${name}`, cards: makeCards(book, list, 'whole') }]
+        : list.map((p) => ({ piece: p, title: `${setTitle(book, p)}${suffix}`, cards: makeCards(book, [p], style, yizhu) }));
+      return { name: whole ? null : name, sets: sets.filter((x) => x.cards.length) };
+    })
+    .filter((x) => x.sets.length);
+  return { folder, groups };
+}
+
 // 卡片集叫什么: 有作者的一篇「水调歌头·明月几时有（苏轼）」「出师表（诸葛亮）」, 一段文章「三字经 · 人之初」, 整本「三字经」
 export const setTitle = (book, piece = null) => (!piece ? book.title : piece.a ? `${piece.t}（${piece.a}）` : `${book.title} · ${piece.t}`);
 

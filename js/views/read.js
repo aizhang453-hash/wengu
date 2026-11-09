@@ -7,8 +7,8 @@
 // 书的正文要等拿来 (import) 才画, 先画架子; 拿来时已经换页了就不画
 
 import { h, fill, toast, icon, openDialog } from '../dom.js';
-import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, markOf, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf, authorKey, hasAuthorPage, worksOf, searchAuthors } from '../reading.js';
-import { makeSet, makeCard } from '../store.js';
+import { BOOKS, SOURCE, SHELVES, bookOf, loadBook, loadWithPiece, orderOf, pieceId, makeCards, setTitle, DAILY_BOOK, dailyIndex, searchLibrary, isFav, markOf, favList, readingsOf, splitMarks, spokenText, loadYizhu, entryOf, notesOf, idiomsOf, variantsOf, wholeBookPlan, authorKey, hasAuthorPage, worksOf, searchAuthors } from '../reading.js';
+import { makeSet, makeCard, makeFolder } from '../store.js';
 import { dayKey } from '../srs.js';
 import { festivalOn } from '../festival.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
@@ -711,6 +711,30 @@ export function renderPiece({ store, go }, id, n) {
 
 // ---- 做成卡片: 接下句 / 整篇, 这一篇 / 整本 ----
 //   有注释的书多两种: 「字词」正面注的词 (带着那一小句), 背面注释; 「成语」正面成语, 背面意思和出处。整本就是有的那几篇
+// 整本做卡片 (v1.73): 照 wholeBookPlan 建书名文件夹、分类小文件夹、每篇一个卡片集, 一起存一次 (存不下就全退回去, 抛错)。
+// 返回 { folder, sets 几个卡片集, cards 几张卡片 }
+export function makeBookFolder(store, book, plan, styleName) {
+  return store.transaction(() => {
+    const now = Date.now();
+    const top = store.putFolder(makeFolder(plan.folder));
+    const describe = (x) => `从温故书库做的：《${book.title}》${x.piece ? `「${x.piece.t}」` : ''}，${styleName}。`;
+    const makeSets = (list) =>
+      list.map((x) => store.putSet(makeSet({ title: x.title, description: describe(x), termLang: 'zh-CN', defLang: 'zh-CN', cards: x.cards.map((c) => makeCard(c.term, c.def)) })).id);
+    let sets = 0;
+    let cards = 0;
+    const loose = [];
+    plan.groups.forEach((g, k) => {
+      sets += g.sets.length;
+      cards += g.sets.reduce((n, x) => n + x.cards.length, 0);
+      if (!g.name) return loose.push(...makeSets(g.sets));
+      // 小文件夹按书里的次序排 (order 递增)
+      store.putFolder({ ...makeFolder(g.name, top.id), order: now + k, setIds: makeSets(g.sets) });
+    });
+    const folder = store.putFolder({ ...store.getFolder(top.id), setIds: loose });
+    return { folder, sets, cards };
+  });
+}
+
 function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
   const draft = { style: 'next', all: false };
   const hasZhu = (p) => Boolean(entryOf(yizhu, p)?.notes?.length);
@@ -755,12 +779,23 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
       book.count > 1
         ? [
             h('p', { class: 'small' }, '做哪些'),
-            h('div', { class: 'chip-row two' }, choice('all', false, `这一${book.unit}`, piece.t), choice('all', true, `整本（${book.count} ${book.unit}）`, book.title)),
+            h('div', { class: 'chip-row two' }, choice('all', false, `这一${book.unit}`, piece.t), choice('all', true, `整本（${book.count} ${book.unit}）`, `${book.title}：放进一个文件夹，每${book.unit}一个卡片集`)),
           ]
         : null,
       sample ? h('div', { class: 'read-sample' }, h('span', { class: 'muted small' }, '卡片样子'), h('div', { class: 'read-sample-card' }, h('span', {}, sample.term), h('span', { class: 'read-sample-arrow', 'aria-hidden': 'true' }, '→'), h('span', {}, sample.def.length > 60 ? `${sample.def.slice(0, 60)}……` : sample.def))) : null,
     );
-    fill(preview, `做成卡片集「${title()}」，一共 ${list.length} 张。`);
+    if (!draft.all) return fill(preview, `做成卡片集「${title()}」，一共 ${list.length} 张。`);
+    const plan = wholeBookPlan(book, data, draft.style, yizhu);
+    if (plan.single) return fill(preview, `做成卡片集「${plan.single.title}」，一共 ${plan.single.cards.length} 张。`);
+    const sets = plan.groups.reduce((n, g) => n + g.sets.length, 0);
+    const n = plan.groups.reduce((m, g) => m + g.sets.reduce((k, x) => k + x.cards.length, 0), 0);
+    const named = plan.groups.filter((g) => g.name).map((g) => g.name);
+    fill(
+      preview,
+      `建一个文件夹「${plan.folder}」，`,
+      named.length ? `里面按分类分 ${named.length} 个小文件夹（${named.slice(0, 3).join('、')}${named.length > 3 ? '……' : ''}），` : '',
+      draft.style === 'whole' ? `每类一个卡片集：一共 ${sets} 个卡片集、${n} 张卡片。` : `每${book.unit}一个卡片集：一共 ${sets} 个卡片集、${n} 张卡片。点文件夹可以合起来一起背。`,
+    );
   }
   draw();
   const dialog = openDialog({
@@ -774,13 +809,28 @@ function cardsDialog({ store, go }, book, data, piece, yizhu = null) {
           class: 'btn primary',
           type: 'button',
           onclick: () => {
-            const name = title();
+            const styleName = draft.style === 'next' ? '接下句' : draft.style === 'zhu' ? '字词（注释）' : draft.style === 'cy' ? '成语、名句' : `整${book.unit}`;
+            const plan = draft.all ? wholeBookPlan(book, data, draft.style, yizhu) : null;
+            if (plan && !plan.single) {
+              const same = store.childFolders('').find((f) => f.name === plan.folder);
+              if (same && !confirm(`已经有一个「${plan.folder}」文件夹了，再做一个吗？`)) return;
+              let made;
+              try {
+                made = makeBookFolder(store, book, plan, styleName);
+              } catch {
+                return toast('存不下了：浏览器给的空间满了，先导出备份、删掉不用的卡片集再试');
+              }
+              dialog.close();
+              toast(`做好了 ${made.sets} 个卡片集、${made.cards} 张卡片，都放在文件夹「${plan.folder}」里`);
+              return go(`#/folder/${encodeURIComponent(made.folder.id)}`);
+            }
+            const name = plan ? plan.single.title : title();
             const same = store.allSets().find((s) => s.title === name);
             if (same && !confirm(`已经有一个「${name}」卡片集了，再做一个吗？`)) return;
-            const list = cards();
+            const list = plan ? plan.single.cards : cards();
             const set = makeSet({
               title: name,
-              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${draft.style === 'next' ? '接下句' : draft.style === 'zhu' ? '字词（注释）' : draft.style === 'cy' ? '成语、名句' : `整${book.unit}`}。`,
+              description: `从温故书库做的：《${book.title}》${draft.all ? '' : `「${piece.t}」`}，${styleName}。`,
               termLang: 'zh-CN',
               defLang: 'zh-CN',
               cards: list.map((c) => makeCard(c.term, c.def)),

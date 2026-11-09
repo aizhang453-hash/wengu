@@ -3465,6 +3465,12 @@ a.card-row.search-hit:hover {
   background: var(--surface-2);
 }
 
+/* 文件夹页里的小文件夹方块: 上移下移放在右上角 (下面一行是张数和进度条, 别压着) */
+.folder-tile + .folder-move {
+  top: 10px;
+  bottom: auto;
+}
+
 /* 文件夹方块的底色跟进度条的底一样, 进度条的底换深一点 */
 .folder-tile .meter {
   background: var(--line);
