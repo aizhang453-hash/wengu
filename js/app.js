@@ -13,6 +13,7 @@
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
 //   #/read/author/<作者>  作者页: 书斋里他的所有作品
+//   #/news                新闻 (像新闻网站): #/news/sec/<栏目> 一个栏目, #/news/s/<编号> 一条新闻, #/news/topic/<条目> 正在发生的一件事
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -67,6 +68,7 @@ import { renderMistakeReview } from './views/mistakereview.js';
 import { renderMistakeImport } from './views/mistakeimport.js';
 import { renderSettings } from './views/settings.js';
 import { renderLibrary, renderBook, renderPiece, renderAuthor } from './views/read.js';
+import { renderNews, renderStory, renderTopic } from './views/news.js';
 import { GAME_KEYS } from './games.js';
 import { SyncManager, loadConfig, expiryInfo } from './sync.js';
 import { installAudioUnlock } from './unlock.js';
@@ -152,6 +154,11 @@ function parse(hash) {
   if (parts[0] === 'pet') return { page: 'pet' };
   if (parts[0] === 'read' && parts[1] === 'author' && parts[2]) return { page: 'author', name: parts[2] }; // 作者页 (v1.71)
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
+  if (parts[0] === 'news') {
+    if (parts[1] === 's' && parts[2]) return { page: 'news-story', id: parts[2] };
+    if (parts[1] === 'topic' && parts[2]) return { page: 'news-topic', title: parts.slice(2).join('/') };
+    return { page: 'news', sec: parts[1] === 'sec' ? (parts[2] ?? null) : null };
+  }
   if (parts[0] === 'sync') return { page: 'sync', sub: parts[1] ?? null, data: parts[2] ?? null };
   // 合起来学的「卡片集页」就是文件夹页
   if (parts[0] === 'set' && parts[1]?.startsWith('folder:') && !parts[2]) return { page: 'folder', id: parts[1].slice(7) };
@@ -229,6 +236,9 @@ function render() {
   else if (route.page === 'read-book') view = renderBook(ctx, route.id);
   else if (route.page === 'author') view = renderAuthor(ctx, route.name);
   else if (route.page === 'read-piece') view = renderPiece(ctx, route.id, route.n);
+  else if (route.page === 'news') view = renderNews(ctx, route.sec);
+  else if (route.page === 'news-story') view = renderStory(ctx, route.id);
+  else if (route.page === 'news-topic') view = renderTopic(ctx, route.title);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);

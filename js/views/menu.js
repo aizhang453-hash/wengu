@@ -1,4 +1,4 @@
-// 左边的菜单 (顶上的 ☰ 点开): 今日、题目集、书斋、统计; 更多 (学习游戏、游戏厅、文件夹、温温); 设置。
+// 左边的菜单 (顶上的 ☰ 点开): 今日、题目集、书斋、新闻、统计; 更多 (学习游戏、游戏厅、文件夹、温温); 设置。
 // 顶上的「新建」: 新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹, 都在这一个菜单里
 
 import { h, icon, menuButton } from '../dom.js';
@@ -90,6 +90,7 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         item('#/', 'home', '今日', { badge: due, match: (x) => x === '#/' || x === '#' || starts('#/review')(x) }),
         item('#/mistakes', 'book', '题目集', { badge: mistakes, match: starts('#/mistakes') }),
         item('#/read', 'read', '书斋', { match: starts('#/read') }),
+        item('#/news', 'news', '新闻', { match: starts('#/news') }),
         item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
         folders.length
           ? [
