@@ -8,7 +8,8 @@ name: 新闻
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # 每 15 分钟 (GitHub 忙的时候会晚几分钟到半小时)
+    # 每 15 分钟。不用整点、一刻钟 (0、15、30、45 分): GitHub 说那几分钟最忙, 定时任务会晚, 太忙时会被跳过
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
   # 改了拿新闻的程序 (合进 main 的时候) 马上跑一次
   push:
@@ -27,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
 
