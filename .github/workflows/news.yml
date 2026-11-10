@@ -1,13 +1,14 @@
-# 新闻 (v1.74): 每天几次从维基百科的「新闻动态」拿最新的新闻 (tools/news.mjs), 放到 news 分支的 latest.json,
-# 温故的「新闻」页从那里读 (js/news.js)。
-# news 分支只放这一个文件, 每次整个盖掉 (只留最新的一份), 不往 main 里加提交, 仓库不会越来越大。
+# 新闻 (v1.74): 每 15 分钟拿一次各家的新闻 (tools/news.mjs), 放到 news 分支: latest.json (所有新闻的标题、摘要) 和 a/<编号>.json (全文)。
+# 温故的「新闻」「快讯」页从那里读 (js/news.js)。
+# news 分支每次整个盖掉 (只留最新的一份), 不往 main 里加提交, 仓库不会越来越大; 卫报的文章过了 24 小时也就跟着没了 (卫报的规定)。
+# 卫报的 API 要密钥: 仓库 Settings › Secrets and variables › Actions 里的 GUARDIAN_API_KEY (没有就不拿卫报)。
 # 跟上次一样的不推。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上跑一次。
 
 name: 新闻
 
 on:
   schedule:
-    - cron: '23 */4 * * *' # 每四个小时一次 (北京时间 0:23、4:23、8:23……)
+    - cron: '*/15 * * * *' # 每 15 分钟 (GitHub 忙的时候会晚几分钟到半小时)
   workflow_dispatch:
   # 改了拿新闻的程序 (合进 main 的时候) 马上跑一次
   push:
@@ -24,7 +25,7 @@ concurrency:
 jobs:
   news:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -32,44 +33,44 @@ jobs:
         with:
           node-version: 22
 
-      # 上次的新闻: 版本没变的条目不用再拿正文
+      # 上次的新闻: 已经拿过的全文不用再拿, 中新网挤掉的标题还留 24 小时
       - name: 拿上次的
         run: |
           mkdir -p news
-          if git fetch --depth=1 origin news 2>/dev/null && git show FETCH_HEAD:latest.json > news/latest.json 2>/dev/null; then
-            cp news/latest.json "$RUNNER_TEMP/prev.json"
-          else
-            rm -f news/latest.json
+          if git fetch --depth=1 origin news 2>/dev/null; then
+            git archive FETCH_HEAD | tar -x -C news
+            rm -f news/README.md
           fi
+          cp -r news "$RUNNER_TEMP/prev"
 
       - name: 拿新闻
         env:
-          # 维基百科要求写明是谁在拿
+          # 写明是谁在拿
           NEWS_UA: WenguNews/1.0 (+${{ github.server_url }}/${{ github.repository }})
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
         run: node tools/news.mjs
 
       - name: 放到 news 分支
         run: |
-          if [ -f "$RUNNER_TEMP/prev.json" ] && cmp -s "$RUNNER_TEMP/prev.json" news/latest.json; then
+          if diff -rq "$RUNNER_TEMP/prev" news > /dev/null; then
             echo "新闻没有变化"
             exit 0
           fi
           out="$RUNNER_TEMP/news-branch"
-          mkdir -p "$out"
-          cp news/latest.json "$out/latest.json"
+          cp -r news "$out"
           cat > "$out/README.md" <<'EOF'
           # 温故的新闻
 
-          这个分支是自动生成的：GitHub Actions（`.github/workflows/news.yml`）每天几次用 `tools/news.mjs` 从中文维基百科的「新闻动态」拿最新的新闻，写成 `latest.json`，温故的「新闻」页读这个文件。每次整个覆盖，只留最新的一份，不要在这里改东西。
+          这个分支是自动生成的：GitHub Actions（`.github/workflows/news.yml`）每 15 分钟用 `tools/news.mjs` 拿一次各家的新闻，写成 `latest.json`（所有新闻的标题、摘要）和 `a/`（能放全文的几家，一篇一个文件），温故的「新闻」「快讯」页读这些。每次整个覆盖，只留最新的一份，不要在这里改东西。
 
-          新闻的文字来自[维基百科](https://zh.wikipedia.org/zh-cn/Portal:新闻动态)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hans) 授权；图片来自维基共享资源，作者和授权写在每张图下面。
+          全文来自美国之音（公共财产）、自由亚洲电台（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia, 2025 M St. NW, Suite 300, Washington DC 20036.）、卫报开放平台（Powered by The Guardian；仅供个人、非商业阅读，24 小时内更新）、NASA（公共财产）；中新网、BBC、NPR 只有标题、摘要和链接，版权归各家。
           EOF
           cd "$out"
           git init -q -b news
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add latest.json README.md
+          git add -A
           git commit -q -m "新闻 $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" news
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" news
           # 备用的 jsDelivr 也马上换成新的 (没成功也不要紧, 它过一阵自己会换)
           curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@news/latest.json" > /dev/null || true

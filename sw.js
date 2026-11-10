@@ -12,6 +12,8 @@ const FILES = [
   'icon-192.png',
   'icon-512.png',
   'icon-maskable-512.png',
+  'img/guardian-powered-black.png',
+  'img/guardian-powered-white.png',
   'css/style.css',
   'js/aitext.js',
   'js/anki.js',

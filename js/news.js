@@ -1,16 +1,21 @@
 // 新闻 (v1.74): 拿新闻、存一份在这台设备上 (断网也能看上次的), 还有新闻页要用的小工具。页面在 views/news.js
 //
-// 新闻从哪来: GitHub Actions 每天几次从中文维基百科的「新闻动态」拿 (tools/news.mjs), 放在仓库 news 分支的 latest.json。
-// 先从 GitHub 拿 (raw.githubusercontent.com), 拿不到再试 jsDelivr (同一个文件, 国内有时候更好连)。
-// 在自己电脑上跑 (npm start) 时先用本地的 news/latest.json (node tools/news.mjs 生成的)。
+// 新闻从哪来: GitHub Actions 每 15 分钟拿一次各家的新闻 (tools/news.mjs), 放在仓库 news 分支:
+//   latest.json  所有新闻的标题、摘要、时间、链接 (来源: 美国之音、自由亚洲电台、中新网、卫报、NASA、BBC、NPR)
+//   a/<编号>.json 能放全文的那几家 (美国之音、自由亚洲电台、卫报、NASA), 一篇一个
+// 先从 GitHub 拿 (raw.githubusercontent.com), 拿不到再试 jsDelivr (同一份文件, 国内有时候更好连)。
+// 在自己电脑上跑 (npm start) 时先用本地的 news/ (node tools/news.mjs 生成的)。
 // 拿到的存在 IndexedDB (不放 localStorage: 那里放卡片, 空间要留着)。
+// 卫报的规定: 内容最多留 24 小时。卫报的文章拿来 (got) 超过 24 小时的不显示, 这台设备上存着的也删掉
 
 import { SITE } from './platform.js';
 
 const [, OWNER, REPO] = /^https:\/\/([^.]+)\.github\.io\/([^/]+)\//.exec(SITE) ?? [];
-export const NEWS_URLS = [`https://raw.githubusercontent.com/${OWNER}/${REPO}/news/latest.json`, `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@news/latest.json`];
-export const FRESH_MS = 10 * 60 * 1000; // 十分钟内拿过的不再拿
-export const SECTIONS = ['时政', '军事', '财经', '科技', '社会', '体育', '文娱']; // 跟 tools/news.mjs 的一样
+export const NEWS_BASES = [`https://raw.githubusercontent.com/${OWNER}/${REPO}/news/`, `https://cdn.jsdelivr.net/gh/${OWNER}/${REPO}@news/`];
+export const FRESH_MS = 5 * 60 * 1000; // 五分钟内拿过的不再拿 (新闻每 15 分钟才更新一次)
+export const GUARDIAN_MS = 24 * 3600 * 1000;
+export const LIVE_MS = 24 * 3600 * 1000; // 快讯只列 24 小时内的
+export const LANGS = { zh: '中文', en: 'English' };
 
 // ---- 存在这台设备上 ----
 
@@ -36,34 +41,20 @@ async function idb(mode, fn) {
     t.onabort = () => reject(t.error);
   });
 }
+const idbGet = (key) => idb('readonly', (s) => s.get(key)).catch(() => null);
+const idbPut = (key, value) => idb('readwrite', (s) => s.put(value, key)).catch(() => {});
+const idbKeys = () => idb('readonly', (s) => s.getAllKeys()).catch(() => []);
+const idbDel = (keys) => (keys.length ? idb('readwrite', (s) => keys.forEach((k) => s.delete(k))).catch(() => {}) : Promise.resolve());
 
-// 上次拿到的 { data, at } (没有、读不出来: null)
-export async function cachedNews() {
-  try {
-    const rec = await idb('readonly', (s) => s.get('latest'));
-    return rec && validNews(rec.data) ? rec : null;
-  } catch {
-    return null;
-  }
+// 文件像不像样
+export function validIndex(d) {
+  return Boolean(d && d.v === 2 && d.sources && typeof d.sources === 'object' && Array.isArray(d.items) && d.items.length);
 }
 
-async function saveNews(rec) {
-  try {
-    await idb('readwrite', (s) => s.put(rec, 'latest'));
-  } catch {
-    // 存不了就只管这次
-  }
-}
-
-// 文件像不像样: 格式对, 有新闻
-export function validNews(d) {
-  return Boolean(d && d.v === 1 && Array.isArray(d.stories) && d.stories.length && d.articles && typeof d.articles === 'object');
-}
-
-// 从哪几个网址拿 (按先后试)
-export function newsUrls(loc = globalThis.location) {
-  const local = loc && (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') ? [new URL('news/latest.json', loc.href).href] : [];
-  return [...local, ...NEWS_URLS];
+// 从哪几个地方拿 (按先后试)
+export function newsBases(loc = globalThis.location) {
+  const local = loc && (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') ? [new URL('news/', loc.href).href] : [];
+  return [...local, ...NEWS_BASES];
 }
 
 async function fetchJson(url, ms = 10000) {
@@ -78,24 +69,31 @@ async function fetchJson(url, ms = 10000) {
   }
 }
 
-// 拿新闻: 十分钟内拿过的直接用存着的; 不然去拿, 拿不到就用存着的 (stale: true)。
+// 上次拿到的 { data, at } (没有: null)
+export async function cachedIndex() {
+  const rec = await idbGet('index');
+  return rec && validIndex(rec.data) ? rec : null;
+}
+
+// 拿新闻: 五分钟内拿过的直接用存着的 (maxAge 可以改); 不然去拿, 拿不到就用存着的 (stale: true)。
 // 返回 { data, at, stale, error }; 一次都没拿到过又没网: data 是 null
-export async function loadNews({ force = false, now = Date.now(), urls = newsUrls(), fetchOne = fetchJson } = {}) {
-  const cached = await cachedNews();
-  if (!force && cached && now - cached.at < FRESH_MS) return { ...cached, stale: false };
+export async function loadIndex({ force = false, maxAge = FRESH_MS, now = Date.now(), bases = newsBases(), fetchOne = fetchJson } = {}) {
+  const cached = await cachedIndex();
+  if (!force && cached && now - cached.at < maxAge) return { ...cached, stale: false };
   let error = null;
   let older = false;
-  for (const url of urls) {
+  for (const base of bases) {
     try {
-      const data = await fetchOne(url);
-      if (!validNews(data)) throw new Error('格式不对');
-      // 备用的网址可能还是旧的: 比存着的还旧就不要
-      if (cached && cached.data.at && data.at && data.at < cached.data.at) {
+      const data = await fetchOne(`${base}latest.json`);
+      if (!validIndex(data)) throw new Error('格式不对');
+      // 备用的地方可能还是旧的: 比存着的还旧就不要
+      if (cached?.data.at && data.at && data.at < cached.data.at) {
         older = true;
         continue;
       }
       const rec = { data, at: now };
-      await saveNews(rec);
+      await idbPut('index', rec);
+      pruneArticles(data, now);
       return { ...rec, stale: false };
     } catch (e) {
       error = e;
@@ -105,27 +103,101 @@ export async function loadNews({ force = false, now = Date.now(), urls = newsUrl
   return { data: null, at: 0, stale: true, error };
 }
 
+// 一篇全文: 存着的先用, 没有再去拿; 卫报的过了 24 小时不给
+export async function loadArticle(id, { now = Date.now(), bases = newsBases(), fetchOne = fetchJson } = {}) {
+  const ok = (a) => a && Array.isArray(a.body) && !guardianExpired(a, now);
+  const saved = await idbGet(`a:${id}`);
+  if (ok(saved)) return saved;
+  for (const base of bases) {
+    try {
+      const a = await fetchOne(`${base}a/${encodeURIComponent(id)}.json`);
+      if (!ok(a)) continue;
+      await idbPut(`a:${id}`, a);
+      return a;
+    } catch {
+      // 换下一个
+    }
+  }
+  return null;
+}
+
+// 存着的全文: 已经不在列表里的、卫报过了 24 小时的删掉
+export async function pruneArticles(data, now = Date.now()) {
+  const keep = new Set(visibleItems(data, now).map((x) => `a:${x.id}`));
+  const keys = await idbKeys();
+  await idbDel(keys.filter((k) => String(k).startsWith('a:') && !keep.has(k)));
+}
+
 // ---- 页面用的小工具 ----
 
+export const guardianExpired = (x, now = Date.now()) => x.src === 'guardian' && !(now - Date.parse(x.got) < GUARDIAN_MS);
+
+// 能显示的新闻 (卫报过了 24 小时的不要), 新的在前
+export function visibleItems(data, now = Date.now()) {
+  return (data?.items ?? []).filter((x) => !guardianExpired(x, now));
+}
+
+// 一种语言的; src: 只要这一家
+export function itemsFor(data, lang, { src = null, now = Date.now() } = {}) {
+  return visibleItems(data, now).filter((x) => x.lang === lang && (!src || x.src === src));
+}
+
+// 快讯: 24 小时内的标题
+export function liveItems(data, lang, now = Date.now()) {
+  return itemsFor(data, lang, { now }).filter((x) => now - Date.parse(x.at) < LIVE_MS);
+}
+
+// 这种语言有哪几家 (照 sources 的次序), 各有几条
+export function sourcesFor(data, lang, now = Date.now()) {
+  const items = itemsFor(data, lang, { now });
+  return Object.entries(data?.sources ?? {})
+    .filter(([, s]) => s.lang === lang)
+    .map(([id, s]) => ({ id, ...s, n: items.filter((x) => x.src === id).length }))
+    .filter((s) => s.n);
+}
+
+// 首页: 头条 (最新的、能读全文、有图的一条), 下面几格 (再几条这样的), 其余的按日子列
+export function frontPage(items, { cards = 4 } = {}) {
+  const pics = items.filter((x) => x.full && x.img);
+  const top = pics.slice(0, 1 + cards);
+  const used = new Set(top.map((x) => x.id));
+  return { lead: top[0] ?? null, cards: top.slice(1), rest: items.filter((x) => !used.has(x.id)) };
+}
+
+// 按日子分组 (照这台设备的时间): [{ day: 'YYYY-MM-DD', items }]
+export function byDay(items) {
+  const out = [];
+  for (const x of items) {
+    const day = localDay(x.at);
+    const last = out[out.length - 1];
+    if (last?.day === day) last.items.push(x);
+    else out.push({ day, items: [x] });
+  }
+  return out;
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+export const localDay = (iso) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+export const clock = (iso) => {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const WEEKDAYS = '日一二三四五六';
-// 新闻的日子都是北京时间的
-export function beijingToday(now = new Date()) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).map((x) => [x.type, x.value]));
-  return `${p.year}-${p.month}-${p.day}`;
+// 'YYYY-MM-DD' → '今天'、'昨天'、'11月8日 星期日'
+export function dayLabel(day, today = localDay(new Date().toISOString())) {
+  const [y, m, d] = day.split('-').map(Number);
+  const diff = Math.round((Date.UTC(...today.split('-').map((v, i) => Number(v) - (i === 1 ? 1 : 0))) - Date.UTC(y, m - 1, d)) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  const plain = `${m}月${d}日 星期${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}`;
+  return Number(today.slice(0, 4)) === y ? plain : `${y}年${plain}`;
 }
 
-// '2026-11-08' → '11月8日 星期日'; 今天、昨天写「今天」「昨天」(long: 后面也带上日子)
-export function dayLabel(date, today = beijingToday(), { long = false } = {}) {
-  const [y, m, d] = date.split('-').map(Number);
-  const week = `星期${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}`;
-  const plain = `${m}月${d}日 ${week}`;
-  const diff = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86400000);
-  const near = diff === 0 ? '今天' : diff === 1 ? '昨天' : null;
-  if (!near) return Number(today.slice(0, 4)) === y ? plain : `${y}年${plain}`;
-  return long ? `${near} · ${plain}` : near;
-}
-
-// 「3 小时前」这样的: 新闻什么时候更新的
+// 「3 小时前」
 export function agoText(iso, now = Date.now()) {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return '';
@@ -137,73 +209,39 @@ export function agoText(iso, now = Date.now()) {
   return `${Math.round(hr / 24)} 天前`;
 }
 
-export const storyHref = (s) => `#/news/s/${encodeURIComponent(s.id)}`;
-export const sectionHref = (sec) => (sec ? `#/news/sec/${encodeURIComponent(sec)}` : '#/news');
-export const topicHref = (t) => `#/news/topic/${encodeURIComponent(t.title)}`;
-export const wikiUrl = (page) => `https://zh.wikipedia.org/zh-cn/${encodeURIComponent(String(page).replace(/ /g, '_'))}`;
+// 列表里一条点了去哪: 能读全文的在温故里读, 其余的打开原网站
+export const itemHref = (x) => (x.full ? `#/news/a/${encodeURIComponent(x.id)}` : x.u);
+export const langHref = (lang) => (lang === 'en' ? '#/news/en' : '#/news');
+export const liveHref = (lang) => (lang === 'en' ? '#/news/live/en' : '#/news/live');
+export const itemOf = (data, id) => data?.items.find((x) => x.id === id) ?? null;
 
-export const storyOf = (data, id) => data?.stories.find((s) => s.id === id) ?? null;
-export const articleOf = (data, s) => (s?.art ? (data.articles[s.art] ?? null) : null);
-// 新闻的图: 头条配的图, 没有就用条目的图
-export const imageOf = (data, s) => s?.img ?? articleOf(data, s)?.img ?? null;
-// 小一点的图 (列表里用): 维基共享资源的缩略图网址里写着宽度, 换成 330
-export const smallImage = (src) => String(src ?? '').replace(/\/960px-/, '/330px-');
-// 标题: 有专门条目的用条目名; 没有的就用那一句话
-export const headline = (s) => s.title ?? s.text;
+// 段落里的一段段 (字、链接、粗体……) → 纯文字 (朗读用)
+export const inlineText = (parts) => (parts ?? []).map((x) => (typeof x === 'string' ? x : (x.t ?? x.b ?? x.i ?? ''))).join('');
 
-// 头条 (照首页的次序)
-export function topStories(data) {
-  return (data?.top ?? []).map((id) => storyOf(data, id)).filter(Boolean);
-}
-
-// 按日子分组 (新的在前): [{ date, stories }]; sec: 只要这个栏目的
-export function byDay(data, sec = null) {
-  const out = [];
-  for (const s of data?.stories ?? []) {
-    if (sec && s.sec !== sec) continue;
-    const last = out[out.length - 1];
-    if (last && last.date === s.date) last.stories.push(s);
-    else out.push({ date: s.date, stories: [s] });
-  }
-  return out;
-}
-
-// 有新闻的栏目 (照 SECTIONS 的次序) 和各有几条
-export function sectionCounts(data) {
-  const n = {};
-  for (const s of data?.stories ?? []) n[s.sec] = (n[s.sec] ?? 0) + 1;
-  return SECTIONS.filter((x) => n[x]).map((sec) => ({ sec, n: n[sec] }));
-}
-
-// 同一件事的别的新闻 (主条目一样的), 新的在前
-export function sameEvent(data, s) {
-  if (!s?.art) return [];
-  return data.stories.filter((x) => x.art === s.art && x.id !== s.id);
-}
-
-// 正在发生的一件事 (专题) 和讲到它的新闻
-export const topicOf = (data, title) => data?.topics?.find((t) => t.title === title) ?? null;
-export function topicStories(data, t) {
-  if (!t) return [];
-  const names = new Set([t.title, t.name]);
-  // 链接对得上的, 或者字里写着这件事的名字 (三个字以上的: 「伊朗战争」)
-  return data.stories.filter((s) => names.has(s.art) || s.links.some((l) => names.has(l.page) || names.has(l.name)) || (t.name.length >= 3 && s.text.includes(t.name)));
-}
-
-// 新闻里提到的人、机构 (有简介的; 主条目不算)
-export function peopleOf(data, s) {
-  return (s?.links ?? []).filter((l) => l.page !== s.art && data.notes?.[l.page]).map((l) => ({ ...l, line: data.notes[l.page] }));
-}
-
-// 朗读用: 标题、导语、正文的段落, 一段一条
-export function spokenParts(data, s) {
-  const a = articleOf(data, s);
-  const parts = [{ k: 'title', text: headline(s) }];
-  if (s.title) parts.push({ k: 'lede', text: s.text });
-  (a?.body ?? []).forEach((b, i) => {
-    if (typeof b === 'string') parts.push({ k: i, text: b });
-    else if (b.h) parts.push({ k: i, text: b.h });
-    else if (b.li) parts.push({ k: i, text: b.li.filter((x) => x !== '……').join('；') });
+// 朗读: 标题、导语、正文的段落、小标题、列表、引文, 一块一条 (k 是第几块, 页面上标出念到哪)
+export function spokenParts(a) {
+  const parts = [{ k: 'title', text: a.t }];
+  if (a.lede?.length) parts.push({ k: 'lede', text: inlineText(a.lede) });
+  (a.body ?? []).forEach((b, i) => {
+    const text = b.p ? inlineText(b.p) : b.q ? inlineText(b.q) : b.h ? b.h : b.li ? b.li.map(inlineText).join('；') : '';
+    if (text.trim()) parts.push({ k: i, text });
   });
   return parts;
+}
+
+// 快讯: 上次看到哪 (这台设备上), 新来的标一下
+const SEEN_KEY = 'wengu:news-seen';
+export function lastSeen() {
+  try {
+    return localStorage.getItem(SEEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+export function markSeen(iso) {
+  try {
+    if (iso && iso > lastSeen()) localStorage.setItem(SEEN_KEY, iso);
+  } catch {
+    // 记不住就算了
+  }
 }

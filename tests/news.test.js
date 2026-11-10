@@ -1,359 +1,336 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHtml, decode, itnFrom, daysFrom, pickMain, titleOf, isEvent, sectionOf, bodyFrom, introLine, placeIntro, noteWanted, eventLine, dropGloss, alike, buildStories, finish, hashId, todayIn } from '../tools/news.mjs';
-import { validNews, loadNews, newsUrls, NEWS_URLS, dayLabel, agoText, byDay, sectionCounts, topStories, sameEvent, topicStories, topicOf, peopleOf, smallImage, headline, imageOf, spokenParts, storyHref, wikiUrl } from '../js/news.js';
+import { parseHtml, decode, blocksFrom, parseRss, itemFrom, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT } from '../tools/news.mjs';
+import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, sourcesFor, frontPage, byDay, dayLabel, agoText, itemHref, langHref, liveHref, inlineText, spokenParts } from '../js/news.js';
 
-// 照维基百科真的网页的样子写的一小段 (首页「新闻动态」)
-const ITN = `<div class="mw-content-ltr mw-parser-output" lang="zh-Hans-CN"><div id="column-itn" class="knoblock">
-<figure class="mw-halign-right" typeof="mw:File"><a href="/wiki/File:2026_Krakow_shooting_CCTV.webp" class="mw-file-description"><img src="//thumb.wikimedia.org/x.webp" /></a><figcaption></figcaption></figure>
-<ul><li>波兰<a href="/wiki/%E5%85%8B%E6%8B%89%E7%A7%91%E5%A4%AB" title="克拉科夫">克拉科夫</a>发生<b><a href="/wiki/2026%E5%B9%B4%E6%B3%A2%E5%85%B0%E5%85%8B%E6%8B%89%E7%A7%91%E5%A4%AB%E6%9E%AA%E5%87%BB%E6%A1%88" title="2026年波兰克拉科夫枪击案">大规模枪击事件</a></b><small>（图）</small>，造成至少9人死亡。</li>
-<li><a href="/wiki/%E5%B7%B4%E6%8B%89%E5%9C%AD%E6%80%BB%E7%BB%9F" title="巴拉圭总统">巴拉圭总统</a><b><a href="/wiki/%E5%9C%A3%E5%9C%B0%E4%BA%9A%E5%93%A5%C2%B7%E5%9F%B9%E5%B0%BC%E4%BA%9A" title="圣地亚哥·培尼亚">圣地亚哥·培尼亚</a></b>因银行倒闭宣布请辞不果，遭参议院弹劾免职。</li>
-<li>香港高等法院裁定<b><a href="/wiki/%E9%BB%83%E4%B9%8B%E9%8B%92" title="黄之锋">黄之锋</a></b>罪成，判处10年监禁。</li>
-<li>未见于大事记的<b><a href="/wiki/2026%E5%B9%B4%E6%9F%90%E5%9C%B0%E5%9C%B0%E9%9C%87" title="2026年某地地震">地震</a></b>造成伤亡。</li></ul>
-</div>
-<div id="column-feature-more">&#160;<span class="column-feature-more-header"><b><a href="/wiki/Portal:%E6%96%B0%E8%81%9E%E5%8B%95%E6%85%8B" title="Portal:新闻动态">正在发生</a></b>：</span><a href="/wiki/%E4%BF%84%E7%83%8F%E6%88%B0%E7%88%AD_(2022%E5%B9%B4%E8%87%B3%E4%BB%8A)" title="俄乌战争 (2022年至今)">俄乌战争</a>（<a href="/wiki/A" title="俄乌战争过程">过程</a> · <a href="/wiki/B" title="谈判">谈判</a>）－<a href="/wiki/%E4%BC%8A%E6%9C%97%E6%88%B0%E7%88%AD_(2026%E5%B9%B4)" title="伊朗战争 (2026年)">伊朗战争</a></div>
-<div id="column-feature-more" style="margin-top: 0em;">&#160;<span class="column-feature-more-header"><b><a href="/wiki/2026%E5%B9%B411%E6%9C%88%E9%80%9D%E4%B8%96%E4%BA%BA%E7%89%A9%E5%88%97%E8%A1%A8" title="2026年11月逝世人物列表">最近逝世</a></b>：</span><a href="/wiki/%E9%A1%A7%E5%AE%89%E7%94%9F" title="顾安生">顾安生</a>－<a href="/w/index.php?title=X&amp;action=edit&amp;redlink=1" class="new" title="X（页面不存在）">X</a></div>
-<style>.mw-parser-output .x{color:red}</style></div>`;
+options.gap = 0; // 测试不用等
 
-// 每月的大事记: 一天一节, 后面附着出处 (引用模板里有整齐的 COinS)
-const coins = (title, site, url, date) => `<span title="ctx&#95;ver=Z39.88-2004&amp;rft.atitle=${encodeURIComponent(title)}&amp;rft.jtitle=${encodeURIComponent(site)}&amp;rft.date=${date}&amp;rft&#95;id=${encodeURIComponent(url)}" class="Z3988"></span>`;
-const MONTH = `<div class="mw-content-ltr mw-parser-output" lang="zh-Hans-CN">
-<div class="mw-heading mw-heading2"><h2 id="11月5日">11月5日</h2></div>
-<ul><li><a href="/wiki/%E5%B7%B4%E6%8B%89%E5%9C%AD%E7%B8%BD%E7%B5%B1" title="巴拉圭总统">巴拉圭总统</a><a href="/wiki/%E8%81%96%E5%9C%B0%E7%89%99%E5%93%A5%C2%B7%E6%BD%98%E5%B0%BC%E4%BA%9E" class="mw-redirect" title="圣地亚哥·潘尼亚">圣地亚哥·潘尼亚</a>因银行破产表示辞职，后被众议院弹劾。<sup id="cite&#95;ref-1" class="reference"><a href="#cite_note-1">[1]</a></sup></li>
-<li>香港众志前秘书长<a href="/wiki/%E9%BB%83%E4%B9%8B%E9%8B%92" title="黄之锋">黄之锋</a>，<a href="/wiki/%E9%BB%83%E4%B9%8B%E9%8B%92%E4%B8%B2%E8%AC%80%E5%8B%BE%E7%B5%90%E6%A1%88" title="黄之锋串谋勾结案">被控串谋</a>罪名成立，被判处10年监禁<sup class="reference"><a href="#cite_note-2">[2]</a></sup>。</li>
-<li><span class="ilh-all"><span class="ilh-page"><a href="/w/index.php?title=Y&amp;redlink=1" class="new" title="防灾大臣（页面不存在）">防灾大臣</a></span><span class="noprint ilh-comment"><span class="ilh-paren">（</span><span class="ilh-lang">日语</span>：防災大臣<span class="ilh-paren">）</span></span></span>上任。</li></ul>
-<div class="mw-heading mw-heading2"><h2 id="11月7日">11月7日</h2></div>
-<ul><li>波兰<a href="/wiki/%E5%85%8B%E6%8B%89%E7%A7%91%E5%A4%AB" title="克拉科夫">克拉科夫</a>发生<a href="/wiki/2026%E5%B9%B4%E6%B3%A2%E5%85%B0%E5%85%8B%E6%8B%89%E7%A7%91%E5%A4%AB%E6%9E%AA%E5%87%BB%E6%A1%88" title="2026年波兰克拉科夫枪击案">枪击事件</a>，致至少6人死亡。<sup class="reference"><a href="#cite_note-3">[3]</a></sup></li>
-<li>美国大选：<ul><li>民主党赢得众议院。</li><li>民主党赢得参议院。</li></ul></li></ul>
-<div class="mw-heading mw-heading2"><h2 id="10月31日">10月31日</h2></div>
-<ul><li>别的月份的一天，不要。</li></ul>
-<div class="mw-references-wrap"><ol class="references">
-<li id="cite&#95;note-1"><span class="reference-text"><cite class="citation news"><a rel="nofollow" class="external text" href="https://www.npr.org/x">Paraguay's president is impeached</a>. NPR.</cite>${coins("Paraguay's president is impeached", 'NPR', 'https://www.npr.org/x', '2026-11-05')}</span></li>
-<li id="cite&#95;note-2"><span class="reference-text"><cite class="citation web"><a rel="nofollow" class="external text" href="https://www.zaobao.com.sg/y">黄之锋串谋勾结外国势力罪成判监10年</a>. [[联合早报]].</cite>${coins('黄之锋串谋勾结外国势力罪成判监10年', '[[联合早报]]', 'https://www.zaobao.com.sg/y', '2026-11-05')}</span></li>
-<li id="cite&#95;note-3"><span class="reference-text"><cite class="citation web"><a rel="nofollow" class="external text" href="https://www.bbc.com/z">Six killed in Krakow</a>.</cite></span></li>
-</ol></div></div>`;
+// ---- 拿新闻的程序 (tools/news.mjs) ----
 
-test('新闻: 网页拆成树 (实体、空元素、样式不要)', () => {
-  assert.equal(decode('a&amp;b&#95;c&#x41;&nbsp;&#160;&lt;'), 'a&b_cA  <');
-  const root = parseHtml('<p class="x">一<br>二<img src="a.png"/><style>p{}</style><b>三</b></p>');
+test('新闻: 网页拆成树 (实体、CDATA、空元素、样式不要)', () => {
+  assert.equal(decode('a&amp;b&#95;c&#x41;&nbsp;&lt;'), 'a&b_cA <');
+  const root = parseHtml('<p class="x">一<br>二<img src="a.png"/><style>p{}</style><b>三</b><![CDATA[四&五]]></p>');
   const p = root.children[0];
-  assert.equal(p.tag, 'p');
   assert.equal(p.attrs.class, 'x');
   assert.deepEqual(
     p.children.map((c) => (typeof c === 'string' ? c : c.tag)),
-    ['一', 'br', '二', 'img', 'style', 'b'],
+    ['一', 'br', '二', 'img', 'style', 'b', '四&五'],
   );
-  assert.equal(p.children[5].children[0], '三');
 });
 
-test('新闻: 首页的「新闻动态」— 头条、加粗的链接、配图、正在发生 (括号里的不要)、最近逝世 (红链不要)', () => {
-  const itn = itnFrom(ITN);
-  assert.equal(itn.image, '2026 Krakow shooting CCTV.webp');
-  assert.equal(itn.items.length, 4);
-  assert.equal(itn.items[0].text, '波兰克拉科夫发生大规模枪击事件，造成至少9人死亡。');
-  assert.equal(itn.items[0].pic, true);
-  assert.equal(itn.items[1].pic, false);
+test('新闻: 网页 → 能安全显示的块 — 段落 (链接、粗体)、小标题、列表、引文、图; 视频和表格换成「到原网站看」; 字一个不改', () => {
+  const html = `华盛顿 —<p>第一段<a href="https://x.org/a">链接</a>，<b>粗</b>和<em>斜</em>。<script>alert(1)</script></p>
+    <h4>小标题</h4><ul><li>甲</li><li><a href="javascript:x">乙</a></li></ul><ol><li>一</li></ol>
+    <blockquote><p>引文</p></blockquote>
+    <figure><img src="//img.org/a.jpg" alt="说明"><figcaption>图：说明（美联社）</figcaption></figure>
+    <figure><img data-src="https://img.org/b.jpg" alt="自己的图"></figure>
+    <iframe src="https://video"></iframe><table><tr><td>表</td></tr></table>
+    <aside>相关链接</aside><div><p>里面的段落<br>换行</p></div>`;
+  assert.deepEqual(blocksFrom(html, { dropImage: wirePhoto }), [
+    { p: ['华盛顿 — 第一段', { a: 'https://x.org/a', t: '链接' }, '，', { b: '粗' }, '和', { i: '斜' }, '。'] },
+    { h: '小标题' },
+    { li: [['甲'], ['乙']] },
+    { li: [['一']], o: true },
+    { q: ['引文'] },
+    { img: { src: 'https://img.org/b.jpg', cap: '自己的图' } }, // 美联社的那张不要
+    { more: true }, // 视频、表格连着的只写一次
+    { p: ['里面的段落\n换行'] },
+  ]);
+  // 不挑图的时候 (卫报): 通讯社的图也照放
+  assert.equal(blocksFrom('<figure><img src="https://i.guim.co.uk/a.jpg"><figcaption>Photograph: AFP</figcaption></figure>')[0].img.cap, 'Photograph: AFP');
+  assert.equal(wirePhoto('图取自AFP'), true);
+  assert.equal(wirePhoto('（美联社照片）'), true);
+  assert.equal(wirePhoto('Photograph: Reuters'), true);
+  assert.equal(wirePhoto('资料照片：民众在台北参与急救训练'), false);
+  assert.equal(wirePhoto('APPLE 新品发布'), false); // 「AP」得是一个单独的词
+});
+
+const rss = (items) => `<?xml version="1.0"?><rss xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>X</title>${items}</channel></rss>`;
+
+test('新闻: RSS — CDATA、各种时间写法、图 (media:content、enclosure、media:thumbnail)、作者', () => {
+  const xml = rss(`
+    <item><title><![CDATA[黄乐做的是什么生意？]]></title><link>https://www.rfa.org/mandarin/a/1/</link><pubDate>Tue, 10 Nov 2026 16:16:26 +0000</pubDate>
+      <description><![CDATA[<p>美国人工智能芯片龙头……</p>]]></description><content:encoded><![CDATA[<p>全文<b>重点</b></p>]]></content:encoded>
+      <media:content url="https://www.rfa.org/resizer/a.jpg?x=1&amp;y=2" type="image/jpeg"><media:credit role="author">图取自AFP</media:credit><media:description><![CDATA[黄乐出席晚宴]]></media:description></media:content><dc:creator>记者：Alan Lu</dc:creator></item>
+    <item><title>纳吉布开始居家服刑</title><link>https://www.chinanews.com.cn/gj/2026/11-11/1.shtml</link><pubDate>Wed, 11 Nov 2026 00:01:07 +0800</pubDate><description>中新社吉隆坡11月10日电……</description></item>
+    <item><title>台湾立委访美</title><link>https://www.voachinese.com/a/x/1.html</link><pubDate>Wed, 11 Nov 2026 03:33:06 +0800</pubDate><author>chinese@voanews.com (锺辰芳)</author><enclosure url="https://gdb.voanews.com/a_w800_h450.jpg" type="image/jpeg"/></item>
+    <item><title>US soldier arrested</title><link>https://www.bbc.co.uk/news/articles/c1?at_medium=RSS</link><pubDate>Tue, 10 Nov 2026 20:20:04 GMT</pubDate><media:thumbnail width="240" url="https://ichef.bbci.co.uk/240/a.png"/></item>
+    <item><title>没有日子的</title><link>https://x</link></item>`);
+  const r = parseRss(xml);
+  assert.equal(r.length, 5);
   assert.deepEqual(
-    itn.items[0].links.map((l) => [l.page, l.name, Boolean(l.b)]),
-    [
-      ['克拉科夫', '克拉科夫', false],
-      ['2026年波兰克拉科夫枪击案', '2026年波兰克拉科夫枪击案', true],
-    ],
+    r.map((x) => x.at),
+    ['2026-11-10T16:16:26.000Z', '2026-11-10T16:01:07.000Z', '2026-11-10T19:33:06.000Z', '2026-11-10T20:20:04.000Z', null],
   );
+  assert.equal(r[0].title, '黄乐做的是什么生意？');
+  assert.equal(r[0].content, '<p>全文<b>重点</b></p>');
+  assert.deepEqual(r[0].image, { src: 'https://www.rfa.org/resizer/a.jpg?x=1&y=2', cap: '黄乐出席晚宴', credit: '图取自AFP' });
+  assert.equal(r[0].author, '记者：Alan Lu');
+  assert.equal(r[2].author, '锺辰芳');
+  assert.equal(r[2].image.src, 'https://gdb.voanews.com/a_w800_h450.jpg');
+  assert.equal(r[3].image.src, 'https://ichef.bbci.co.uk/240/a.png');
+
+  // 变成列表里的一条: 能放全文的来源, 通讯社的图不要; 只有标题的来源 (BBC) 照放; 没有日子的不要
+  const rfa = itemFrom('rfa', r[0]);
+  assert.equal(rfa.img, undefined);
+  assert.equal(rfa.s, '美国人工智能芯片龙头……');
+  assert.equal(rfa.lang, 'zh');
+  assert.equal(rfa.id, idOf('rfa', 'https://www.rfa.org/mandarin/a/1/'));
+  assert.equal(itemFrom('bbc', r[3]).img.src, 'https://ichef.bbci.co.uk/240/a.png');
+  assert.equal(itemFrom('bbc', r[3]).id, idOf('bbc', 'https://www.bbc.co.uk/news/articles/c1')); // 网址后面的 ?at_medium 不算
+  assert.equal(itemFrom('cns', r[4]), null);
+});
+
+test('新闻: VOA 的文章页 — 正文在 wsw 里, 开头的地点并进第一段, 主图的说明写着通讯社的不要', () => {
+  const page = (cap) => `<html><body><div class="cover-media"><figure><img src="https://gdb.voanews.com/50b2_w250_r1_s.jpg" alt="${cap}"><figcaption><span class="caption">${cap}</span></figcaption></figure></div>
+    <ul><li class="links__item"><a class="links__item-link" href="/author/x">锺辰芳</a></li></ul>
+    <div class="wsw"><span class="dateline">华盛顿 —&nbsp;</span><p>第一段。</p><p>第二段<a href="https://www.voachinese.com/a/2.html">相关</a>。</p></div><div class="footer-toolbar">分享</div></body></html>`;
+  const a = voaArticle(page('资料照片：民众参与急救训练'));
+  assert.deepEqual(a.body, [{ p: ['华盛顿 — 第一段。'] }, { p: ['第二段', { a: 'https://www.voachinese.com/a/2.html', t: '相关' }, '。'] }]);
+  assert.deepEqual(a.img, { src: 'https://gdb.voanews.com/50b2_w800_r1.jpg', cap: '资料照片：民众参与急救训练' });
+  assert.equal(a.by, '锺辰芳');
+  assert.equal(voaArticle(page('2026年11月10日，示威者在街头（美联社照片）')).img, null);
+  assert.equal(voaArticle('<html><p>没有正文</p></html>'), null);
+});
+
+const guardianResult = ({ fields = {}, ...over } = {}) => ({
+  id: 'world/2026/nov/10/x',
+  type: 'article',
+  sectionName: 'World news',
+  webTitle: 'Headline',
+  webUrl: 'https://www.theguardian.com/world/2026/nov/10/x',
+  webPublicationDate: '2026-11-10T20:28:47Z',
+  fields: { headline: 'Headline', standfirst: '<p>Standfirst <a href="https://www.theguardian.com/y">link</a></p>', trailText: 'Trail <strong>text</strong>', byline: 'Lucy Campbell', body: '<p>Para one.</p><p>Para two.</p>', main: '<figure><img src="https://i.guim.co.uk/main.jpg" alt="m"><figcaption>Caption. Photograph: AFP</figcaption></figure>', thumbnail: 'https://media.guim.co.uk/t/500.jpg', firstPublicationDate: '2026-11-10T20:20:00Z', legallySensitive: 'false', ...fields },
+  ...over,
+});
+
+test('新闻: 卫报 API 的一篇 — 直播和法律敏感的不要; 栏目用卫报自己的; 记着什么时候拿的 (24 小时后撤下)', () => {
+  const got = '2026-11-10T21:00:00.000Z';
+  const { item, article } = guardianItem(guardianResult(), got);
+  assert.deepEqual(item, { id: idOf('guardian', 'https://www.theguardian.com/world/2026/nov/10/x'), src: 'guardian', lang: 'en', t: 'Headline', s: 'Trail text', u: 'https://www.theguardian.com/world/2026/nov/10/x', at: '2026-11-10T20:20:00.000Z', sec: 'World news', img: { src: 'https://media.guim.co.uk/t/500.jpg' }, by: 'Lucy Campbell', full: true, got });
+  assert.deepEqual(article.lede, ['Standfirst ', { a: 'https://www.theguardian.com/y', t: 'link' }]);
+  assert.deepEqual(article.img, { src: 'https://i.guim.co.uk/main.jpg', cap: 'Caption. Photograph: AFP' });
+  assert.deepEqual(article.body, [{ p: ['Para one.'] }, { p: ['Para two.'] }]);
+  assert.equal(article.got, got);
+  assert.equal(guardianItem(guardianResult({ type: 'liveblog' }), got), null);
+  assert.equal(guardianItem(guardianResult({ fields: { legallySensitive: 'true' } }), got), null);
+});
+
+test('新闻: 跟上次的合起来 — 这次的为准; 只有标题的留 48 小时、能读全文的留一个星期; 卫报拿来超过 24 小时的不要', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z');
+  const h = (n) => new Date(now - n * 3600000).toISOString();
+  const prev = [
+    { id: 'cns-old', src: 'cns', at: h(50), t: '太旧' },
+    { id: 'cns-a', src: 'cns', at: h(30), t: '上次的' },
+    { id: 'rfa-a', src: 'rfa', at: h(100), t: '四天前的全文' },
+    { id: 'rfa-old', src: 'rfa', at: h(200), t: '八天前' },
+    { id: 'guardian-a', src: 'guardian', at: h(2), got: h(25), t: '过期' },
+    { id: 'guardian-b', src: 'guardian', at: h(2), got: h(1), t: '还新' },
+    { id: 'cns-b', src: 'cns', at: h(1), t: '旧标题' },
+  ];
+  const fresh = [
+    { id: 'cns-b', src: 'cns', at: h(1), t: '新标题' },
+    { id: 'bbc-future', src: 'bbc', at: new Date(now + 3 * 3600000).toISOString(), t: '时间写错了' },
+  ];
   assert.deepEqual(
-    itn.ongoing.map((l) => l.name),
-    ['俄乌战争 (2022年至今)', '伊朗战争 (2026年)'],
-  );
-  assert.deepEqual(
-    itn.deaths.map((l) => l.name),
-    ['顾安生'],
+    merge({ prev, fresh, now }).map((x) => `${x.id}:${x.t}`),
+    ['cns-b:新标题', 'guardian-b:还新', 'cns-a:上次的', 'rfa-a:四天前的全文'],
   );
 });
 
-test('新闻: 每月大事记 — 按天分, 出处 (COinS)、外语原名的小字和红链不要、下一层拆开、别的月份的不要', () => {
-  const days = daysFrom(MONTH, 2026, 11);
-  assert.deepEqual(
-    days.map((d) => [d.date, d.text]),
-    [
-      ['2026-11-05', '巴拉圭总统圣地亚哥·潘尼亚因银行破产表示辞职，后被众议院弹劾。'],
-      ['2026-11-05', '香港众志前秘书长黄之锋，被控串谋罪名成立，被判处10年监禁。'],
-      ['2026-11-05', '防灾大臣上任。'],
-      ['2026-11-07', '波兰克拉科夫发生枪击事件，致至少6人死亡。'],
-      ['2026-11-07', '美国大选：民主党赢得众议院。'],
-      ['2026-11-07', '美国大选：民主党赢得参议院。'],
-    ],
-  );
-  assert.deepEqual(days[0].src, [{ t: "Paraguay's president is impeached", u: 'https://www.npr.org/x', s: 'NPR', d: '2026-11-05' }]);
-  assert.equal(days[1].src[0].s, '联合早报'); // 去掉 [[ ]]
-  assert.deepEqual(days[3].src, [{ t: 'Six killed in Krakow', u: 'https://www.bbc.com/z', s: 'bbc.com' }]); // 没有 COinS: 用链接和网站
-  assert.deepEqual(days[2].links, []); // 红链不算
-  assert.equal(days[0].links[1].page, '聖地牙哥·潘尼亞'); // 页面名照网址 (拿条目时用), 显示的是简体
-  assert.equal(days[0].links[1].name, '圣地亚哥·潘尼亚');
-});
+// 假的网站: 照网址回 RSS、文章页、卫报的 API
+function fakeWeb(now, { failRfa = false } = {}) {
+  const at = (h) => new Date(now - h * 3600000).toUTCString();
+  const calls = [];
+  const pages = {
+    'https://www.voachinese.com/api/zm_yql-vomx-tpeybti': rss(`<item><title>VOA 一</title><link>https://www.voachinese.com/a/1.html</link><pubDate>${at(1)}</pubDate><description>摘要</description><enclosure url="https://gdb.voanews.com/1_w800_h450.jpg" type="image/jpeg"/></item>`),
+    'https://www.voachinese.com/a/1.html': '<div class="wsw"><p>VOA 全文。</p></div>',
+    'https://www.rfa.org/mandarin/rss': rss(`<item><title>RFA 一</title><link>https://www.rfa.org/mandarin/1/</link><pubDate>${at(2)}</pubDate><content:encoded><![CDATA[<p>RFA 全文</p>]]></content:encoded></item>`),
+    'https://www.chinanews.com.cn/rss/scroll-news.xml': rss(`<item><title>中新 一</title><link>https://www.chinanews.com.cn/1.shtml</link><pubDate>${at(0.5)}</pubDate></item>`),
+    'https://www.chinanews.com.cn/rss/importnews.xml': rss(''),
+    'https://www.nasa.gov/news-release/feed/': rss(`<item><title>NASA one</title><link>https://www.nasa.gov/1/</link><pubDate>${at(3)}</pubDate><content:encoded><![CDATA[<figure><img src="https://www.nasa.gov/p.jpg"></figure><p>NASA text</p>]]></content:encoded></item>`),
+    'https://feeds.bbci.co.uk/news/rss.xml': rss(`<item><title>BBC one</title><link>https://www.bbc.co.uk/news/1</link><pubDate>${at(0.2)}</pubDate></item>`),
+    'https://feeds.npr.org/1001/rss.xml': rss(''),
+  };
+  const fetch = async (url, init) => {
+    calls.push(url);
+    if (url.startsWith('https://content.guardianapis.com/search')) {
+      assert.equal(init.headers['api-key'], 'k'); // 密钥放在请求头里
+      return new Response(JSON.stringify({ response: { status: 'ok', results: [guardianResult({ fields: { firstPublicationDate: new Date(now - 3600000).toISOString() } })] } }));
+    }
+    if (failRfa && url.includes('rfa.org')) return new Response('', { status: 404 });
+    return pages[url] !== undefined ? new Response(pages[url]) : new Response('', { status: 404 });
+  };
+  return { fetch, calls };
+}
 
-test('新闻: 主条目 — 年份开头、像一件事的、加粗的; 标题去掉年份和括号', () => {
-  assert.equal(isEvent('2026年美國選舉'), true);
-  assert.equal(isEvent('黃之鋒串謀勾結案'), true);
-  assert.equal(isEvent('2026年格林納達大選'), true);
-  assert.equal(isEvent('新西兰大選'), true);
-  assert.equal(isEvent('黄之锋'), false);
-  assert.equal(isEvent('伊朗战争 (2026年)'), true);
-  const links = (...xs) => xs.map(([name, b]) => ({ page: name, name, b }));
-  assert.equal(pickMain(links(['基米·安东内利'], ['2026年墨西哥城大奖赛'], ['一级方程式世界车手冠军列表'])).name, '2026年墨西哥城大奖赛');
-  assert.equal(pickMain(links(['巴拉圭总统'], ['圣地亚哥·培尼亚', true])).name, '圣地亚哥·培尼亚');
-  assert.equal(pickMain(links(['日本'], ['细野豪志'])), null);
-  assert.equal(titleOf({ name: '2026年波兰克拉科夫枪击案' }), '波兰克拉科夫枪击案');
-  assert.equal(titleOf({ name: '伊朗战争 (2026年)' }), '伊朗战争');
-  assert.equal(titleOf({ name: '黄之锋' }), null);
-  assert.equal(titleOf({ name: '2026年' }), '2026年');
-});
+test('新闻: 拿一次 — 全文的放进 articles; 卫报一小时内不再拿; 一家拿不到时用上次的', async () => {
+  const realFetch = globalThis.fetch;
+  const log = () => {};
+  try {
+    const now = Date.parse('2026-11-11T12:00:00Z');
+    let web = fakeWeb(now);
+    globalThis.fetch = web.fetch;
+    const first = await collect({ now, guardianKey: 'k', log });
+    const srcs = first.index.items.map((x) => x.src);
+    assert.deepEqual(srcs, ['bbc', 'cns', 'voa', 'guardian', 'rfa', 'nasa']); // 新的在前
+    assert.equal(first.index.v, 2);
+    assert.equal(first.index.guardianAt, new Date(now).toISOString());
+    assert.deepEqual(Object.keys(first.index.sources), Object.keys(SOURCES));
+    assert.equal(first.index.sources.rfa.note, RFA_CREDIT);
+    const full = first.index.items.filter((x) => x.full).map((x) => x.src);
+    assert.deepEqual(full.sort(), ['guardian', 'nasa', 'rfa', 'voa']);
+    const voa = first.index.items.find((x) => x.src === 'voa');
+    assert.deepEqual(first.articles[voa.id].body, [{ p: ['VOA 全文。'] }]);
+    const nasa = first.index.items.find((x) => x.src === 'nasa');
+    assert.equal(nasa.img.src, 'https://www.nasa.gov/p.jpg'); // RSS 没给图: 用正文里的第一张
+    assert.ok(web.calls.some((u) => u.includes('guardianapis')));
 
-test('新闻: 栏目 — 先看分类 (繁体也认), 再看字; 辞职、弹劾的算时政; 都对不上的是时政', () => {
-  assert.equal(sectionOf('某地发生枪击', ['2026年波蘭罪案', '槍擊案']), '社会');
-  assert.equal(sectionOf('安东内利夺得车手总冠军', ['2026年一級方程式世界錦標賽']), '体育');
-  assert.equal(sectionOf('巴拉圭总统因银行破产表示辞职，后被众议院弹劾。'), '时政');
-  assert.equal(sectionOf('加密货币交易所遭黑客入侵，数码货币被盗。'), '科技');
-  assert.equal(sectionOf('无人机空袭基辅'), '军事');
-  assert.equal(sectionOf('央行宣布加息，股市大跌'), '财经');
-  assert.equal(sectionOf('总统与法官发生肢体冲突'), '时政'); // 「冲突」不一定是打仗
-  assert.equal(sectionOf('某电影获得金马奖'), '文娱');
-  assert.equal(sectionOf('日本防灾厅成立'), '时政');
-});
+    // 半小时后再拿: 卫报照用上次的 (不请求), VOA 的文章页拿过了也不再拿; RFA 拿不到 → 上次的留着
+    const later = now + 30 * 60000;
+    web = fakeWeb(later, { failRfa: true });
+    globalThis.fetch = web.fetch;
+    const second = await collect({ prev: first.index, prevArticles: first.articles, now: later, guardianKey: 'k', log });
+    assert.ok(!web.calls.some((u) => u.includes('guardianapis')));
+    assert.ok(!web.calls.includes('https://www.voachinese.com/a/1.html'));
+    assert.ok(second.index.items.some((x) => x.src === 'rfa' && x.full));
+    assert.ok(second.articles[second.index.items.find((x) => x.src === 'guardian').id]);
 
-test('新闻: 正文 — 参见、参考资料不要; 空小标题去掉; 短行并成列表、单独一行是小标题; 第一段的外文原名去掉; 太长截断', () => {
-  const text = [
-    '2026年墨西哥城大奖赛（西班牙语：Formula 1 Gran Premio），是第19场。',
-    '',
-    '== 赛事背景 ==',
-    '=== 时间表 ===',
-    '== 车队名单 ==',
-    '共有以下车手：',
-    '甲代表A，代替B',
-    '乙代表C，代替D',
-    '== 赛前 ==',
-    '冠军点',
-    '他领先很多（英语：keep）。',
-    '== 参见 ==',
-    '别的条目',
-    '=== 小节 ===',
-    '也不要。',
-    '== 反应 ==',
-    '大家都说了话。',
-  ].join('\n');
-  assert.deepEqual(bodyFrom(text), {
-    body: ['2026年墨西哥城大奖赛，是第19场。', { h: '车队名单' }, '共有以下车手：', { li: ['甲代表A，代替B', '乙代表C，代替D'] }, { h: '赛前' }, { h: '冠军点', s: 1 }, '他领先很多（英语：keep）。', { h: '反应' }, '大家都说了话。'],
-    cut: false,
-  });
-  const long = bodyFrom(['一'.repeat(30) + '。', '== 二 ==', '二'.repeat(30) + '。', '三'.repeat(30) + '。'].join('\n'), 70);
-  assert.deepEqual(long, { body: ['一'.repeat(30) + '。', { h: '二' }, '二'.repeat(30) + '。'], cut: true });
-  // 截断后最后剩个小标题: 不要
-  assert.deepEqual(bodyFrom(['一'.repeat(30) + '。', '== 二 ==', '二'.repeat(60) + '。'].join('\n'), 50), { body: ['一'.repeat(30) + '。'], cut: true });
-  assert.equal(dropGloss('张三（英语：Zhang San，1970年—）是人。'), '张三是人。');
-});
-
-test('新闻: 人和机构的一句话简介 — 括号去掉、只要第一句; 地方、职位不要; 从日子讲起的是一件事', () => {
-  assert.equal(introLine('巴尔特·德韦弗（荷兰语：Bart De Wever，1970年12月21日—），比利时政治人物，现任首相。他出生于……'), '巴尔特·德韦弗，比利时政治人物，现任首相。');
-  assert.equal(introLine('比利时王国，通称比利时，是位于欧洲西北部的国家。'), '比利时王国，是位于欧洲西北部的国家。');
-  assert.equal(introLine('甲'.repeat(100) + '。', 20).length, 20);
-  assert.equal(placeIntro('比利时王国，通称比利时（法语：Belgique），是位于欧洲西北部的国家。'), true);
-  assert.equal(placeIntro('曼谷，官方名称恭贴玛哈纳空（泰语：กรุงเทพ），是泰国的首都。'), true);
-  assert.equal(placeIntro('山西省，简称晋，中华人民共和国华北地区的一个省份，地处黄土高原。'), true);
-  assert.equal(placeIntro('维多利亚州，简称维州，是澳大利亚东岸南部的一个州，首府墨尔本。'), true);
-  assert.equal(placeIntro('黄之锋，香港民主自决派政客，曾任香港众志秘书长。'), false);
-  assert.equal(placeIntro('中央集市广场是波兰城市克拉科夫旧城区的主要广场。'), false);
-  assert.equal(noteWanted('巴拉圭总统'), false);
-  assert.equal(noteWanted('澳门立法会'), true);
-  assert.equal(noteWanted('2026年美国选举'), false);
-  assert.equal(eventLine('欧洲中部时间2026年10月30日，波兰宪法法院院长……'), true);
-  assert.equal(eventLine('2026年10月底至11月期间，《纽约时报》揭露……'), true);
-  assert.equal(eventLine('黄仁勋是台湾裔美国籍企业家。'), false);
-});
-
-test('新闻: 头条跟大事记里同一件事的并成一条 (主条目、加粗的、字差不多的); 对不上的算第一次看见那天', () => {
-  assert.ok(alike('巴拉圭总统圣地亚哥·培尼亚因银行倒闭宣布请辞不果，遭参议院弹劾免职。', '巴拉圭总统圣地亚哥·潘尼亚因银行破产表示辞职，后被众议院弹劾。') >= 0.4);
-  assert.ok(alike('波兰发生枪击事件', '日本防灾厅成立') < 0.1);
-  const itn = itnFrom(ITN);
-  const days = daysFrom(MONTH, 2026, 11);
-  const { stories, top } = buildStories({ days, itn, today: '2026-11-10' });
-  assert.deepEqual(
-    top.map((s) => [s.date, s.main?.name, s.top]),
-    [
-      ['2026-11-07', '2026年波兰克拉科夫枪击案', 1], // 主条目一样
-      ['2026-11-05', '圣地亚哥·培尼亚', 2], // 译名不一样, 字差不多
-      ['2026-11-05', '黄之锋串谋勾结案', 3], // 加粗的是人, 大事记里有这件事的条目: 用大事记的
-      ['2026-11-10', '2026年某地地震', 4], // 大事记里还没有: 今天
-    ],
-  );
-  assert.equal(top[0].text, itn.items[0].text); // 用头条的字
-  assert.equal(top[0].pic, true);
-  assert.equal(stories.length, 7);
-  // 编号跨天不变
-  assert.equal(top[0].id, `261107-${hashId('m:2026年波兰克拉科夫枪击案')}`);
-  // 上次的文件里有这条头条: 照上次的日子
-  const again = buildStories({ days, itn, today: '2026-11-12', prev: { stories: [{ top: 4, key: top[3].key, date: '2026-11-10' }] } });
-  assert.equal(again.top[3].date, '2026-11-10');
-});
-
-test('新闻: 拼成文件 — 标题用条目的简体名, 主条目 (译名不同也算) 不在相关里, 没用上的条目不写', () => {
-  const itn = itnFrom(ITN);
-  const days = daysFrom(MONTH, 2026, 11);
-  const { stories, top } = buildStories({ days, itn, today: '2026-11-10' });
-  const out = finish({
-    stories,
-    top,
-    today: '2026-11-10',
-    articles: {
-      '2026年波兰克拉科夫枪击案': { rev: 1, name: '2026年波兰克拉科夫枪击案', body: ['枪击。'], cats: ['槍擊案'], image: 'a.jpg', event: true },
-      圣地亚哥·培尼亚: { rev: 2, name: '圣地亚哥·培尼亚', body: ['政治人物。'], intro: true, cats: [] },
-      没人用的: { rev: 3, name: '没人用的', body: [], cats: [] },
-    },
-    resolve: (t) => (t === '聖地牙哥·潘尼亞' ? '圣地亚哥·培尼亚' : t),
-    imgs: { 'a.jpg': { src: 'https://x/960px-a.jpg', w: 960, h: 540 }, '2026 Krakow shooting CCTV.webp': { src: 'https://x/960px-b.webp', w: 960, h: 540 } },
-    itnImage: '2026 Krakow shooting CCTV.webp',
-    topicList: [],
-    deathList: [],
-    notes: { 巴拉圭总统: null, 黃之鋒: '黄之锋，香港政客。' },
-    alias: {},
-  });
-  assert.ok(validNews(out));
-  assert.deepEqual(Object.keys(out.articles).sort(), ['2026年波兰克拉科夫枪击案', '圣地亚哥·培尼亚']);
-  assert.equal(out.articles['2026年波兰克拉科夫枪击案'].cats, undefined);
-  const krakow = out.stories.find((s) => s.top === 1);
-  assert.equal(krakow.title, '波兰克拉科夫枪击案');
-  assert.equal(krakow.sec, '社会');
-  assert.equal(krakow.img.src, 'https://x/960px-b.webp'); // 首页那张图给头条
-  assert.deepEqual(
-    krakow.links.map((l) => l.page),
-    ['克拉科夫'],
-  );
-  const pena = out.stories.find((s) => s.top === 2);
-  assert.equal(pena.title, undefined); // 主条目是人: 没有标题, 用那句话
-  assert.equal(pena.art, '圣地亚哥·培尼亚');
-  assert.deepEqual(
-    pena.links.map((l) => l.page),
-    ['巴拉圭總統'], // 「聖地牙哥·潘尼亞」重定向到主条目: 不列
-  );
-  assert.equal(out.stories[0].date, '2026-11-10'); // 新的在前
-  assert.deepEqual(out.notes, { 黃之鋒: '黄之锋，香港政客。' }); // 只留用得上的
-  assert.equal(todayIn('Asia/Shanghai', new Date('2026-11-10T17:00:00Z')), '2026-11-11');
+    // 没有密钥: 不放卫报
+    globalThis.fetch = fakeWeb(now).fetch;
+    const noKey = await collect({ now, guardianKey: '', log });
+    assert.ok(!noKey.index.items.some((x) => x.src === 'guardian'));
+    assert.equal(noKey.index.guardianAt, null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
 
 // ---- 温故这边 (js/news.js) ----
 
+const NOW = Date.parse('2026-11-11T12:00:00Z');
+const ago = (h) => new Date(NOW - h * 3600000).toISOString();
 const DATA = {
-  v: 1,
-  at: '2026-11-10T12:00:00Z',
-  top: ['b'],
-  stories: [
-    { id: 'a', date: '2026-11-10', sec: '社会', text: '甲地火灾。', links: [{ page: '甲地', name: '甲地' }], src: [] },
-    { id: 'b', date: '2026-11-09', sec: '时政', title: '某国大选', text: '某国举行大选。', art: '2026年某国大选', top: 1, links: [{ page: '张三', name: '张三' }, { page: '俄乌战争', name: '俄乌战争' }], src: [], img: { src: 'https://t/960px-x.jpg' } },
-    { id: 'c', date: '2026-11-09', sec: '时政', text: '某国大选结果出炉。', art: '2026年某国大选', links: [], src: [] },
-    { id: 'd', date: '2026-11-08', sec: '体育', text: '某队夺冠。', links: [], src: [] },
-    { id: 'e', date: '2026-11-08', sec: '军事', text: '俄乌战争双方交换战俘。', links: [], src: [] },
+  v: 2,
+  at: ago(0.1),
+  guardianAt: ago(0.5),
+  sources: { voa: { name: '美国之音', lang: 'zh', full: true }, cns: { name: '中新网', lang: 'zh', full: false }, guardian: { name: 'The Guardian', lang: 'en', full: true }, bbc: { name: 'BBC News', lang: 'en', full: false }, npr: { name: 'NPR', lang: 'en', full: false } },
+  items: [
+    { id: 'cns-1', src: 'cns', lang: 'zh', t: '中新一', u: 'https://cns/1', at: ago(0.5) },
+    { id: 'voa-1', src: 'voa', lang: 'zh', t: 'VOA 一', u: 'https://voa/1', at: ago(1), full: true, img: { src: 'https://img/1' } },
+    { id: 'guardian-old', src: 'guardian', lang: 'en', t: 'Old', u: 'https://g/old', at: ago(2), full: true, got: ago(25) },
+    { id: 'guardian-1', src: 'guardian', lang: 'en', t: 'Guardian one', u: 'https://g/1', at: ago(3), full: true, got: ago(0.5), img: { src: 'https://img/g' } },
+    { id: 'bbc-1', src: 'bbc', lang: 'en', t: 'BBC one', u: 'https://bbc/1', at: ago(5) },
+    { id: 'voa-2', src: 'voa', lang: 'zh', t: 'VOA 二', u: 'https://voa/2', at: ago(30), full: true, img: { src: 'https://img/2' } },
+    { id: 'voa-3', src: 'voa', lang: 'zh', t: 'VOA 三', u: 'https://voa/3', at: ago(50), full: true },
   ],
-  articles: { '2026年某国大选': { rev: 1, name: '2026年某国大选', body: ['开头。', { h: '结果' }, { li: ['甲', '乙', '……'] }], img: { src: 'https://t/y.jpg' } } },
-  topics: [{ title: '俄乌战争', name: '俄乌战争', body: ['打仗。'] }],
-  deaths: [],
-  notes: { 张三: '张三，某国政治人物。', 甲地: null },
 };
 
-test('新闻页: 文件像不像样、按日子分、栏目、头条、同一件事、正在发生、人和机构', () => {
-  assert.equal(validNews(DATA), true);
-  assert.equal(validNews({ ...DATA, v: 2 }), false);
-  assert.equal(validNews({ ...DATA, stories: [] }), false);
-  assert.equal(validNews(null), false);
+test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源、快讯只要 24 小时内; 首页的头条和几格', () => {
+  assert.equal(validIndex(DATA), true);
+  assert.equal(validIndex({ ...DATA, v: 1 }), false);
+  assert.equal(validIndex({ ...DATA, items: [] }), false);
+  assert.equal(guardianExpired(DATA.items[2], NOW), true);
+  assert.equal(guardianExpired(DATA.items[3], NOW), false);
+  assert.equal(guardianExpired({ src: 'guardian' }, NOW), true); // 不知道什么时候拿的: 也当过期
+  assert.equal(guardianExpired(DATA.items[0], NOW), false);
   assert.deepEqual(
-    byDay(DATA).map((d) => [d.date, d.stories.map((s) => s.id)]),
+    visibleItems(DATA, NOW).map((x) => x.id),
+    ['cns-1', 'voa-1', 'guardian-1', 'bbc-1', 'voa-2', 'voa-3'],
+  );
+  assert.deepEqual(
+    itemsFor(DATA, 'en', { now: NOW }).map((x) => x.id),
+    ['guardian-1', 'bbc-1'],
+  );
+  assert.deepEqual(
+    itemsFor(DATA, 'zh', { src: 'voa', now: NOW }).map((x) => x.id),
+    ['voa-1', 'voa-2', 'voa-3'],
+  );
+  assert.deepEqual(
+    liveItems(DATA, 'zh', NOW).map((x) => x.id),
+    ['cns-1', 'voa-1'],
+  );
+  assert.deepEqual(
+    sourcesFor(DATA, 'en', NOW).map((s) => [s.id, s.n]),
     [
-      ['2026-11-10', ['a']],
-      ['2026-11-09', ['b', 'c']],
-      ['2026-11-08', ['d', 'e']],
+      ['guardian', 1],
+      ['bbc', 1],
+    ],
+  ); // NPR 一条都没有: 不列
+  const page = frontPage(itemsFor(DATA, 'zh', { now: NOW }), { cards: 1 });
+  assert.equal(page.lead.id, 'voa-1');
+  assert.deepEqual(
+    page.cards.map((x) => x.id),
+    ['voa-2'],
+  );
+  assert.deepEqual(
+    page.rest.map((x) => x.id),
+    ['cns-1', 'voa-3'],
+  );
+});
+
+test('新闻页: 点了去哪、日子、几小时前、朗读的内容', () => {
+  assert.equal(itemHref(DATA.items[1]), '#/news/a/voa-1');
+  assert.equal(itemHref(DATA.items[0]), 'https://cns/1'); // 只有标题的: 原网站
+  assert.equal(langHref('en'), '#/news/en');
+  assert.equal(langHref('zh'), '#/news');
+  assert.equal(liveHref('en'), '#/news/live/en');
+  assert.deepEqual(
+    byDay([{ at: '2026-11-11T09:00:00' }, { at: '2026-11-11T08:00:00' }, { at: '2026-11-10T23:00:00' }]).map((d) => [d.day, d.items.length]),
+    [
+      ['2026-11-11', 2],
+      ['2026-11-10', 1],
     ],
   );
-  assert.deepEqual(
-    byDay(DATA, '时政').map((d) => d.date),
-    ['2026-11-09'],
-  );
-  assert.deepEqual(sectionCounts(DATA), [
-    { sec: '时政', n: 2 },
-    { sec: '军事', n: 1 },
-    { sec: '社会', n: 1 },
-    { sec: '体育', n: 1 },
-  ]);
-  assert.deepEqual(
-    topStories(DATA).map((s) => s.id),
-    ['b'],
-  );
-  assert.deepEqual(
-    sameEvent(DATA, DATA.stories[1]).map((s) => s.id),
-    ['c'],
-  );
-  assert.deepEqual(sameEvent(DATA, DATA.stories[0]), []);
-  assert.deepEqual(
-    topicStories(DATA, topicOf(DATA, '俄乌战争')).map((s) => s.id),
-    ['b', 'e'], // 链接对得上的、字里写着的
-  );
-  assert.deepEqual(peopleOf(DATA, DATA.stories[1]), [{ page: '张三', name: '张三', line: '张三，某国政治人物。' }]);
-  assert.deepEqual(peopleOf(DATA, DATA.stories[0]), []); // 简介是 null 的 (地方) 不列
-  assert.equal(headline(DATA.stories[0]), '甲地火灾。');
-  assert.equal(headline(DATA.stories[1]), '某国大选');
-  assert.equal(imageOf(DATA, DATA.stories[1]).src, 'https://t/960px-x.jpg');
-  assert.equal(imageOf(DATA, DATA.stories[2]).src, 'https://t/y.jpg'); // 没有自己的图: 条目的
-  assert.equal(imageOf(DATA, DATA.stories[0]), null);
-  assert.equal(smallImage('https://t/thumb/a/ab/x.jpg/960px-x.jpg'), 'https://t/thumb/a/ab/x.jpg/330px-x.jpg');
-  assert.equal(smallImage('https://t/a/ab/x.jpg'), 'https://t/a/ab/x.jpg');
-  assert.deepEqual(spokenParts(DATA, DATA.stories[1]), [
-    { k: 'title', text: '某国大选' },
-    { k: 'lede', text: '某国举行大选。' },
-    { k: 0, text: '开头。' },
-    { k: 1, text: '结果' },
-    { k: 2, text: '甲；乙' },
-  ]);
-  assert.equal(storyHref({ id: '261109-x' }), '#/news/s/261109-x');
-  assert.equal(wikiUrl('俄乌战争 (2022年至今)'), `https://zh.wikipedia.org/zh-cn/${encodeURIComponent('俄乌战争_(2022年至今)')}`);
-});
-
-test('新闻页: 日子和「几小时前」', () => {
-  assert.equal(dayLabel('2026-11-10', '2026-11-10'), '今天');
-  assert.equal(dayLabel('2026-11-09', '2026-11-10'), '昨天');
-  assert.equal(dayLabel('2026-11-09', '2026-11-10', { long: true }), '昨天 · 11月9日 星期一');
-  assert.equal(dayLabel('2026-11-08', '2026-11-10'), '11月8日 星期日');
+  assert.equal(dayLabel('2026-11-11', '2026-11-11'), '今天');
+  assert.equal(dayLabel('2026-11-10', '2026-11-11'), '昨天');
+  assert.equal(dayLabel('2026-11-08', '2026-11-11'), '11月8日 星期日');
   assert.equal(dayLabel('2025-12-31', '2026-01-02'), '2025年12月31日 星期三');
-  const now = Date.parse('2026-11-10T12:00:00Z');
-  assert.equal(agoText('2026-11-10T11:59:30Z', now), '刚刚');
-  assert.equal(agoText('2026-11-10T11:40:00Z', now), '20 分钟前');
-  assert.equal(agoText('2026-11-10T09:00:00Z', now), '3 小时前');
-  assert.equal(agoText('2026-11-08T12:00:00Z', now), '2 天前');
-  assert.equal(agoText('不是时间', now), '');
+  assert.equal(agoText(ago(0.01), NOW), '刚刚');
+  assert.equal(agoText(ago(0.5), NOW), '30 分钟前');
+  assert.equal(agoText(ago(3), NOW), '3 小时前');
+  assert.equal(agoText(ago(49), NOW), '2 天前');
+  assert.equal(inlineText(['甲', { a: 'https://x', t: '乙' }, { b: '丙' }, { i: '丁' }]), '甲乙丙丁');
+  assert.deepEqual(spokenParts({ t: '标题', lede: ['导语'], body: [{ p: ['一段'] }, { img: { src: 'x' } }, { h: '小标题' }, { li: [['甲'], ['乙']] }, { q: ['引文'] }, { more: true }] }), [
+    { k: 'title', text: '标题' },
+    { k: 'lede', text: '导语' },
+    { k: 0, text: '一段' },
+    { k: 2, text: '小标题' },
+    { k: 3, text: '甲；乙' },
+    { k: 4, text: '引文' },
+  ]);
 });
 
-test('新闻页: 从哪拿 — 先 GitHub 再 jsDelivr (自己电脑上先用本地的); 拿不到、格式不对的换下一个; 都拿不到: 没有', async () => {
-  assert.deepEqual(NEWS_URLS, ['https://raw.githubusercontent.com/aizhang453-hash/wengu/news/latest.json', 'https://cdn.jsdelivr.net/gh/aizhang453-hash/wengu@news/latest.json']);
-  assert.deepEqual(newsUrls({ hostname: 'aizhang453-hash.github.io', href: 'https://aizhang453-hash.github.io/wengu/' }), NEWS_URLS);
-  assert.deepEqual(newsUrls({ hostname: 'localhost', href: 'http://localhost:8000/#/news' }), ['http://localhost:8000/news/latest.json', ...NEWS_URLS]);
+test('新闻页: 从哪拿 — 先 GitHub 再 jsDelivr (自己电脑上先用本地的); 拿不到、格式不对的换下一个', async () => {
+  assert.deepEqual(NEWS_BASES, ['https://raw.githubusercontent.com/aizhang453-hash/wengu/news/', 'https://cdn.jsdelivr.net/gh/aizhang453-hash/wengu@news/']);
+  assert.deepEqual(newsBases({ hostname: 'aizhang453-hash.github.io', href: 'https://aizhang453-hash.github.io/wengu/' }), NEWS_BASES);
+  assert.deepEqual(newsBases({ hostname: 'localhost', href: 'http://localhost:8000/#/news' }), ['http://localhost:8000/news/', ...NEWS_BASES]);
   // 这里没有 IndexedDB: 存不了、也没有存着的, 不要紧
   const tried = [];
-  const got = await loadNews({
-    urls: ['u1', 'u2', 'u3'],
+  const got = await loadIndex({
+    bases: ['b1/', 'b2/', 'b3/'],
     now: 1000,
     fetchOne: async (u) => {
       tried.push(u);
-      if (u === 'u1') throw new Error('断网');
-      if (u === 'u2') return { v: 1, stories: [] }; // 格式不对
+      if (u === 'b1/latest.json') throw new Error('断网');
+      if (u === 'b2/latest.json') return { v: 2, sources: {}, items: [] };
       return DATA;
     },
   });
-  assert.deepEqual(tried, ['u1', 'u2', 'u3']);
+  assert.deepEqual(tried, ['b1/latest.json', 'b2/latest.json', 'b3/latest.json']);
   assert.equal(got.data, DATA);
-  assert.equal(got.at, 1000);
   assert.equal(got.stale, false);
-  const none = await loadNews({
-    urls: ['u1'],
+  const none = await loadIndex({
+    bases: ['b1/'],
     fetchOne: async () => {
       throw new Error('断网');
     },
   });
   assert.equal(none.data, null);
-  assert.equal(none.stale, true);
   assert.equal(none.error.message, '断网');
+  // 全文: 卫报过了 24 小时的不给
+  const art = { id: 'g', src: 'guardian', t: 'x', body: [{ p: ['y'] }], got: ago(1) };
+  assert.equal(await loadArticle('g', { bases: ['b/'], now: NOW, fetchOne: async () => art }), art);
+  assert.equal(await loadArticle('g', { bases: ['b/'], now: NOW, fetchOne: async () => ({ ...art, got: ago(30) }) }), null);
+  assert.deepEqual(await loadArticle('v', { bases: ['b/'], now: NOW, fetchOne: async (u) => (u === 'b/a/v.json' ? { id: 'v', src: 'voa', t: 'x', body: [] } : null) }), { id: 'v', src: 'voa', t: 'x', body: [] });
 });

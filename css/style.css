@@ -10139,14 +10139,14 @@ button.pick-row:hover {
   border-color: var(--accent);
 }
 
-/* ==== 新闻 (v1.74): #/news ==== */
+/* ==== 新闻 (v1.74): #/news 新闻、#/news/live 快讯、#/news/a/<编号> 一篇全文 ==== */
 .news-wait {
   padding: 40px 0;
   text-align: center;
 }
 
 .news-head {
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 6px;
 }
 
@@ -10154,10 +10154,10 @@ button.pick-row:hover {
   margin-bottom: 0;
 }
 
-.news-updated {
+.news-head-tools {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
 }
 
 .news-stale {
@@ -10168,7 +10168,32 @@ button.pick-row:hover {
   font-size: 0.9rem;
 }
 
-/* 栏目: 一排, 手机上左右划 */
+/* 中文 | English */
+.news-langs {
+  display: inline-flex;
+  gap: 2px;
+  margin: 2px 0 10px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.news-lang {
+  padding: 5px 16px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.news-lang.on {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 来源: 一排, 手机上左右划 */
 .news-secs {
   display: flex;
   gap: 6px;
@@ -10182,11 +10207,9 @@ button.pick-row:hover {
   display: none;
 }
 
-.news-secs .chip,
-.news-topics .chip {
+.news-secs .chip {
   flex: none;
   white-space: nowrap;
-  text-decoration: none;
 }
 
 .news-n {
@@ -10198,11 +10221,39 @@ button.pick-row:hover {
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-decoration: none;
+  letter-spacing: 0.03em;
 }
 
-/* 头条: 第一条大图在左 (手机上在上), 其他几条一格一条 */
+.news-time {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.news-out {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* 卫报的标志 */
+.news-gu-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+}
+
+.news-gu-logo {
+  display: inline-block;
+  line-height: 0;
+}
+
+.news-gu-logo img {
+  width: 112px;
+  height: auto;
+}
+
+/* 头条: 第一条大图在左 (手机上在上), 再几条一格一条 */
 .news-top {
   display: grid;
   gap: 12px;
@@ -10219,10 +10270,6 @@ button.pick-row:hover {
   box-shadow: var(--shadow);
   color: var(--text);
   text-decoration: none;
-}
-
-.news-lead.no-pic {
-  grid-template-columns: 1fr;
 }
 
 .news-lead:hover,
@@ -10262,16 +10309,12 @@ button.pick-row:hover {
 
 .news-lead-title {
   font-family: var(--font-serif);
-  font-size: 1.5rem;
+  font-size: 1.45rem;
   line-height: 1.35;
 }
 
-.news-lead.no-pic .news-lead-title {
-  font-size: 1.3rem;
-}
-
 .news-lead-sum,
-.news-card-sum,
+.news-card-title,
 .news-row-sum {
   display: -webkit-box;
   overflow: hidden;
@@ -10302,10 +10345,6 @@ button.pick-row:hover {
   text-decoration: none;
 }
 
-.news-card.no-pic {
-  padding-top: 14px;
-}
-
 .news-card > :not(.news-card-pic) {
   margin: 0 14px;
 }
@@ -10316,34 +10355,10 @@ button.pick-row:hover {
 }
 
 .news-card-title {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
   font-family: var(--font-serif);
-  font-size: 1.05rem;
+  font-size: 1.02rem;
   line-height: 1.45;
-}
-
-.news-card-sum {
-  -webkit-line-clamp: 3;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.news-topics {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 18px 0 0;
-}
-
-.news-topics-label {
-  margin-right: 4px;
-  color: var(--accent);
-  font-size: 0.85rem;
-  font-weight: 700;
 }
 
 /* 按日子列的新闻: 一行一条, 右边小图 */
@@ -10384,11 +10399,6 @@ button.pick-row:hover {
   line-height: 1.55;
 }
 
-/* 没有专门条目的新闻, 标题就是一整句话: 不加粗 */
-.news-row-title.plain {
-  font-weight: 450;
-}
-
 .news-row-sum {
   -webkit-line-clamp: 2;
   color: var(--muted);
@@ -10412,14 +10422,14 @@ button.pick-row:hover {
   }
 
   .news-lead-title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .news-thumb {
     width: 86px;
   }
 
-  /* 头条的其他几条: 两格一排, 不要摘要 */
+  /* 头条下面几条: 两格一排 */
   .news-cards {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
@@ -10430,35 +10440,12 @@ button.pick-row:hover {
   }
 
   .news-card-title {
-    font-size: 0.98rem;
+    font-size: 0.96rem;
   }
-
-  .news-card-sum {
-    display: none;
-  }
-}
-
-.news-people {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.93rem;
-  line-height: 1.65;
-}
-
-.news-people a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.news-people a:hover strong {
-  color: var(--accent);
 }
 
 .news-source {
-  margin-top: 40px;
+  margin-top: 36px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
   line-height: 1.75;
@@ -10468,7 +10455,103 @@ button.pick-row:hover {
   color: inherit;
 }
 
-/* 一条新闻 */
+/* 快讯: 中文、英文两栏 (手机上一次一栏, 上面切) */
+.news-live .news-langs {
+  display: none;
+}
+
+.news-live-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.news-live-head {
+  margin: 8px 0 6px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--text);
+}
+
+.news-live-day {
+  margin: 14px 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.news-live-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.news-live-list li {
+  border-bottom: 1px solid var(--line);
+}
+
+.news-live-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  padding: 9px 2px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.news-live-row:hover {
+  background: var(--surface-2);
+}
+
+.news-live-time {
+  grid-row: span 2;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+
+.news-live-src {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.news-live-title {
+  line-height: 1.55;
+}
+
+.news-new {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+@media (max-width: 760px) {
+  .news-live .news-langs {
+    display: inline-flex;
+  }
+
+  .news-live-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .news-live-col:not(.on) {
+    display: none;
+  }
+
+  .news-live-head {
+    display: none;
+  }
+}
+
+/* 一篇全文 */
 .news-story {
   max-width: 720px;
   margin: 0 auto;
@@ -10480,15 +10563,25 @@ button.pick-row:hover {
 }
 
 .news-article h1 {
-  margin: 6px 0 12px;
+  margin: 6px 0 8px;
   font-family: var(--font-serif);
-  font-size: 1.9rem;
+  font-size: 1.8rem;
   line-height: 1.35;
 }
 
-.news-article h1.long {
-  font-size: 1.35rem;
-  line-height: 1.55;
+.news-by {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+
+.news-credit-box {
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  line-height: 1.6;
 }
 
 .news-lede {
@@ -10525,16 +10618,13 @@ button.pick-row:hover {
 .news-credit {
   margin-top: 6px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
 
-.news-credit a {
-  color: inherit;
-}
-
 .news-article p,
-.news-article li {
+.news-article li,
+.news-article blockquote {
   font-size: 1.04rem;
   line-height: 1.85;
 }
@@ -10543,19 +10633,28 @@ button.pick-row:hover {
   margin: 0 0 1em;
 }
 
+.news-article :lang(en) p,
+.news-article:lang(en) p,
+.news-article:lang(en) li {
+  line-height: 1.7;
+}
+
 .news-article h2 {
-  margin: 1.6em 0 0.6em;
-  font-size: 1.15rem;
+  margin: 1.5em 0 0.6em;
+  font-size: 1.12rem;
 }
 
-.news-article h3 {
-  margin: 1.3em 0 0.4em;
-  font-size: 1rem;
-}
-
-.news-article ul {
+.news-article ul,
+.news-article ol {
   margin: 0 0 1em;
   padding-left: 1.3em;
+}
+
+.news-article blockquote {
+  margin: 0 0 1em;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
 }
 
 .news-article .news-speaking {
@@ -10565,33 +10664,10 @@ button.pick-row:hover {
 }
 
 .news-more {
-  color: var(--muted);
+  font-size: 0.9rem;
 }
 
-.news-sub {
-  margin-top: 34px;
-}
-
-.news-src {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.95rem;
-}
-
-.news-src a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.news-src-site {
-  margin-right: 8px;
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.news-src a:hover .news-src-title {
-  text-decoration: underline;
+.news-original {
+  margin-top: 1.6em;
+  font-weight: 600;
 }

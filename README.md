@@ -27,7 +27,7 @@
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **题目集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **书斋** | 古诗文原文免费读（以前叫「阅读」），书架分四层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）、古典小说（西游记，一回一回读）；每日一首、搜索、收藏、目录里的「接着读」、简体 / 繁体、朗读；《古文观止》里 33 篇名篇有注释、译文、出自这篇的成语和名句；搜索也能搜成语；一键做成「接下句」「字词」「成语」卡片集来背 |
-| **新闻** | 像新闻网站：头条、栏目（时政、军事、财经、科技、社会、体育、文娱）、正在发生、按日子列最近两个星期的新闻、最近逝世；点开有导语、图、整篇报道、原始报道的链接、新闻里的人和机构，可以朗读；每天自动更新，断网也能看上次的 |
+| **新闻** | 像新闻网站，分中文、English：美国之音、自由亚洲电台、卫报、NASA 在温故里读全文（可以朗读），中新网、BBC、NPR 有标题和链接；「快讯」页列 24 小时内的标题，中英文两栏；每 15 分钟自动更新，断网也能看上次的 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -80,10 +80,12 @@
 
 ### 新闻
 
-- 在左上角 ☰ 的「新闻」：最上面是头条（第一条大图），一排栏目可以只看一类（分类是按字自动分的，不一定准）；「正在发生」点进去是这件事的简介和最近讲到它的新闻；下面按日子列最近两个星期的新闻，最底下是最近逝世的人。
-- 点开一条：有专门条目的新闻（像「波兰克拉科夫枪击案」）下面是整篇报道；还有原始报道的链接（路透社、联合早报……，在新的网页里打开）、新闻里的人和机构、这件事的其他新闻；可以朗读。
-- 新闻从哪来：新闻网站的文章不许整篇转载，所以用中文维基百科的[「新闻动态」](https://zh.wikipedia.org/zh-cn/Portal:新闻动态)，文字按 CC BY-SA 4.0 授权；图片只用维基共享资源上自由授权的，每张图下面写着作者和授权。
-- 每天自动更新：GitHub Actions 每四个小时跑一次 `tools/news.mjs`（`.github/workflows/news.yml`），把新闻放到仓库的 `news` 分支（只有一个 `latest.json`，每次整个覆盖）。温故从 GitHub 拿这个文件（拿不到再试 jsDelivr），存在这台设备上，断网也能看上次的。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上更新一次。
+- 在左上角 ☰ 的「新闻」，分「中文」「English」两页：最上面是头条（最新一篇能读全文的，大图），下面按日子列；一排来源可以只看一家。
+- 能读全文的：美国之音、自由亚洲电台（中文），卫报、NASA（英文）。点开在温故里读：作者、图、正文、原文链接、出处，可以朗读。中新网、BBC、NPR 只有标题和摘要，点了在新的网页里打开原网站（标着 ↗）。
+- 「快讯」：24 小时内各家的标题，中文、英文分两栏，新的在上面；上次看过以后来的标「新」；开着时每 3 分钟自己刷新。
+- 来源是逐家核对过条款选的：美国之音、NASA 是美国政府的作品（美国之音转载美联社的照片不放）；自由亚洲电台允许非商业、教育用途转载，每篇写着它要求的署名；卫报用开放平台的 API，按它的规定只留 24 小时、原样显示、放「Powered by The Guardian」标志、仅供个人非商业阅读。其余的只放标题和链接。
+- 每 15 分钟自动更新：GitHub Actions 跑 `tools/news.mjs`（`.github/workflows/news.yml`），放到仓库的 `news` 分支（`latest.json` 和一篇一个的全文 `a/`，每次整个覆盖）。温故从 GitHub 拿（拿不到再试 jsDelivr），存在这台设备上，断网也能看上次的（卫报的过了 24 小时就删）。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上更新一次。
+- 卫报的 API 要密钥：在卫报开放平台免费申请，放进仓库 Settings › Secrets and variables › Actions，名字是 `GUARDIAN_API_KEY`。没有密钥就不拿卫报，别的照常。
 
 ### 导入
 
@@ -138,7 +140,7 @@ npm start        # 本地运行：http://localhost:8000
 npm test         # 运行测试
 npm run sw       # 新增 js 文件后，更新离线缓存清单
 node tools/library.mjs <原文文件夹> <opencc-js 的 full.js>   # 重新生成书库（一般不用；要先下载 chinese-poetry 和 opencc-js，放哪些文件见脚本开头）
-node tools/news.mjs   # 从维基百科拿新闻，写成 news/latest.json（自己电脑上的新闻页先用这个；平常是 GitHub Actions 跑）
+node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页先用这个；平常是 GitHub Actions 跑）；有 GUARDIAN_API_KEY 才拿卫报
 ```
 
 直接打开 `index.html` 无法运行（浏览器不允许从本地文件加载 JavaScript 模块），请使用上述本地服务器。
@@ -154,13 +156,13 @@ node tools/news.mjs   # 从维基百科拿新闻，写成 news/latest.json（自
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
   - `mistakes.js` 题目集（v1.63 以前叫错题集；所有题目集、一个题目集）、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
   - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
-  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）、`news.js` 新闻（首页、一条新闻、正在发生）
+  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）、`news.js` 新闻（中文、English、快讯、一篇全文）
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
-  - `js/news.js` 新闻：从 news 分支拿 `latest.json`、存在 IndexedDB、分组；`tools/news.mjs` 从维基百科拿新闻（GitHub Actions 每四个小时跑一次：`.github/workflows/news.yml`）
+  - `js/news.js` 新闻：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS 和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
   - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
@@ -174,6 +176,6 @@ node tools/news.mjs   # 从维基百科拿新闻，写成 news/latest.json（自
 ## 许可证
 
 [PolyForm Strict 1.0.0](LICENSE)：可查看代码、个人使用，不可修改后再发布或商用。
-新闻（仓库的 `news` 分支）来自[中文维基百科](https://zh.wikipedia.org/zh-cn/Portal:新闻动态)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.zh-hans) 授权；图片来自维基共享资源，作者和授权见每张图下面。
+新闻（仓库的 `news` 分支）的版权归各家：美国之音、NASA 的是美国政府的作品；自由亚洲电台的按它的条款转载（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia）；卫报的来自卫报开放平台（Powered by The Guardian，仅供个人、非商业阅读）；中新网、BBC、NPR 只有标题、摘要和链接。`img/guardian-powered-*.png` 是卫报提供的标志，只按卫报开放平台的规定用。
 书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。
