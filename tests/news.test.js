@@ -104,7 +104,7 @@ const guardianResult = ({ fields = {}, ...over } = {}) => ({
   ...over,
 });
 
-test('新闻: 卫报 API 的一篇 — 直播和法律敏感的不要; 栏目用卫报自己的; 记着什么时候拿的 (24 小时后撤下)', () => {
+test('新闻: 卫报 API 的一篇 — 直播不要, 法律敏感的照放但记上 legal; 栏目用卫报自己的; 记着什么时候拿的 (24 小时后撤下)', () => {
   const got = '2026-11-10T21:00:00.000Z';
   const { item, article } = guardianItem(guardianResult(), got);
   assert.deepEqual(item, { id: idOf('guardian', 'https://www.theguardian.com/world/2026/nov/10/x'), src: 'guardian', lang: 'en', t: 'Headline', s: 'Trail text', u: 'https://www.theguardian.com/world/2026/nov/10/x', at: '2026-11-10T20:20:00.000Z', sec: 'World news', img: { src: 'https://media.guim.co.uk/t/500.jpg' }, by: 'Lucy Campbell', full: true, got });
@@ -113,7 +113,11 @@ test('新闻: 卫报 API 的一篇 — 直播和法律敏感的不要; 栏目用
   assert.deepEqual(article.body, [{ p: ['Para one.'] }, { p: ['Para two.'] }]);
   assert.equal(article.got, got);
   assert.equal(guardianItem(guardianResult({ type: 'liveblog' }), got), null);
-  assert.equal(guardianItem(guardianResult({ fields: { legallySensitive: 'true' } }), got), null);
+  assert.equal(item.legal, undefined);
+  const legal = guardianItem(guardianResult({ fields: { legallySensitive: 'true' } }), got);
+  assert.equal(legal.item.legal, true);
+  assert.equal(legal.article.legal, true);
+  assert.deepEqual(legal.article.body, [{ p: ['Para one.'] }, { p: ['Para two.'] }]);
 });
 
 test('新闻: 跟上次的合起来 — 这次的为准; 只有标题的留 48 小时、能读全文的留一个星期; 卫报拿来超过 24 小时的不要', () => {

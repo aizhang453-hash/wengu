@@ -10584,6 +10584,14 @@ button.pick-row:hover {
   line-height: 1.6;
 }
 
+.news-legal {
+  margin: 8px 0 14px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--mid-soft);
+  font-size: 0.9rem;
+}
+
 .news-lede {
   margin: 0 0 14px;
   padding-left: 12px;

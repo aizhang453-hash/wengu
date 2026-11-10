@@ -11,7 +11,8 @@
 //     卫报 The Guardian 开放平台 (Open Platform) 的 API, 要密钥 (环境变量 GUARDIAN_API_KEY, 放在 GitHub 的 secret 里)。开发者密钥给全文, 只能非商业;
 //                       内容最多留 24 小时 (所以每小时整批重新拿一次, 温故里拿来超过 24 小时的不显示), 原样显示、标题作者都留着、链回原文、
 //                       旁边放「Powered by The Guardian」标志; 不许拿去做 AI、文本挖掘 (栏目用卫报自己分的, 不分析文字);
-//                       标了「法律敏感」(英国法庭报道的限制) 的不放
+//                       标了「法律敏感」(多是英国正在审的案子, 法庭对报道有限制) 的照放, 页面上写明「这篇涉及正在进行的诉讼, 内容可能会被修改」;
+//                       卫报改了、撤了的, 下一次整批重新拿 (最多一小时) 时跟着改、跟着没
 //     NASA              美国政府的作品, RSS 带全文
 //   只放标题和链接 (点了去原网站): 中新网 (即时新闻、要闻)、BBC、NPR
 // 快讯页用所有来源的标题, 留最近 24 小时; 中新网的即时新闻一次只给 30 条 (两个小时左右), 所以跟上次的合起来。
@@ -344,16 +345,17 @@ function serialize(n) {
     .join('');
 }
 
-// 卫报 API 的一篇 → [列表里的一条, 全文]; 直播、标了法律敏感的不要
+// 卫报 API 的一篇 → [列表里的一条, 全文]; 直播不要; 标了法律敏感的记上 legal (页面上写一句)
 export function guardianItem(r, got) {
   const f = r.fields ?? {};
-  if (r.type !== 'article' || f.legallySensitive === 'true' || !f.body) return null;
+  if (r.type !== 'article' || !f.body) return null;
+  const legal = f.legallySensitive === 'true' ? { legal: true } : {};
   const id = idOf('guardian', r.webUrl);
   const t = plain(f.headline || r.webTitle);
   const main = f.main ? blocksFrom(f.main).find((b) => b.img)?.img : null;
   const thumb = f.thumbnail ? { src: f.thumbnail } : null;
-  const item = { id, src: 'guardian', lang: 'en', t, s: cut(plain(f.trailText || f.standfirst), SUMMARY_MAX), u: r.webUrl, at: new Date(f.firstPublicationDate || r.webPublicationDate).toISOString(), sec: r.sectionName, ...(thumb ? { img: thumb } : {}), ...(f.byline ? { by: f.byline } : {}), full: true, got };
-  const article = { id, src: 'guardian', t, u: r.webUrl, at: item.at, sec: r.sectionName, by: f.byline || '', lede: f.standfirst ? blocksFrom(f.standfirst).flatMap((b) => b.p ?? []) : [], img: main ?? null, body: blocksFrom(f.body), got };
+  const item = { id, src: 'guardian', lang: 'en', t, s: cut(plain(f.trailText || f.standfirst), SUMMARY_MAX), u: r.webUrl, at: new Date(f.firstPublicationDate || r.webPublicationDate).toISOString(), sec: r.sectionName, ...(thumb ? { img: thumb } : {}), ...(f.byline ? { by: f.byline } : {}), full: true, got, ...legal };
+  const article = { id, src: 'guardian', t, u: r.webUrl, at: item.at, sec: r.sectionName, by: f.byline || '', lede: f.standfirst ? blocksFrom(f.standfirst).flatMap((b) => b.p ?? []) : [], img: main ?? null, body: blocksFrom(f.body), got, ...legal };
   return { item, article };
 }
 

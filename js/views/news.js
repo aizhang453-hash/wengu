@@ -329,6 +329,8 @@ export function renderArticle(ctx, id) {
       // 卫报: 标志放在文章旁边, 链到这篇的原文; RFA: 署名要醒目, 放在最上面
       a.src === 'guardian' ? h('p', { class: 'news-gu-note' }, guardianLogo(a.u)) : null,
       a.src === 'rfa' && s.note ? h('p', { class: 'news-credit-box' }, s.note) : null,
+      // 卫报标了「法律敏感」的 (多是英国正在审的案子)
+      a.legal ? h('p', { class: 'news-legal' }, '这篇涉及正在进行的诉讼，内容可能会被修改。') : null,
       a.lede?.length ? h('p', { class: 'news-lede', 'data-k': 'lede' }, inline(a.lede)) : null,
     );
     const { button, bar } = speaker(article, () => spokenParts(a), lang);
