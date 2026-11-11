@@ -1,11 +1,11 @@
 // 广播 (v1.78, #/radio): 全世界的网络电台 (电台目录和规矩见 ../radio.js; 播放和底下那一条见 radiobar.js)
 //   v1.79 (用户挑的): 最上面「正在播放」的大面板 (台标、台名、播放 / 暂停、收藏、睡觉定时、音量, 放着时有跳动的声音条);
-//   下面搜电台 (台名、种类、城市、国家); 没搜的时候列: 收藏、最近听过、附近的台 (按邸报天气定的地方)、热门。
-//   收藏、最近听过跟着卡片同步 (store.data.radio)。
+//   下面搜电台 (台名、种类、城市、国家); 没搜的时候列: 收藏、附近的台 (按邸报天气定的地方)、热门。
+//   收藏跟着卡片同步 (store.data.radio)。v1.79.1: 用户说「最近听过」看着难受, 去掉了 (也不再记)
 //   v1.78.1: 热门不分「中文 | 全世界」; v1.78.2: 搜索框清空就回到原样 (不要「不搜了」)
 
 import { h, fill, icon } from '../dom.js';
-import { topStations, searchStations, nearbyStations, favoriteList, isFavorite, recentList } from '../radio.js';
+import { topStations, searchStations, nearbyStations, favoriteList, isFavorite } from '../radio.js';
 import { savedPlace, savePlace, locate } from '../weather.js';
 import { playStation, togglePlay, stopRadio, radioNow, onRadioChange, stationIcon, statusText, setSleep, sleepLeft, radioVolume, setRadioVolume, canSetVolume } from './radiobar.js';
 
@@ -24,10 +24,7 @@ export function renderRadio({ store }) {
   const box = h('section', { class: 'radio-page' });
   const input = h('input', { type: 'search', class: 'input radio-search', placeholder: '搜电台：台名、种类、城市，比如 BBC、jazz、纽约', enterkeyhint: 'search', 'aria-label': '搜电台' });
 
-  const play = (s) => {
-    if (radioNow().station?.id !== s.id) store.addRadioRecent(s);
-    playStation(s);
-  };
+  const play = (s) => playStation(s);
 
   const favButton = (s, fav, cls = '') =>
     h(
@@ -149,7 +146,7 @@ export function renderRadio({ store }) {
           : note
             ? null
             : h('p', { class: 'muted' }, '没找到这样的电台。')
-        : [section('收藏', favoriteList(radio)), section('最近听过', recentList(radio)), section(place ? `${place.name}附近` : '附近的台', near, nearExtra()), section('热门', hot)],
+        : [section('收藏', favoriteList(radio)), section(place ? `${place.name}附近` : '附近的台', near, nearExtra()), section('热门', hot)],
     );
   }
 

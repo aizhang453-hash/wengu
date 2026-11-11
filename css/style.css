@@ -10719,9 +10719,15 @@ button.pick-row:hover {
   cursor: pointer;
 }
 
-.radio-row-main:hover strong,
 .radio-row.on strong {
   color: var(--accent);
+}
+
+/* 鼠标指着的台名变红; iPad 上手指点过以后会一直「指着」, 所以只在有鼠标的设备上 */
+@media (hover: hover) {
+  .radio-row-main:hover strong {
+    color: var(--accent);
+  }
 }
 
 .radio-row-text {
