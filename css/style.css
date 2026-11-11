@@ -10145,17 +10145,56 @@ button.pick-row:hover {
   text-align: center;
 }
 
-/* 最上面: 新闻  中文 | English            几分钟前更新 刷新 */
-.news-head {
+/* 报头 (v1.81, 像报纸头版):
+   中文 | English                    几分钟前更新 刷新
+                     邸 报
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   2026年11月11日 星期三  农历丙午年十月初三     天气
+   ═══════════════════════════════════════════════════ */
+.news-mast {
+  margin-bottom: 22px;
+}
+
+.news-mast-top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  margin-bottom: 16px;
 }
 
-.news-head h1 {
-  margin: 0;
+.news-mast-title {
+  margin: 10px 0 12px;
+  font-family: var(--font-serif);
+  font-size: clamp(2.6rem, 9vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  line-height: 1.1;
+  text-align: center;
+  text-indent: 0.35em; /* 字距加在每个字后面, 往右挪一点才居中 */
+}
+
+.news-mast-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 7px 2px;
+  border-top: 2px solid var(--text);
+  border-bottom: 4px double var(--text);
+}
+
+.news-mast-date {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+}
+
+.news-mast-term {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .news-head-tools {
@@ -10481,6 +10520,17 @@ button.pick-row:hover {
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+/* 来源的说明 (Global Voices: 志愿者撰稿) */
+.news-src-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 /* 快讯: 一个大方块 */
@@ -10816,6 +10866,191 @@ button.pick-row:hover {
 
 .news-more {
   font-size: 0.9rem;
+}
+
+/* 评论文章 (v1.81): 台名后面一个小框 */
+.news-op {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.news-live-src {
+  display: flex;
+  align-items: center;
+}
+
+/* 点过的 (v1.81): 标题变灰 */
+.news-live-row.seen .news-live-title,
+.news-long-row.seen .news-long-title,
+.news-long-row.seen .news-long-sum {
+  color: var(--muted);
+}
+
+.news-long-row.seen .news-long-title {
+  font-weight: 500;
+}
+
+/* 今日一图、历史上的今天 (v1.81) */
+.news-potd,
+.news-otd {
+  margin-top: 30px;
+}
+
+.news-potd h2,
+.news-otd h2 {
+  margin: 0 0 10px;
+  font-size: 1.25rem;
+}
+
+.news-potd figure {
+  margin: 0;
+}
+
+.news-potd-pic {
+  display: block;
+  text-align: center;
+}
+
+/* 横的照满宽度, 竖的别占一整屏; 宽高写在 img 上 (没拿到图时也先占好地方) */
+.news-potd-pic img {
+  display: inline-block;
+  max-width: 100%;
+  max-height: 520px;
+  width: auto;
+  height: auto;
+  border-radius: 14px;
+  background: var(--surface-2);
+  vertical-align: top;
+}
+
+.news-potd-cap {
+  margin: 10px 0 0;
+  line-height: 1.7;
+}
+
+.news-otd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.news-otd-head .news-credit {
+  margin: 0;
+}
+
+.news-otd-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.news-otd-list li {
+  display: flex;
+  gap: 14px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--line);
+  line-height: 1.7;
+}
+
+.news-otd-year {
+  flex: none;
+  width: 4.6em;
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 文章页的按钮: 朗读、字小、字大 */
+.news-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 字号 (v1.81): 小、中 (原来的)、大 */
+.news-article.size-0 p,
+.news-article.size-0 li,
+.news-article.size-0 blockquote {
+  font-size: 0.94rem;
+}
+
+.news-article.size-2 p,
+.news-article.size-2 li,
+.news-article.size-2 blockquote {
+  font-size: 1.22rem;
+}
+
+.news-article.size-2 .news-lede {
+  font-size: 1.24rem;
+}
+
+/* 点词查意思 (v1.81, wordpop.js): 点的词标一下, 旁边一小块 */
+::highlight(news-word) {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.news-article.word-lookup :is(p, li, blockquote, h2) {
+  cursor: pointer;
+}
+
+.word-pop {
+  position: absolute;
+  z-index: 60;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  font-size: 0.95rem;
+}
+
+.word-pop[hidden] {
+  display: none;
+}
+
+.word-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.word-pop-word {
+  font-size: 1.2rem;
+}
+
+.word-pop-ph {
+  font-size: 0.88rem;
+}
+
+.word-pop-x {
+  margin-left: auto;
+}
+
+.word-pop-tr {
+  margin: 2px 0;
+  line-height: 1.6;
+}
+
+.word-pop-from {
+  margin: 2px 0 6px;
+}
+
+.word-pop-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
 }
 
 .news-original {

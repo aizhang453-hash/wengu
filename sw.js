@@ -31,6 +31,7 @@ const FILES = [
   'js/dom.js',
   'js/draft.js',
   'js/draftdata.js',
+  'js/endict.js',
   'js/exam.js',
   'js/examlist.js',
   'js/festival.js',
@@ -58,6 +59,7 @@ const FILES = [
   'js/library/hant/youxueqionglin.js',
   'js/library/hant/zengguangxianwen.js',
   'js/library/hant/zhuzijiaxun.js',
+  'js/library/lunar-days.js',
   'js/library/lunyu.js',
   'js/library/qianjiashi.js',
   'js/library/qianziwen.js',
@@ -74,6 +76,7 @@ const FILES = [
   'js/library/youxueqionglin.js',
   'js/library/zengguangxianwen.js',
   'js/library/zhuzijiaxun.js',
+  'js/lunar.js',
   'js/media.js',
   'js/merge.js',
   'js/mistakeimport.js',
@@ -160,6 +163,7 @@ const FILES = [
   'js/views/suggest.js',
   'js/views/sync.js',
   'js/views/wordle.js',
+  'js/views/wordpop.js',
   'js/weather.js',
   'js/wordle.js',
   'js/words.js',
@@ -168,8 +172,9 @@ const FILES = [
 ];
 
 // 很大的书 (长篇小说) 一回一个文件, 第一次打开时不全存 (几 MB): 读过哪回就存哪回, 换版本时也不删。
+// 英汉小词典 (js/endict/, 邸报点词查意思用) 也一样: 点到哪个字母的词才存那个。
 // App 里照样全部放进去 (ios/copy-web.sh 照这一行复制整个文件夹)
-const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/'];
+const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

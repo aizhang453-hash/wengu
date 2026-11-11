@@ -14,6 +14,13 @@
 //                       标了「法律敏感」(多是英国正在审的案子, 法庭对报道有限制) 的照放, 页面上写明「这篇涉及正在进行的诉讼, 内容可能会被修改」;
 //                       卫报改了、撤了的, 下一次整批重新拿 (最多一小时) 时跟着改、跟着没
 //     NASA              美国政府的作品, RSS 带全文
+//     RFA English (v1.81) 自由亚洲电台的英文版, 条款跟中文版一样 (署名 RFA_CREDIT 放在最上面); RSS 带全文
+//     KFF Health News (v1.81) 美国的健康新闻, CC BY-NC-ND 4.0, 写明谁都能免费转载整篇: 要写记者和 KFF Health News、留着链接、链回原文、不能改;
+//                       美联社、Getty 这些通讯社的照片不在许可里 → 说明、署名写着通讯社的图不要。RSS 带全文
+//     Global Voices (v1.81) 世界各地的公民媒体, CC BY 3.0 (写作者、出处、链回原文就能转)。作者大多是志愿者、不是专职记者 →
+//                       页面上台名后面标「志愿者撰稿」(tag; 用户要的)。文章里的图很多是别人的、不在许可里 → 图都不放 (noImages)
+//   查过不用的 (2026-11): ProPublica、The Conversation (条款写明不许自动整批转载)、美国之音英文版 (2025 年 3 月起停更)、Grist (照片和改动的规定不清楚)
+//   卫报一次只拿最新的 15 篇 (v1.81: 用户说英文长文章被卫报占满了)
 //   快讯 (只放标题和链接, 点了去原网站; v1.75 加了很多家, 都是不用付费、没有付费墙的, 2026-11 在美国打开看过):
 //     中文: 中新网 (要闻)、央视新闻、界面新闻、BBC 中文、德国之声、法广、香港电台、中央社
 //     英文: NPR、Al Jazeera、PBS NewsHour、DW、France 24、CBS News、ABC News
@@ -40,6 +47,7 @@ const KEEP_H = 24; // 只有标题的新闻留多久 (小时; 快讯只列 24 �
 const KEEP_FULL_H = 7 * 24; // 能读全文的留一个星期 (RFA 一天才两三篇)
 const GUARDIAN_KEEP_H = 24; // 卫报的规定: 最多留 24 小时
 const GUARDIAN_EVERY_MIN = 55; // 卫报多久重新拿一次 (每天 500 次的额度, 每小时一次足够)
+const GUARDIAN_COUNT = 15; // 卫报一次拿几篇 (v1.81: 原来 50 篇, 把别家都挤到后面了)
 const VOA_PAGES_PER_RUN = 12; // 每次最多去 VOA 拿几篇文章页 (别催人家)
 const SUMMARY_MAX = 140;
 
@@ -61,6 +69,9 @@ export const SOURCES = {
   cna: { name: '中央社', lang: 'zh', full: false, home: 'https://www.cna.com.tw/', rss: ['https://feeds.feedburner.com/rsscna/mainland', 'https://feeds.feedburner.com/rsscna/intworld'], hant: 'tw' },
   guardian: { name: 'The Guardian', lang: 'en', full: true, home: 'https://www.theguardian.com/', note: '© Guardian News & Media Limited. Powered by The Guardian Open Platform; for personal, non-commercial reading only.' },
   nasa: { name: 'NASA', lang: 'en', full: true, home: 'https://www.nasa.gov/news/', rss: ['https://www.nasa.gov/news-release/feed/'], note: 'Source: NASA (nasa.gov)' },
+  rfaen: { name: 'Radio Free Asia', lang: 'en', full: true, home: 'https://www.rfa.org/english/', rss: ['https://www.rfa.org/english/rss'], note: RFA_CREDIT },
+  gv: { name: 'Global Voices', lang: 'en', full: true, home: 'https://globalvoices.org/', rss: ['https://globalvoices.org/feed/'], tag: '志愿者撰稿', noImages: true, note: 'Published by Global Voices (globalvoices.org) under CC BY 3.0. Most Global Voices writers are volunteers, not staff journalists.' },
+  kff: { name: 'KFF Health News', lang: 'en', full: true, home: 'https://kffhealthnews.org/', rss: ['https://kffhealthnews.org/feed/'], note: 'Republished from KFF Health News (kffhealthnews.org) under CC BY-NC-ND 4.0. KFF Health News is a national newsroom that produces in-depth journalism about health issues.' },
   npr: { name: 'NPR', lang: 'en', full: false, home: 'https://www.npr.org/sections/news/', rss: ['https://feeds.npr.org/1001/rss.xml'] },
   aljazeera: { name: 'Al Jazeera', lang: 'en', full: false, home: 'https://www.aljazeera.com/', rss: ['https://www.aljazeera.com/xml/rss/all.xml'] },
   pbs: { name: 'PBS NewsHour', lang: 'en', full: false, home: 'https://www.pbs.org/newshour/', rss: ['https://www.pbs.org/newshour/feeds/rss/headlines'] },
@@ -69,6 +80,15 @@ export const SOURCES = {
   cbs: { name: 'CBS News', lang: 'en', full: false, home: 'https://www.cbsnews.com/', rss: ['https://www.cbsnews.com/latest/rss/main'] },
   abc: { name: 'ABC News', lang: 'en', full: false, home: 'https://abcnews.go.com/', rss: ['https://feeds.abcnews.com/abcnews/topstories'] },
 };
+
+// 评论文章 (v1.81, 用户要的「分清新闻和评论」, 页面上标「评论」): 网址在评论版 (卫报 commentisfree、Al Jazeera opinions、RFA pinglun……)、
+// 标题开头写着「评论：」「观点：」「社评：」、RSS 的分类就叫 Opinion / 评论的。卫报看它自己分的 (guardianItem)。
+// 只认这些明确的; 「评论分析」这种 (德国之声, 分析和评论混在一起) 不算
+const OP_URL = /\/(opinions?|commentisfree|commentary|op-ed|pinglun)(\/|$)/i;
+const OP_WORDS = '(评论|評論|观点|觀點|社评|社評|社论|社論|时评|時評|短评|短評|opinion|commentary|op-ed)';
+const OP_TITLE = new RegExp(`^\\s*(?:[【［[]\\s*${OP_WORDS}\\s*[】］\\]]|${OP_WORDS}\\s*[：:|｜])`, 'i'); // 「【评论】……」「观点：……」
+const OP_CAT = /^(opinions?|commentary|op-ed|评论|評論|观点|觀點|社评|社評|社论|社論|时评|時評)$/i;
+export const isOpinion = (u, t = '', cats = []) => OP_URL.test(String(u).replace(/[?#].*$/, '')) || OP_TITLE.test(String(t)) || cats.some((c) => OP_CAT.test(c.trim()));
 
 // 视频页 (Al Jazeera、France 24、CBS、ABC 的 RSS 里一半是视频): 快讯只要能读的文章
 export const isVideo = (u, t = '') => /\/videos?\//i.test(String(u).replace(/[?#].*$/, '')) || /^(watch|video)\s*:/i.test(String(t));
@@ -235,7 +255,8 @@ function imgOf(node) {
   if (set[0] && (!src || /^data:/.test(src))) src = set[0][0];
   if (src.startsWith('//')) src = `https:${src}`;
   if (!/^https:\/\//.test(src)) return null;
-  const capNode = node.tag === 'figure' ? find(node, (x) => x.tag === 'figcaption') : null;
+  // 图的说明: <figure> 里的 <figcaption>, 或者 WordPress 的 <div class="wp-caption"> 里的 <p class="wp-caption-text"> (Global Voices 这样写)
+  const capNode = node.tag === 'figure' ? find(node, (x) => x.tag === 'figcaption') : hasClass(node, 'wp-caption') ? find(node, (x) => hasClass(x, 'wp-caption-text')) : null;
   const cap = clean(capNode ? textOf(capNode) : img.attrs.alt || '').replace(/\n/g, ' ');
   return { src, ...(cap ? { cap } : {}) };
 }
@@ -276,7 +297,7 @@ export function blocksFrom(html, { dropImage = () => false } = {}) {
       } else if (t === 'blockquote') {
         const q = inlineOf(c);
         if (q.length) out.push({ q });
-      } else if (t === 'figure' || t === 'img' || t === 'picture') {
+      } else if (t === 'figure' || t === 'img' || t === 'picture' || (t === 'div' && hasClass(c, 'wp-caption'))) {
         if (find(c, (x) => EMBED.has(x.tag))) more();
         else {
           const img = imgOf(c);
@@ -312,7 +333,7 @@ const attrIn = (x, t, a) => {
   return m ? decode(m[1]) : '';
 };
 
-// RSS → [{ title, link, at, desc (网页), content (网页, 全文), author, image: { src, cap, credit } }]
+// RSS → [{ title, link, at, desc (网页), content (网页, 全文), author, image: { src, cap, credit }, cats (分类) }]
 export function parseRss(xml) {
   return [...String(xml).matchAll(/<item[\s>][\s\S]*?<\/item>/g)].map(([x]) => {
     const at = Date.parse(tagIn(x, 'pubDate') || tagIn(x, 'dc:date'));
@@ -331,6 +352,7 @@ export function parseRss(xml) {
       content: tagIn(x, 'content:encoded'),
       author: plain(tagIn(x, 'dc:creator') || tagIn(x, 'author').replace(/^\S+@\S+\s*\((.*)\)$/, '$1')),
       image,
+      cats: [...x.matchAll(/<(category|dc:subject)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/g)].map((m) => plain(xmlText(m[2]))).filter(Boolean),
     };
   });
 }
@@ -354,10 +376,11 @@ export function itemFrom(src, r, hans = null) {
   const s = SOURCES[src];
   const u = s.link ? s.link(r.link) : r.link;
   if (!s.full && isVideo(u, r.title)) return null;
-  if (!s.full) return { id: idOf(src, u), src, lang: s.lang, t: s.hant && hans ? hans[s.hant](r.title) : r.title, u, at: r.at };
+  const op = isOpinion(u, r.title, r.cats) ? { op: true } : {};
+  if (!s.full) return { id: idOf(src, u), src, lang: s.lang, t: s.hant && hans ? hans[s.hant](r.title) : r.title, u, at: r.at, ...op };
   const summary = cut(plain(r.desc), SUMMARY_MAX);
-  const img = r.image && !wirePhoto(`${r.image.cap} ${r.image.credit}`) ? { src: r.image.src } : null;
-  return { id: idOf(src, u), src, lang: s.lang, t: r.title, ...(summary && summary !== r.title ? { s: summary } : {}), u, at: r.at, ...(img ? { img } : {}), ...(r.author ? { by: r.author } : {}) };
+  const img = r.image && !s.noImages && !wirePhoto(`${r.image.cap} ${r.image.credit}`) ? { src: r.image.src } : null;
+  return { id: idOf(src, u), src, lang: s.lang, t: r.title, ...(summary && summary !== r.title ? { s: summary } : {}), u, at: r.at, ...(img ? { img } : {}), ...(r.author ? { by: r.author } : {}), ...op };
 }
 
 // 央视新闻的新闻列表 (news_1.jsonp: news({"data":{"list":[{ title, url, focus_date: '2026-11-11 08:53:31' (北京时间) }]}})) → 快讯
@@ -399,17 +422,17 @@ function serialize(n) {
     .join('');
 }
 
-// 卫报 API 的一篇 → [列表里的一条, 全文]; 直播不要; 标了法律敏感的记上 legal (页面上写一句)
+// 卫报 API 的一篇 → [列表里的一条, 全文]; 直播不要; 标了法律敏感的记上 legal (页面上写一句); 评论版的 (卫报自己分的) 记上 op
 export function guardianItem(r, got) {
   const f = r.fields ?? {};
   if (r.type !== 'article' || !f.body) return null;
-  const legal = f.legallySensitive === 'true' ? { legal: true } : {};
+  const flags = { ...(f.legallySensitive === 'true' ? { legal: true } : {}), ...(r.pillarId === 'pillar/opinion' || r.sectionId === 'commentisfree' ? { op: true } : {}) };
   const id = idOf('guardian', r.webUrl);
   const t = plain(f.headline || r.webTitle);
   const main = f.main ? blocksFrom(f.main).find((b) => b.img)?.img : null;
   const thumb = f.thumbnail ? { src: f.thumbnail } : null;
-  const item = { id, src: 'guardian', lang: 'en', t, s: cut(plain(f.trailText || f.standfirst), SUMMARY_MAX), u: r.webUrl, at: new Date(f.firstPublicationDate || r.webPublicationDate).toISOString(), sec: r.sectionName, ...(thumb ? { img: thumb } : {}), ...(f.byline ? { by: f.byline } : {}), full: true, got, ...legal };
-  const article = { id, src: 'guardian', t, u: r.webUrl, at: item.at, sec: r.sectionName, by: f.byline || '', lede: f.standfirst ? blocksFrom(f.standfirst).flatMap((b) => b.p ?? []) : [], img: main ?? null, body: blocksFrom(f.body), got, ...legal };
+  const item = { id, src: 'guardian', lang: 'en', t, s: cut(plain(f.trailText || f.standfirst), SUMMARY_MAX), u: r.webUrl, at: new Date(f.firstPublicationDate || r.webPublicationDate).toISOString(), sec: r.sectionName, ...(thumb ? { img: thumb } : {}), ...(f.byline ? { by: f.byline } : {}), full: true, got, ...flags };
+  const article = { id, src: 'guardian', t, u: r.webUrl, at: item.at, sec: r.sectionName, by: f.byline || '', lede: f.standfirst ? blocksFrom(f.standfirst).flatMap((b) => b.p ?? []) : [], img: main ?? null, body: blocksFrom(f.body), got, ...flags };
   return { item, article };
 }
 
@@ -464,10 +487,10 @@ async function fromRss(src, prevArticles, log, hans) {
           }
         } else if (!art && r.content) {
           const imgOk = r.image && !wirePhoto(`${r.image.cap} ${r.image.credit}`);
-          art = { body: blocksFrom(r.content, { dropImage: wirePhoto }), img: imgOk ? { src: r.image.src, ...(r.image.cap ? { cap: r.image.cap } : {}) } : null, by: item.by ?? '' };
+          art = { body: blocksFrom(r.content, { dropImage: s.noImages ? () => true : wirePhoto }), img: imgOk && !s.noImages ? { src: r.image.src, ...(r.image.cap ? { cap: r.image.cap } : {}) } : null, by: item.by ?? '' };
         }
         if (art?.body?.length) {
-          articles[item.id] = { id: item.id, src, t: item.t, u: item.u, at: item.at, by: art.by ?? '', img: art.img ?? null, body: art.body };
+          articles[item.id] = { id: item.id, src, t: item.t, u: item.u, at: item.at, by: art.by ?? '', img: art.img ?? null, body: art.body, ...(item.op ? { op: true } : {}) };
           item.full = true;
           // 列表里的小图: RSS 没给的, 用文章的图, 再没有就用正文里的第一张 (NASA)
           const first = art.img ?? art.body.find((b) => b.img)?.img;
@@ -481,7 +504,7 @@ async function fromRss(src, prevArticles, log, hans) {
 }
 
 async function fromGuardian(key, got) {
-  const q = new URLSearchParams({ 'order-by': 'newest', 'page-size': '50', 'show-fields': 'headline,standfirst,trailText,byline,body,main,thumbnail,firstPublicationDate,legallySensitive' });
+  const q = new URLSearchParams({ 'order-by': 'newest', 'page-size': String(GUARDIAN_COUNT), 'show-fields': 'headline,standfirst,trailText,byline,body,main,thumbnail,firstPublicationDate,legallySensitive' });
   const d = await get(`https://content.guardianapis.com/search?${q}`, { headers: { 'api-key': key }, json: true });
   if (d.response?.status !== 'ok') throw new Error(d.response?.message ?? '卫报的 API 出错');
   const items = [];
@@ -493,6 +516,142 @@ async function fromGuardian(key, got) {
     articles[x.item.id] = x.article;
   }
   return { items, articles };
+}
+
+// ---------- 今日一图、历史上的今天 (v1.81, 邸报的报纸栏目; 用户挑的) ----------
+// 维基百科 (免费不用注册):
+//   今日一图     维基共享资源每天选的一张好照片: 英文维基的 featured 资料 (/api/rest_v1/feed/featured/年/月/日) 里的 image。
+//                图各有各的许可 (多是 CC BY-SA、公有领域) → 页面上写作者、许可、链回图的页面。
+//                中文说明: 中文维基的「Wikipedia:每日图片/2026年11月11日」(是同一张图才用; 繁简混着写, 用 opencc-js 转简体)
+//   历史上的今天 维基百科编者挑的几件事 (文字是 CC BY-SA 4.0 → 写明来自维基百科、链回去)。
+//                中文: /api/rest_v1/feed/onthisday/selected/月/日, 请求头写 Accept-Language: zh-cn, 维基自己转成简体
+//                (featured 资料里的中文版会把「-{zh-cn:…}-」这种繁简写法里的字整个丢掉, 2026-11-11 试的, 不用它)
+//                英文: featured 资料里的 onthisday (一天二十条, 挑六条)
+// 时区: 拿 UTC 的昨天、今天、明天三天, 网页按这台设备的日期挑 (美国晚上已经是 UTC 的明天了)
+// 英文的一份有 250 KB: 一天的拿过了, 6 小时内不再拿
+const DAYS_EVERY_H = 6;
+const OTD_COUNT = 6; // 历史上的今天最多几条
+
+// 维基的写法 → 字: [[链接|字]] → 字; 繁简写法 -{zh-cn:简;zh-tw:繁}- 取简体; 粗体斜体的 ''' ''、{{模板}}、<ref>、<small>（圖）</small> 去掉
+export function wikiText(s) {
+  let t = String(s ?? '').replace(/<ref[^>]*\/>|<ref[\s\S]*?<\/ref>/g, '');
+  t = t.replace(/-\{([\s\S]*?)\}-/g, (all, x) => {
+    if (!/zh(-[a-z]+)?\s*:/i.test(x)) return x;
+    const v = Object.fromEntries(x.split(';').map((p) => p.split(/:(.*)/s).map((q) => q.trim())).filter((p) => p[1]));
+    return v['zh-cn'] ?? v['zh-hans'] ?? v['zh-sg'] ?? v.zh ?? Object.values(v)[0] ?? '';
+  });
+  for (let i = 0; i < 5 && /\{\{[^{}]*\}\}/.test(t); i++) t = t.replace(/\{\{[^{}]*\}\}/g, '');
+  t = t.replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1').replace(/'{2,}/g, '');
+  return otdText(plain(t));
+}
+
+// 一条的字: 维基资料里偶尔夹着样式表 (.mw-parser-output …{…}), 「（图）」「(pictured)」说的是维基页面上的图, 这里没有, 去掉
+export function otdText(s) {
+  return String(s ?? '')
+    .replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '')
+    .replace(/\.mw-parser-output[^{}]*\{[^{}]*\}/g, '')
+    .replace(/\s*\([^()]*\b(pictured|depicted)\b[^()]*\)/gi, '')
+    .replace(/[（(]\s*(左|右|上|下|中)?\s*[图圖]\s*[)）]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// 历史上的今天: [{ y 哪年 (公元前是负的), t }], 按年份从早到晚; 太多的话隔几条挑一条 (各个年代都有)
+export function otdOf(list, conv = (x) => x, n = OTD_COUNT) {
+  const all = (Array.isArray(list) ? list : [])
+    .filter((x) => Number.isFinite(Number(x?.year)) && x?.text)
+    .map((x) => ({ y: Number(x.year), t: conv(otdText(plain(x.text))) }))
+    .filter((x) => x.t)
+    .sort((a, b) => a.y - b.y);
+  if (all.length <= n) return all;
+  return Array.from({ length: n }, (_, i) => all[Math.round((i * (all.length - 1)) / (n - 1))]);
+}
+
+// 今日一图: { file, src (960 像素宽的), w, h, page (图的页面), by 作者, lic 许可, licUrl, en 英文说明, zh 中文说明 }
+export function picOf(im, zh = '') {
+  const src = im?.thumbnail?.source;
+  if (!src || !im.file_page || !im.license?.type) return null;
+  const by = cut(plain(im.artist?.text ?? '').replace(/\s+/g, ' ').trim(), 80);
+  return {
+    file: String(im.title ?? '').replace(/^File:/, ''),
+    src: src.replace(/\?utm_.*$/, ''),
+    w: im.thumbnail.width,
+    h: im.thumbnail.height,
+    page: im.file_page,
+    ...(by ? { by } : {}),
+    lic: im.license.type,
+    ...(im.license.url ? { licUrl: im.license.url } : {}),
+    ...(im.description?.text ? { en: cut(plain(im.description.text).replace(/\s+/g, ' ').trim(), 400) } : {}),
+    ...(zh ? { zh } : {}),
+  };
+}
+
+// 中文维基「每日图片」那一页 (维基的写法: {{Featurepic/format | Image = 文件名 | Content = 说明}}) → { image, text }
+export function zhPicPage(wikitext) {
+  const field = (k) => new RegExp(`\\|\\s*${k}\\s*=\\s*([\\s\\S]*?)(?=\\n\\s*\\||\\n?\\}\\}\\s*$)`, 'i').exec(String(wikitext ?? ''))?.[1]?.trim() ?? '';
+  return { image: field('Image').replace(/^(File|Image|文件|檔案|图像):/i, '').replace(/_/g, ' '), text: wikiText(field('Content')) };
+}
+
+// 先问维基百科自己的地址, 不行再问 api.wikimedia.org (同一份资料)
+async function wikiGet(lang, path, headers = {}) {
+  let err;
+  for (const base of [`https://${lang}.wikipedia.org/api/rest_v1/feed/`, `https://api.wikimedia.org/feed/v1/wikipedia/${lang}/`]) {
+    try {
+      return await get(base + path, { json: true, headers });
+    } catch (e) {
+      err = e;
+    }
+  }
+  throw err;
+}
+
+// 一天的: { got, pic, zh: [历史上的今天], en: [...] }
+async function fromWiki(day, hans, now) {
+  const [y, m, d] = day.split('-');
+  const toHans = hans ? hans.tw : (x) => x;
+  const en = await wikiGet('en', `featured/${y}/${m}/${d}`);
+  let zh = [];
+  try {
+    // 维基自己转好了简体; 万一没转 (备用的地址), 再用 opencc-js 转一遍 (简体的字不会变)
+    zh = otdOf((await wikiGet('zh', `onthisday/selected/${m}/${d}`, { 'Accept-Language': 'zh-cn' }))?.selected, toHans);
+  } catch {
+    // 中文的拿不到: 只有英文的
+  }
+  let zhCap = '';
+  const im = en?.image;
+  if (im) {
+    try {
+      const q = new URLSearchParams({ action: 'query', titles: `Wikipedia:每日图片/${Number(y)}年${Number(m)}月${Number(d)}日`, prop: 'revisions', rvprop: 'content', rvslots: 'main', format: 'json', formatversion: '2' });
+      const page = (await get(`https://zh.wikipedia.org/w/api.php?${q}`, { json: true }))?.query?.pages?.[0];
+      const zp = zhPicPage(page?.revisions?.[0]?.slots?.main?.content);
+      if (zp.text && zp.image === String(im.title ?? '').replace(/^File:/, '')) zhCap = toHans(zp.text);
+    } catch {
+      // 没有中文说明
+    }
+  }
+  return { got: new Date(now).toISOString(), pic: im ? picOf(im, zhCap) : null, zh, en: otdOf(en?.onthisday) };
+}
+
+const utcDay = (t) => new Date(t).toISOString().slice(0, 10);
+
+// UTC 的昨天、今天、明天; 上次拿过、不到 6 小时的照用; 拿不到的用上次的
+export async function wikiDays(prevDays, hans, now, log) {
+  const days = {};
+  for (const day of [-1, 0, 1].map((k) => utcDay(now + k * 86400000))) {
+    const old = prevDays?.[day];
+    if (old && now - Date.parse(old.got) < DAYS_EVERY_H * 3600000) {
+      days[day] = old;
+      continue;
+    }
+    log(`拿 维基百科 ${day}`);
+    try {
+      days[day] = await fromWiki(day, hans, now);
+    } catch (e) {
+      log(`  拿不到: ${e.message}`);
+      if (old) days[day] = old;
+    }
+  }
+  return days;
 }
 
 // 跟上次的合起来: 这次拿到的为准, 上次有、这次 RSS 里已经挤掉的留着 (还在时限内的); 卫报只用这次的 (或者还没到一小时, 用上次的)
@@ -557,8 +716,9 @@ export async function collect({ prev = null, prevArticles = {}, now = Date.now()
     else delete x.full;
   }
   if (!items.length) throw new Error('一条新闻都没拿到');
-  const sources = Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, { name: s.name, lang: s.lang, full: s.full, home: s.home, ...(s.note ? { note: s.note } : {}) }]));
-  return { index: { v: 2, sources, guardianAt, items }, articles: outArticles };
+  const days = await wikiDays(prev?.days, hans, now, log);
+  const sources = Object.fromEntries(Object.entries(SOURCES).map(([k, s]) => [k, { name: s.name, lang: s.lang, full: s.full, home: s.home, ...(s.note ? { note: s.note } : {}), ...(s.tag ? { tag: s.tag } : {}) }]));
+  return { index: { v: 2, sources, guardianAt, items, days }, articles: outArticles };
 }
 
 // ---------- 读上次的、写这次的 ----------

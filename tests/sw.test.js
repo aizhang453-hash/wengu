@@ -16,10 +16,10 @@ function listJs(dir) {
 test('断网要存的文件: 每个 js 都在, 写的文件都真的有', () => {
   const sw = readFileSync(join(root, 'sw.js'), 'utf8');
   const files = [...sw.matchAll(/^\s+'([^']+)',$/gm)].map((m) => m[1]);
-  // 长篇小说一回一个文件 (LAZY 里的文件夹), 不在名单里, 读到才存; 文件夹要真的有, 里面有文件
+  // 长篇小说一回一个文件、英汉小词典一个字母一个文件 (LAZY 里的文件夹), 不在名单里, 读到才存; 文件夹要真的有, 里面有文件
   const lazy = JSON.parse(/^const LAZY = (\[.*\]);$/m.exec(sw)[1].replace(/'/g, '"'));
-  assert.deepEqual(lazy, ['js/library/xiyouji/', 'js/library/hant/xiyouji/']);
-  for (const d of lazy) assert.ok(readdirSync(join(root, d)).filter((f) => f.endsWith('.js')).length >= 100, d);
+  assert.deepEqual(lazy, ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/']);
+  for (const d of lazy) assert.ok(readdirSync(join(root, d)).filter((f) => f.endsWith('.js')).length >= (d === 'js/endict/' ? 26 : 100), d);
   for (const js of listJs('js')) if (!lazy.some((d) => js.startsWith(d))) assert.ok(files.includes(js), `sw.js 里少了 ${js}`);
   for (const f of files) assert.ok(!lazy.some((d) => f.startsWith(d)), `${f} 在 LAZY 里, 不用写进名单`);
   for (const f of files) {

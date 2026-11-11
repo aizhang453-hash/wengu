@@ -1,7 +1,7 @@
 // 新闻 (v1.74): 拿新闻、存一份在这台设备上 (断网也能看上次的), 还有新闻页要用的小工具。页面在 views/news.js
 //
 // 新闻从哪来: GitHub Actions 每 15 分钟拿一次各家的新闻 (tools/news.mjs), 放在仓库 news 分支:
-//   latest.json  所有新闻的标题、时间、链接 (长文章还有摘要、图); 有哪几家见 tools/news.mjs 的 SOURCES
+//   latest.json  所有新闻的标题、时间、链接 (报道还有摘要、图); 有哪几家见 tools/news.mjs 的 SOURCES
 //   a/<编号>.json 能放全文的那几家 (美国之音、自由亚洲电台、卫报、NASA), 一篇一个
 // 先从 GitHub 拿 (raw.githubusercontent.com), 拿不到再试 jsDelivr (同一份文件, 国内有时候更好连)。
 // 在自己电脑上跑 (npm start) 时先用本地的 news/ (node tools/news.mjs 生成的)。
@@ -159,7 +159,7 @@ export function liveItems(data, lang, now = Date.now(), src = null) {
   return itemsFor(data, lang, { src, now }).filter((x) => !x.full && now - Date.parse(x.at) < LIVE_MS);
 }
 
-// 长文章: 能在温故里读全文的, 新的在前
+// 报道: 能在温故里读全文的, 新的在前
 export function longItems(data, lang, now = Date.now()) {
   return itemsFor(data, lang, { now }).filter((x) => x.full);
 }
@@ -185,6 +185,31 @@ export const clock = (iso) => {
   const d = new Date(iso);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+// ---- 读过的 (v1.81, 用户要的「读过的变灰」): 这台设备上记着点过哪几条 (编号 → 什么时候点的), 三天前的扔掉; 不同步 ----
+export const SEEN_KEY = 'wengu:news-seen';
+const SEEN_KEEP_MS = 3 * 24 * 3600 * 1000;
+function readSeen(storage, now) {
+  try {
+    const raw = JSON.parse(storage?.getItem(SEEN_KEY) ?? '{}');
+    return Object.fromEntries(Object.entries(raw && typeof raw === 'object' ? raw : {}).filter(([, t]) => Number.isFinite(t) && now - t < SEEN_KEEP_MS));
+  } catch {
+    return {};
+  }
+}
+export const seenIds = (storage = globalThis.localStorage, now = Date.now()) => new Set(Object.keys(readSeen(storage, now)));
+export function markSeen(id, { storage = globalThis.localStorage, now = Date.now() } = {}) {
+  const all = readSeen(storage, now);
+  all[id] = now;
+  try {
+    storage?.setItem(SEEN_KEY, JSON.stringify(all));
+  } catch {
+    // 存不下就算了
+  }
+}
+
+// ---- 今日一图、历史上的今天 (v1.81): 新闻里存着 UTC 的昨天、今天、明天三天 (tools/news.mjs 的 wikiDays), 按这台设备的日期挑 ----
+export const todayOf = (data, now = Date.now()) => data?.days?.[localDay(new Date(now).toISOString())] ?? null;
 
 const WEEKDAYS = '日一二三四五六';
 // 'YYYY-MM-DD' → '今天'、'昨天'、'11月8日 星期日'

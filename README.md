@@ -28,7 +28,7 @@
 | **题目集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **书斋** | 古诗文原文免费读（以前叫「阅读」），书架分四层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）、古典小说（西游记，一回一回读）；每日一首、搜索、收藏、目录里的「接着读」、简体 / 繁体、朗读；《古文观止》里 33 篇名篇有注释、译文、出自这篇的成语和名句；搜索也能搜成语；一键做成「接下句」「字词」「成语」卡片集来背 |
 | **广播** | 全世界的网络电台：搜（台名、种类、城市、国家）、正在播放的大面板、睡觉定时、收藏（同步）、附近的台、热门；换页面接着响 |
-| **邸报** | 新闻（以前叫「新闻」），分中文、English：上面是快讯（24 小时内各家的标题），下面是长文章（美国之音、自由亚洲电台、卫报、NASA，在温故里读全文、可以朗读）；报纸那样的天气栏；每日猜词；每 15 分钟自动更新，断网也能看上次的 |
+| **邸报** | 新闻（以前叫「新闻」），分中文、English：上面是快讯（24 小时内各家的标题），下面是报道（美国之音、自由亚洲电台、卫报、NASA、Radio Free Asia、KFF Health News、Global Voices，在温故里读全文、可以朗读）；报纸那样的天气栏；每日猜词；每 15 分钟自动更新，断网也能看上次的 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -82,12 +82,16 @@
 ### 邸报（新闻）
 
 - 在左上角 ☰ 的「邸报」（v1.76 以前叫「新闻」；邸报是古代传抄朝廷消息的报），分「中文」「English」两页。
+- 最上面是报纸头版那样的报头：「邸报」两个大字，下面两条线夹着日期、农历（节气那天写上节气）和天气。农历照香港天文台的公历农历对照表（`tools/lunar-days.mjs` 生成 `js/library/lunar-days.js`，2000–2100 年），不用浏览器自带的农历（有几年差一天）。
 - 快讯下面有一块「天气栏」，照报纸的天气版：今天的详细情况（体感、降水概率、风、湿度、紫外线、空气质量、日出日落、月相、昨天的气温）、生活提示（穿衣、带伞、防晒）、以后 7 天、世界大城市的天气。
 - 右上角是当地天气的一行字，点它跳到下面的天气栏。第一次打开会问要不要给位置，不给就在天气栏里点「填城市看天气」自己填（以后在天气栏点「换城市」换）（天气来自免费的 Open-Meteo；城市名来自 BigDataCloud；位置只留到两位小数，存在这台设备上）。
 - 快讯下面是「每日猜词」：每天一个五个字母的英文词，大家一样，6 次猜出来（绿：字母和位置都对；黄：有这个字母但位置不对；灰：没有）。v1.76 以前学习游戏里的 Wordle 搬到这里改成了每天一个词；词表来自开源的 SCOWL（`tools/words.mjs` 生成 `js/words.js`），常用的词排在前面。
 - 上面是「快讯」：24 小时内各家的标题，新的在上面，点了在新的网页里打开原网站。中文：中新网、央视新闻、界面新闻、BBC 中文、德国之声、法广、香港电台、中央社（繁体的转成简体）；英文：NPR、Al Jazeera、PBS NewsHour、DW、France 24、CBS News、ABC News。都是不用付费、不用登录就能看全文的网站（BBC 英文版在美国有付费墙，没放）；视频页不放。
-- 下面是「长文章」：美国之音、自由亚洲电台（中文），卫报、NASA（英文），在温故里读全文，可以朗读。
-- 来源是逐家核对过条款选的：美国之音、NASA 是美国政府的作品（美国之音转载美联社的照片不放）；自由亚洲电台允许非商业、教育用途转载，每篇写着它要求的署名；卫报用开放平台的 API，按它的规定只留 24 小时、原样显示、放「Powered by The Guardian」标志、仅供个人非商业阅读；卫报标了「法律敏感」的，文章上面写明「这篇涉及正在进行的诉讼，内容可能会被修改」。快讯只放标题和链接。
+- 下面是「报道」：美国之音、自由亚洲电台（中文），卫报（最新 15 篇）、NASA、Radio Free Asia、KFF Health News、Global Voices（英文；Global Voices 的作者大多是志愿者，标着「志愿者撰稿」），在温故里读全文，可以朗读、调字号。
+- 评论文章（卫报的评论版、标题写着「观点：」「评论：」的……）台名后面标着「评论」；点过的快讯、报道标题变灰（记在这台设备上，三天后忘掉）。
+- 英文报道里点一个词，旁边弹出中文意思、音标，能朗读，点「加进卡片」放进「邸报生词」卡片集（没有就新做一个）。意思来自开源的英汉词典 ECDICT（`tools/en-dict.mjs` 挑出常用的五万多个词，生成 `js/endict/`，一个字母一个文件，点到哪个字母才下载那个）。
+- 报道下面是「今日一图」（维基共享资源每天选的一张照片，写着作者和许可；中文说明来自中文维基百科的「每日图片」）和「历史上的今天」（维基百科编者挑的几件事），都是每 15 分钟拿新闻时顺便从维基百科拿的。
+- 来源是逐家核对过条款选的：美国之音、NASA 是美国政府的作品（美国之音转载美联社的照片不放）；自由亚洲电台允许非商业、教育用途转载，每篇写着它要求的署名；卫报用开放平台的 API，按它的规定只留 24 小时、原样显示、放「Powered by The Guardian」标志、仅供个人非商业阅读；卫报标了「法律敏感」的，文章上面写明「这篇涉及正在进行的诉讼，内容可能会被修改」；KFF Health News 用 CC BY-NC-ND 4.0 许可，写着记者、链回原文，通讯社的照片不放；Global Voices 用 CC BY 3.0，图不放。快讯只放标题和链接。
 - 每 15 分钟自动更新：GitHub Actions 跑 `tools/news.mjs`（`.github/workflows/news.yml`），放到仓库的 `news` 分支（`latest.json` 和一篇一个的全文 `a/`，每次整个覆盖）。温故从 GitHub 拿（拿不到再试 jsDelivr），存在这台设备上，断网也能看上次的（卫报的过了 24 小时就删）。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上更新一次。
 - GitHub 的定时靠不住，所以每次拿完新闻自己排下一次（「接力」：先在仓库 Settings › Environments 的 `news-wait` 环境里等 14 分钟）。要停就在 Actions › 新闻 里 Disable workflow；接力断了，手动 Run workflow 一次就又接上。新闻一个小时没更新时，邸报最上面会提醒网站的主人（同步设置用的是放网站的那个 GitHub 账号的设备才看得到），点提醒里的链接直接到那一页。
 - 卫报的 API 要密钥：在卫报开放平台免费申请，放进仓库 Settings › Secrets and variables › Actions，名字是 `GUARDIAN_API_KEY`。没有密钥就不拿卫报，别的照常。
@@ -168,7 +172,7 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
   - `mistakes.js` 题目集（v1.63 以前叫错题集；所有题目集、一个题目集）、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
   - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`gamequiz.js`：学习游戏；`wordle.js`：邸报的每日猜词；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
-  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）、`news.js` 新闻（中文、English：快讯和长文章；一篇全文）
+  - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）、`news.js` 新闻（中文、English：快讯和报道；一篇全文）
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
@@ -192,6 +196,8 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
 [PolyForm Strict 1.0.0](LICENSE)：可查看代码、个人使用，不可修改后再发布或商用。
 城市名找地方用 [OpenStreetMap](https://www.openstreetmap.org/copyright) 的 Nominatim（地名 © OpenStreetMap 的贡献者）和 Open-Meteo 的地名搜索（`js/places.js`）。
 每日猜词的词表（`js/words.js`）来自 [SCOWL](http://wordlist.aspell.net/)（许可原文见 `js/LICENSE-scowl.txt`）。
+邸报点词查意思的英汉词典（`js/endict/`）来自 [ECDICT](https://github.com/skywind3000/ECDICT)（MIT，许可原文见 `js/LICENSE-ecdict.txt`）。
+邸报的「今日一图」「历史上的今天」来自[维基百科](https://www.wikipedia.org/)和[维基共享资源](https://commons.wikimedia.org/)：文字是 CC BY-SA 4.0，每张图按它自己的许可（页面上写着作者和许可）。农历来自香港天文台的「公历与农历日期对照表」。
 新闻（仓库的 `news` 分支）的版权归各家：美国之音、NASA 的是美国政府的作品；自由亚洲电台的按它的条款转载（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia）；卫报的来自卫报开放平台（Powered by The Guardian，仅供个人、非商业阅读）；快讯的各家只有标题和链接。`img/guardian-powered-*.png` 是卫报提供的标志，只按卫报开放平台的规定用。
 书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。

@@ -1,14 +1,20 @@
 // 新闻 (v1.74, v1.75 重新排过): 像新闻网站那样的几页 (新闻从哪来、怎么存见 ../news.js)
 //   #/news          中文 (#/news/en 英文): 最上面一个大方块「快讯」(24 小时内各家的标题, 点了去原网站),
-//                   下面「长文章」(美国之音、自由亚洲电台 / 卫报、NASA, 在温故里读全文); 开着时几分钟自己刷新一次
+//                   下面「报道」(美国之音、自由亚洲电台 / 卫报、NASA, 在温故里读全文); 开着时几分钟自己刷新一次
 //                   (v1.74 的 #/news/live 快讯页去掉了, 那个网址现在也打开这一页)
 //   #/news/a/<编号> 一篇全文: 标题、作者、图、正文、原文链接、出处; 可以朗读
-// 用户要页面简洁 (v1.75): 不写「在温故里读全文」「点了去原网站看」这种说明, 快讯、长文章都不按来源分
-// 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边 (长文章的标题旁边)
+// 用户要页面简洁 (v1.75): 不写「在温故里读全文」「点了去原网站看」这种说明, 快讯、报道都不按来源分
+// v1.81: 「长文章」改叫「报道」(用户说怪, 选的; 跟「快讯」配对)
+// 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边 (报道的标题旁边)
+// v1.81 (用户拿报纸、新闻网站比了以后挑的): 报头像报纸头版 (「邸报」居中, 两条线夹着日期、农历、天气);
+//   报道下面「今日一图」「历史上的今天」(维基百科, 见 tools/news.mjs 的 wikiDays); 评论文章标「评论」; 点过的变灰;
+//   文章页能调字号; 英文文章点一个词看中文意思、加进卡片 (wordpop.js)
 
 import { h, fill, icon, toast, openDialog } from '../dom.js';
 import { loadConfig } from '../sync.js';
-import { loadIndex, cachedIndex, loadArticle, LANGS, brokenMinutes, ownsSite, ACTIONS_URL, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
+import { loadIndex, cachedIndex, loadArticle, LANGS, brokenMinutes, ownsSite, ACTIONS_URL, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts, seenIds, markSeen, todayOf } from '../news.js';
+import { lunarText, solarTermOn } from '../lunar.js';
+import { wordLookup } from './wordpop.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
 import { savedPlace, savePlace, loadWeather, loadWorld, locate, searchPlaces, weatherLine, weatherText, windText, uvText, aqiText, moonPhase, lifeTips } from '../weather.js';
 import { dayIndex, TRIES } from '../wordle.js';
@@ -65,25 +71,36 @@ function picture(src, { alt = '' } = {}) {
 }
 
 const srcName = (data, x) => data.sources[x.src]?.name ?? x.src;
-const meta = (data, x) => h('span', { class: 'news-meta-line' }, h('span', { class: 'news-src' }, srcName(data, x)), ` · ${agoText(x.at)}`);
+// 来源有说明的 (Global Voices: 志愿者撰稿, v1.81) 台名后面跟一个灰色小字
+const srcTag = (s) => (s?.tag ? h('span', { class: 'news-src-tag' }, s.tag) : null);
+const meta = (data, x) => h('span', { class: 'news-meta-line' }, h('span', { class: 'news-src' }, srcName(data, x)), srcTag(data.sources[x.src]), x.op ? h('span', { class: 'news-op' }, '评论') : null, ` · ${agoText(x.at)}`);
 
 // 中文 | English
 const langTabs = (lang, href) => h('nav', { class: 'news-langs', 'aria-label': '语言' }, Object.entries(LANGS).map(([k, name]) => h('a', { class: `news-lang${k === lang ? ' on' : ''}`, href: href(k), 'aria-current': k === lang ? 'page' : null }, name)));
 
-// 最上面: 标题、中文 | English、天气、几分钟前更新、刷新
-function head(title, data, rec, refresh, lang, href, weather = null) {
+// 报头 (v1.81, 像报纸头版): 上面一行 中文 | English、几分钟前更新、刷新; 「邸报」两个大字居中;
+// 下面两条线夹着日期、农历 (节气那天写上节气)、天气
+function masthead(data, rec, refresh, lang, href, weather = null) {
+  const now = new Date();
+  const day = localDay(now.toISOString());
+  const lunar = lunarText(day);
+  const term = solarTermOn(day);
   return [
     h(
-      'div',
-      { class: 'news-head' },
-      h('h1', {}, title),
-      langTabs(lang, href),
+      'header',
+      { class: 'news-mast' },
       h(
-        'span',
-        { class: 'news-head-tools' },
+        'div',
+        { class: 'news-mast-top' },
+        langTabs(lang, href),
+        h('span', { class: 'news-head-tools' }, h('span', { class: 'news-updated muted small' }, `${agoText(data.at)}更新`), h('button', { class: 'icon-btn', type: 'button', 'aria-label': '刷新', title: '刷新', onclick: () => refresh(true) }, icon('refresh', 18))),
+      ),
+      h('h1', { class: 'news-mast-title' }, '邸报'),
+      h(
+        'div',
+        { class: 'news-mast-line' },
+        h('span', { class: 'news-mast-date' }, h('span', {}, `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${WEEK[now.getDay()]}`), lunar ? h('span', {}, `农历${lunar}`) : null, term ? h('span', { class: 'news-mast-term' }, term) : null),
         weather,
-        h('span', { class: 'news-updated muted small' }, `${agoText(data.at)}更新`),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': '刷新', title: '刷新', onclick: () => refresh(true) }, icon('refresh', 18)),
       ),
     ),
     rec.stale ? h('p', { class: 'news-stale' }, '没连上网，这是上次的新闻。') : null,
@@ -98,17 +115,29 @@ function brokenNote(data, rec) {
   return h('p', { class: 'news-broken' }, `新闻已经 ${min < 120 ? `${min} 分钟` : `${Math.floor(min / 60)} 小时`}没更新了，自动更新可能断了。`, ext(ACTIONS_URL, '去 GitHub 点「Run workflow」接上'));
 }
 
+// 评论文章 (v1.81): 台名后面一个「评论」
+const opTag = (x) => (x.op ? h('span', { class: 'news-op' }, '评论') : null);
+// 点过的 (v1.81): 记下来, 马上变灰
+const seenClick = (x) => (e) => {
+  markSeen(x.id);
+  e.currentTarget.classList.add('seen');
+};
+
 // 快讯的一条: 时间、哪家、标题 (在新的网页里打开原网站)
-function liveRow(data, x) {
-  return h('li', {}, h('a', { class: 'news-live-row', href: itemHref(x), target: '_blank', rel: 'noopener' }, h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-text' }, h('span', { class: 'news-src' }, srcName(data, x)), h('span', { class: 'news-live-title' }, x.t))));
+function liveRow(data, x, seen) {
+  return h(
+    'li',
+    {},
+    h('a', { class: `news-live-row${seen.has(x.id) ? ' seen' : ''}`, href: itemHref(x), target: '_blank', rel: 'noopener', onclick: seenClick(x) }, h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-text' }, h('span', { class: 'news-live-src' }, h('span', { class: 'news-src' }, srcName(data, x)), opTag(x)), h('span', { class: 'news-live-title' }, x.t))),
+  );
 }
 
-// 长文章: 第一篇大一点 (有摘要、大图), 其余一行一篇 (右边小图)
-function longRow(data, x, big = false) {
+// 报道: 第一篇大一点 (有摘要、大图), 其余一行一篇 (右边小图)
+function longRow(data, x, big, seen) {
   return h(
     'li',
     { class: big ? 'news-long-lead' : null },
-    h('a', { class: 'news-long-row', href: itemHref(x) }, h('span', { class: 'news-long-text' }, meta(data, x), h('strong', { class: 'news-long-title' }, x.t), big && x.s ? h('span', { class: 'news-long-sum' }, x.s) : null), x.img ? h('span', { class: 'news-pic-box' }, picture(x.img.src, { alt: big ? x.t : '' })) : null),
+    h('a', { class: `news-long-row${seen.has(x.id) ? ' seen' : ''}`, href: itemHref(x), onclick: seenClick(x) }, h('span', { class: 'news-long-text' }, meta(data, x), h('strong', { class: 'news-long-title' }, x.t), big && x.s ? h('span', { class: 'news-long-sum' }, x.s) : null), x.img ? h('span', { class: 'news-pic-box' }, picture(x.img.src, { alt: big ? x.t : '' })) : null),
   );
 }
 
@@ -247,8 +276,43 @@ function dailyWordCard() {
   return h('a', { class: 'news-word', href: '#/news/word' }, h('span', { class: 'news-word-title' }, '每日猜词'), h('span', { class: 'muted small' }, `${d.getMonth() + 1}月${d.getDate()}日 · ${status}`), h('span', { class: 'news-word-go', 'aria-hidden': 'true' }, '→'));
 }
 
+// ---- 今日一图、历史上的今天 (v1.81): 维基百科每天的; 写明作者、许可、来自维基百科 ----
+const LICENSES = { 'Public domain': '公有领域' };
+function pictureBox(today, lang) {
+  const p = today?.pic;
+  if (!p?.src) return null;
+  const cap = lang === 'en' ? p.en : p.zh;
+  const lic = LICENSES[p.lic] ?? p.lic;
+  return h(
+    'section',
+    { class: 'news-potd', 'aria-label': '今日一图' },
+    h('h2', {}, '今日一图'),
+    h(
+      'figure',
+      {},
+      h('a', { class: 'news-potd-pic', href: p.page, target: '_blank', rel: 'noopener' }, h('img', { src: p.src, alt: cap ?? '', width: p.w, height: p.h, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', onerror: (e) => e.target.closest('.news-potd')?.remove() })),
+      h('figcaption', {}, cap ? h('p', { class: 'news-potd-cap' }, cap) : null, h('p', { class: 'news-credit' }, `图：${p.by ?? '佚名'} · `, p.licUrl ? ext(p.licUrl, lic) : lic, ' · ', ext(p.page, '维基共享资源'))),
+    ),
+  );
+}
+
+const EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function historyBox(today, lang) {
+  const list = today?.[lang];
+  if (!list?.length) return null;
+  const now = new Date();
+  const [m, d] = [now.getMonth() + 1, now.getDate()];
+  const page = lang === 'en' ? `https://en.wikipedia.org/wiki/${EN_MONTHS[m - 1]}_${d}` : `https://zh.wikipedia.org/wiki/${m}月${d}日`;
+  return h(
+    'section',
+    { class: 'news-otd', 'aria-label': '历史上的今天', lang: lang === 'en' ? 'en' : null },
+    h('div', { class: 'news-otd-head' }, h('h2', { lang: 'zh-CN' }, '历史上的今天'), h('span', { class: 'news-credit', lang: 'zh-CN' }, ext(page, '维基百科'), ' · CC BY-SA')),
+    h('ul', { class: 'news-otd-list' }, list.map((x) => h('li', {}, h('span', { class: 'news-otd-year' }, x.y < 0 ? `前${-x.y}年` : `${x.y}年`), h('span', {}, x.t)))),
+  );
+}
+
 // ---- 新闻 (一种语言) ----
-// 快讯方块: 24 小时内各家的标题全列出来, 新的在上面, 不分来源 (用户 v1.75 说的); 方块里面上下翻, 不把长文章挤到老远
+// 快讯方块: 24 小时内各家的标题全列出来, 新的在上面, 不分来源 (用户 v1.75 说的); 方块里面上下翻, 不把报道挤到老远
 export function renderNews(ctx, lang = 'zh') {
   const weather = weatherParts(); // 一直用同一个 (重画新闻时不重新定位、不重新拿天气)
   const page = newsPage(
@@ -259,23 +323,27 @@ export function renderNews(ctx, lang = 'zh') {
       // 第一篇: 最新的有图的那篇放最上面
       const leadAt = Math.max(0, longs.findIndex((x) => x.img));
       const ordered = longs.length ? [longs[leadAt], ...longs.filter((_, i) => i !== leadAt)] : [];
+      const seen = seenIds();
+      const today = todayOf(data);
       return [
-        head('邸报', data, rec, refresh, lang, langHref, weather.chip),
-        h('section', { class: 'news-flash', 'aria-label': '快讯' }, h('h2', { class: 'news-flash-head' }, '快讯'), live.length ? h('ul', { class: 'news-live-list news-flash-list' }, live.map((x) => liveRow(data, x))) : h('p', { class: 'muted' }, '24 小时内没有快讯。')),
+        masthead(data, rec, refresh, lang, langHref, weather.chip),
+        h('section', { class: 'news-flash', 'aria-label': '快讯' }, h('h2', { class: 'news-flash-head' }, '快讯'), live.length ? h('ul', { class: 'news-live-list news-flash-list' }, live.map((x) => liveRow(data, x, seen))) : h('p', { class: 'muted' }, '24 小时内没有快讯。')),
         dailyWordCard(),
         weather.box,
         ordered.length
           ? h(
               'section',
-              { class: 'news-long', 'aria-label': '长文章' },
-              h('div', { class: 'news-long-head' }, h('h2', {}, '长文章'), longs.some((x) => x.src === 'guardian') ? guardianLogo() : null),
+              { class: 'news-long', 'aria-label': '报道' },
+              h('div', { class: 'news-long-head' }, h('h2', {}, '报道'), longs.some((x) => x.src === 'guardian') ? guardianLogo() : null),
               h(
                 'ul',
                 { class: 'news-long-list' },
-                ordered.map((x, i) => longRow(data, x, i === 0)),
+                ordered.map((x, i) => longRow(data, x, i === 0, seen)),
               ),
             )
           : null,
+        pictureBox(today, lang),
+        historyBox(today, lang),
       ];
     },
     { maxAge: REFRESH_MS - 10000 },
@@ -348,8 +416,47 @@ function speaker(article, parts, lang) {
   return { button, bar };
 }
 
+// 字号 (v1.81): 0 小 1 中 2 大, 这台设备上记着 (跟书斋的分开)
+const SIZE_KEY = 'wengu:news-size';
+function loadSize() {
+  try {
+    const n = Number(localStorage.getItem(SIZE_KEY) ?? 1);
+    return [0, 1, 2].includes(n) ? n : 1;
+  } catch {
+    return 1;
+  }
+}
+function sizeButtons(article) {
+  let size = loadSize();
+  article.classList.add(`size-${size}`);
+  const btn = (d, label, name) =>
+    h(
+      'button',
+      {
+        class: 'btn small news-size',
+        type: 'button',
+        'aria-label': name,
+        title: name,
+        onclick: () => {
+          size = Math.max(0, Math.min(2, size + d));
+          article.classList.remove('size-0', 'size-1', 'size-2');
+          article.classList.add(`size-${size}`);
+          try {
+            localStorage.setItem(SIZE_KEY, String(size));
+          } catch {
+            // 存不下就只管这次
+          }
+        },
+      },
+      label,
+    );
+  return [btn(-1, 'A−', '字小一点'), btn(1, 'A+', '字大一点')];
+}
+
 export function renderArticle(ctx, id) {
   const box = h('section', { class: 'news-page news-story', 'aria-live': 'polite' }, h('p', { class: 'muted news-wait' }, '正在拿这篇文章……'));
+  markSeen(id); // 从别处 (搜索、书签) 打开的也算读过
+  let lookup = null;
   const back = (lang) => h('a', { class: 'back', href: langHref(lang) }, '← 邸报');
   Promise.all([cachedIndex().then((rec) => rec ?? loadIndex()), loadArticle(id)]).then(([rec, a]) => {
     if (!box.isConnected) return;
@@ -371,13 +478,13 @@ export function renderArticle(ctx, id) {
     const article = h(
       'article',
       { class: 'news-article', lang: lang === 'en' ? 'en' : 'zh-CN' },
-      h('p', { class: 'news-meta' }, h('span', { class: 'news-src' }, s.name, a.sec ? ` · ${a.sec}` : ''), h('span', { class: 'muted' }, ` · ${dayLabel(localDay(a.at))} ${clock(a.at)}`)),
+      h('p', { class: 'news-meta' }, h('span', { class: 'news-src' }, s.name, a.sec ? ` · ${a.sec}` : ''), srcTag(s), a.op || x?.op ? h('span', { class: 'news-op' }, '评论') : null, h('span', { class: 'muted' }, ` · ${dayLabel(localDay(a.at))} ${clock(a.at)}`)),
       h('h1', { 'data-k': 'title' }, a.t),
       // 作者 (RFA 写的是「记者：……」这样, 自己带着身份的不再加「作者：」)
       a.by ? h('p', { class: 'news-by muted' }, /[：:]/.test(a.by) || /^by\s/i.test(a.by) ? a.by : lang === 'en' ? `By ${a.by}` : `作者：${a.by}`) : null,
       // 卫报: 标志放在文章旁边, 链到这篇的原文; RFA: 署名要醒目, 放在最上面
       a.src === 'guardian' ? h('p', { class: 'news-gu-note' }, guardianLogo(a.u)) : null,
-      a.src === 'rfa' && s.note ? h('p', { class: 'news-credit-box' }, s.note) : null,
+      (a.src === 'rfa' || a.src === 'rfaen') && s.note ? h('p', { class: 'news-credit-box' }, s.note) : null,
       // 卫报标了「法律敏感」的 (多是英国正在审的案子)
       a.legal ? h('p', { class: 'news-legal' }, '这篇涉及正在进行的诉讼，内容可能会被修改。') : null,
       a.lede?.length ? h('p', { class: 'news-lede', 'data-k': 'lede' }, inline(a.lede)) : null,
@@ -385,7 +492,7 @@ export function renderArticle(ctx, id) {
     const { button, bar } = speaker(article, () => spokenParts(a), lang);
     article.append(
       ...[
-        button ? h('div', { class: 'news-tools' }, button) : null,
+        h('div', { class: 'news-tools' }, button, ...sizeButtons(article)),
         a.img ? h('figure', { class: 'news-pic' }, picture(a.img.src, { alt: a.t }), a.img.cap ? h('figcaption', { class: 'news-credit' }, a.img.cap) : null) : null,
         ...bodyBlocks(a.body, a.u),
         h('p', { class: 'news-original' }, ext(a.u, `在${s.name}网站上看原文`)),
@@ -393,6 +500,15 @@ export function renderArticle(ctx, id) {
       ].filter(Boolean),
     );
     fill(box, back(lang), article, bar);
+    // 英文文章: 点一个词看中文意思 (链接、按钮上的不算)
+    if (lang === 'en') lookup = wordLookup(article, ctx);
   });
-  return { title: '邸报', el: box, cleanup: () => stopSpeaking() };
+  return {
+    title: '邸报',
+    el: box,
+    cleanup: () => {
+      stopSpeaking();
+      lookup?.close();
+    },
+  };
 }

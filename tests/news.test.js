@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHtml, decode, blocksFrom, parseRss, itemFrom, cctvItems, isVideo, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT } from '../tools/news.mjs';
-import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, longItems, brokenMinutes, ownsSite, ACTIONS_URL, byDay, dayLabel, agoText, itemHref, langHref, inlineText, spokenParts } from '../js/news.js';
+import { parseHtml, decode, blocksFrom, parseRss, itemFrom, cctvItems, isVideo, isOpinion, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT, wikiText, otdText, otdOf, picOf, zhPicPage } from '../tools/news.mjs';
+import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, longItems, brokenMinutes, ownsSite, ACTIONS_URL, byDay, dayLabel, agoText, itemHref, langHref, inlineText, spokenParts, seenIds, markSeen, SEEN_KEY, todayOf, localDay } from '../js/news.js';
 
 options.gap = 0; // 测试不用等
 
@@ -179,6 +179,7 @@ function fakeWeb(now, { failRfa = false } = {}) {
     calls.push(url);
     if (url.startsWith('https://content.guardianapis.com/search')) {
       assert.equal(init.headers['api-key'], 'k'); // 密钥放在请求头里
+      assert.match(url, /page-size=15&/); // 卫报一次只拿最新的 15 篇 (v1.81)
       return new Response(JSON.stringify({ response: { status: 'ok', results: [guardianResult({ fields: { firstPublicationDate: new Date(now - 3600000).toISOString() } })] } }));
     }
     if (failRfa && url.includes('rfa.org')) return new Response('', { status: 404 });
@@ -249,7 +250,7 @@ const DATA = {
   ],
 };
 
-test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源; 快讯是 24 小时内只有标题的, 长文章是能读全文的', () => {
+test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源; 快讯是 24 小时内只有标题的, 报道是能读全文的', () => {
   assert.equal(validIndex(DATA), true);
   assert.equal(validIndex({ ...DATA, v: 1 }), false);
   assert.equal(validIndex({ ...DATA, items: [] }), false);
@@ -280,7 +281,7 @@ test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源; 快讯�
   assert.deepEqual(
     longItems(DATA, 'zh', NOW).map((x) => x.id),
     ['voa-1', 'voa-2', 'voa-3'],
-  ); // 长文章不只 24 小时
+  ); // 报道不只 24 小时
   assert.deepEqual(
     longItems(DATA, 'en', NOW).map((x) => x.id),
     ['guardian-1'],
@@ -364,4 +365,146 @@ test('邸报: 新闻一个小时没变就算自动更新断了; 只提醒网站�
   assert.equal(ownsSite({ owner: 'someone-else', repo: 'x', token: 't' }), false);
   assert.equal(ownsSite(null), false);
   assert.equal(ACTIONS_URL, 'https://github.com/aizhang453-hash/wengu/actions/workflows/news.yml');
+});
+
+test('新闻: WordPress 的图 (div.wp-caption) 跟说明一起算一张图; 不放图的来源连说明也不要 (v1.81, Global Voices)', () => {
+  const html = '<p>Before.</p><div class="wp-caption"><img src="https://gv/x.jpg" alt="x"><p class="wp-caption-text">Screenshot from DW.</p></div><p>After.</p>';
+  assert.deepEqual(blocksFrom(html), [{ p: ['Before.'] }, { img: { src: 'https://gv/x.jpg', cap: 'Screenshot from DW.' } }, { p: ['After.'] }]);
+  assert.deepEqual(blocksFrom(html, { dropImage: () => true }), [{ p: ['Before.'] }, { p: ['After.'] }]);
+  assert.equal(SOURCES.gv.noImages, true);
+  assert.equal(SOURCES.gv.tag, '志愿者撰稿');
+  assert.equal(itemFrom('gv', { title: 't', link: 'https://globalvoices.org/1', at: '2026-11-11T00:00:00.000Z', desc: 'd', image: { src: 'https://gv/x.jpg' } }).img, undefined);
+});
+
+test('新闻: 评论文章标出来 (v1.81) — 评论版的网址、标题开头写着「评论：」、分类叫 Opinion 的; 卫报看它自己分的', () => {
+  assert.ok(isOpinion('https://www.aljazeera.com/opinions/2026/11/11/x'));
+  assert.ok(isOpinion('https://www.theguardian.com/commentisfree/2026/nov/11/x'));
+  assert.ok(isOpinion('https://www.rfa.org/mandarin/pinglun/2026/11/11/x/'));
+  assert.ok(isOpinion('https://x/1', '观点：美国该怎么办'));
+  assert.ok(isOpinion('https://x/1', '【评论】一件事'));
+  assert.ok(isOpinion('https://x/1', 'Opinion: why it matters'));
+  assert.ok(isOpinion('https://x/1', '标题', ['新闻', '评论']));
+  assert.ok(!isOpinion('https://x/1', '标题', ['评论分析'])); // 德国之声的「评论分析」里也有分析, 不算
+  assert.ok(!isOpinion('https://www.dw.com/zh/观点不同的两派/a-1', '两派的观点：不一样'));
+  assert.ok(!isOpinion('https://www.npr.org/2026/11/11/1/opinion-poll-shows', 'Poll'));
+  const [r] = parseRss(rss('<item><title>观点：一件事</title><link>https://www.dw.com/zh/a-1</link><pubDate>Wed, 11 Nov 2026 01:00:00 GMT</pubDate><category>评论</category></item>'));
+  assert.deepEqual(r.cats, ['评论']);
+  assert.equal(itemFrom('dwzh', r).op, true);
+  assert.equal(itemFrom('dwzh', { ...r, title: '一件事', cats: [] }).op, undefined);
+  const g = guardianItem(guardianResult({ pillarId: 'pillar/opinion', sectionId: 'commentisfree' }), new Date().toISOString());
+  assert.equal(g.item.op, true);
+  assert.equal(g.article.op, true);
+  assert.equal(guardianItem(guardianResult(), new Date().toISOString()).item.op, undefined);
+});
+
+test('今日一图、历史上的今天 (v1.81): 维基的写法 → 字; 「（图）」、样式表去掉; 一天二十条的挑六条, 各个年代都有', () => {
+  assert.equal(wikiText("[[君士坦丁八世]]安排讓'''[[羅曼努斯三世]]'''<small>（圖）</small>結婚"), '君士坦丁八世安排讓羅曼努斯三世結婚');
+  assert.equal(wikiText('發起[[瓜達康納爾島戰役|反攻行動]]的'), '發起反攻行動的');
+  assert.equal(wikiText("'''[[瓜達康納爾海戰|-{zh-tw:瓜達康納爾海戰; zh-hk:瓜達爾卡納爾島海戰; zh-cn:瓜达尔卡纳尔岛海战;}-]]'''"), '瓜达尔卡纳尔岛海战');
+  assert.equal(wikiText('[[羅德西亞|-{zh-hans:罗得西亚;zh-hant:羅德西亞;}-]]總理'), '罗得西亚總理');
+  assert.equal(wikiText('函數 {{math|1=y}}圖形<ref>注</ref>'), '函數 圖形');
+  assert.equal(otdText('积分来求取函数 .mw-parser-output .texhtml{font-family:serif}.mw-parser-output .mvar{font-style:italic}@media(min-width:420px){.mw-parser-output span.texhtml{white-space:nowrap}}y = f(x)图形'), '积分来求取函数 y = f(x)图形');
+  assert.equal(otdText('Philae (pictured) touched down near the comet (logo depicted).'), 'Philae touched down near the comet.');
+  const many = Array.from({ length: 21 }, (_, i) => ({ year: 2020 - i * 30, text: `第 ${i} 件` }));
+  const six = otdOf(many);
+  assert.equal(six.length, 6);
+  assert.equal(six[0].y, 2020 - 20 * 30); // 最早的
+  assert.equal(six.at(-1).y, 2020); // 最近的
+  assert.ok(six.every((x, i) => i === 0 || x.y > six[i - 1].y));
+  assert.deepEqual(
+    otdOf([{ year: -44, text: '凯撒遇刺（图）' }, { year: 1912, text: '民國' }, { text: '没有年份' }], (t) => t.replace('國', '国')),
+    [
+      { y: -44, t: '凯撒遇刺' },
+      { y: 1912, t: '民国' },
+    ],
+  );
+  assert.deepEqual(otdOf(null), []);
+  const im = {
+    title: 'File:Kościelec view 2.jpg',
+    thumbnail: { source: 'https://thumb.wikimedia.org/x/960px-a.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo', width: 640, height: 427 },
+    file_page: 'https://commons.wikimedia.org/wiki/File:K.jpg',
+    artist: { text: 'kallerna' },
+    license: { type: 'CC BY-SA 4.0', url: 'https://creativecommons.org/licenses/by-sa/4.0' },
+    description: { text: 'Panoramic view.' },
+  };
+  assert.deepEqual(picOf(im, '全景'), { file: 'Kościelec view 2.jpg', src: 'https://thumb.wikimedia.org/x/960px-a.jpg', w: 640, h: 427, page: 'https://commons.wikimedia.org/wiki/File:K.jpg', by: 'kallerna', lic: 'CC BY-SA 4.0', licUrl: 'https://creativecommons.org/licenses/by-sa/4.0', en: 'Panoramic view.', zh: '全景' });
+  assert.equal(picOf({ ...im, license: {} }), null); // 不知道许可的不放
+  assert.deepEqual(zhPicPage('{{Featurepic/format\n| type = packed-hover\n| Image = Kościelec_view_2.jpg\n| Content = 從[[塔特拉山國家公園 (斯洛伐克)|塔特拉山國家公園]]眺望。\n}}'), { image: 'Kościelec view 2.jpg', text: '從塔特拉山國家公園眺望。' });
+});
+
+test('今日一图、历史上的今天: 拿 UTC 的昨天、今天、明天三天; 6 小时内不再拿; 中文说明要是同一张图才用', async () => {
+  const realFetch = globalThis.fetch;
+  const log = () => {};
+  const now = Date.parse('2026-11-11T12:00:00Z');
+  const asked = [];
+  const wiki = (url, init) => {
+    let m = /en\.wikipedia\.org\/api\/rest_v1\/feed\/featured\/(\d+)\/(\d+)\/(\d+)$/.exec(url);
+    if (m) {
+      asked.push(url);
+      const day = `${m[1]}-${m[2]}-${m[3]}`;
+      return { image: { title: `File:${day}.jpg`, thumbnail: { source: `https://thumb/${day}.jpg`, width: 960, height: 640 }, file_page: `https://commons/${day}`, artist: { text: 'A' }, license: { type: 'Public domain' }, description: { text: `Picture ${day}` } }, onthisday: [{ year: 1990, text: `English ${day}` }] };
+    }
+    m = /zh\.wikipedia\.org\/api\/rest_v1\/feed\/onthisday\/selected\/(\d+)\/(\d+)$/.exec(url);
+    if (m) {
+      asked.push(url);
+      assert.equal(init.headers['Accept-Language'], 'zh-cn'); // 维基自己转简体
+      return { selected: [{ year: 2000, text: `中文 ${m[1]}${m[2]}` }] };
+    }
+    if (url.startsWith('https://zh.wikipedia.org/w/api.php?')) {
+      asked.push(url);
+      const title = new URL(url).searchParams.get('titles');
+      // 11 日的中文说明配的是另一张图: 不用
+      const image = title.endsWith('11月11日') ? 'Other.jpg' : title.endsWith('11月10日') ? '2026-11-10.jpg' : '2026-11-12.jpg';
+      return { query: { pages: [{ revisions: [{ slots: { main: { content: `{{Featurepic/format\n| Image = ${image}\n| Content = [[说明]]${title.slice(-6)}\n}}` } } }] }] } };
+    }
+    return null;
+  };
+  try {
+    globalThis.fetch = async (url, init) => {
+      const w = wiki(url, init);
+      return w ? new Response(JSON.stringify(w)) : fakeWeb(now).fetch(url, init);
+    };
+    const { index } = await collect({ now, guardianKey: '', log });
+    assert.deepEqual(Object.keys(index.days), ['2026-11-10', '2026-11-11', '2026-11-12']);
+    const d = index.days['2026-11-11'];
+    assert.equal(d.pic.src, 'https://thumb/2026-11-11.jpg');
+    assert.equal(d.pic.zh, undefined); // 配的不是这张图
+    assert.equal(index.days['2026-11-12'].pic.zh, '说明11月12日');
+    assert.deepEqual(d.zh, [{ y: 2000, t: '中文 1111' }]);
+    assert.deepEqual(d.en, [{ y: 1990, t: 'English 2026-11-11' }]);
+    // 三个小时后: 不再拿
+    asked.length = 0;
+    const again = await collect({ prev: index, now: now + 3 * 3600000, guardianKey: '', log });
+    assert.equal(asked.length, 0);
+    assert.deepEqual(again.index.days, index.days);
+    // 十三个小时后: 过了 UTC 半夜, 换成 11、12、13 日, 都重新拿
+    const later = await collect({ prev: index, now: now + 13 * 3600000, guardianKey: '', log });
+    assert.deepEqual(Object.keys(later.index.days), ['2026-11-11', '2026-11-12', '2026-11-13']);
+    assert.ok(asked.some((u) => u.endsWith('/featured/2026/11/13')));
+    // 维基拿不到: 新闻照样有, 上次的照用
+    globalThis.fetch = fakeWeb(now).fetch;
+    const down = await collect({ prev: index, now: now + 7 * 3600000, guardianKey: '', log });
+    assert.ok(down.index.items.length > 0);
+    assert.deepEqual(down.index.days['2026-11-11'], index.days['2026-11-11']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('邸报: 点过的记在这台设备上, 三天后忘掉 (v1.81); 今日一图按这台设备的日期挑', () => {
+  const map = new Map();
+  const storage = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, String(v)) };
+  markSeen('a', { storage, now: NOW });
+  markSeen('b', { storage, now: NOW + 1000 });
+  assert.deepEqual([...seenIds(storage, NOW + 2000)].sort(), ['a', 'b']);
+  assert.deepEqual([...seenIds(storage, NOW + 3 * 86400000 + 500)], ['b']);
+  markSeen('c', { storage, now: NOW + 3 * 86400000 + 500 }); // 存的时候顺便把过期的扔掉
+  assert.deepEqual(Object.keys(JSON.parse(map.get(SEEN_KEY))).sort(), ['b', 'c']);
+  map.set(SEEN_KEY, '坏了');
+  assert.deepEqual([...seenIds(storage, NOW)], []);
+  assert.deepEqual([...seenIds(null, NOW)], []);
+  const today = localDay(new Date(NOW).toISOString());
+  assert.deepEqual(todayOf({ days: { [today]: { zh: [1] } } }, NOW), { zh: [1] });
+  assert.equal(todayOf({ days: {} }, NOW), null);
+  assert.equal(todayOf({}, NOW), null);
 });
