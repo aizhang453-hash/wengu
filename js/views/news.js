@@ -1,16 +1,16 @@
-// 新闻 (v1.74): 像新闻网站那样的几页 (新闻从哪来、怎么存见 ../news.js)
-//   #/news          中文新闻 (美国之音、自由亚洲电台、中新网)   #/news/en  英文新闻 (卫报、NASA、BBC、NPR)
-//                   最上面是头条 (最新的一条大图), 下面几格, 其余的按日子列; 可以只看一家
-//   #/news/live     快讯: 24 小时内的标题, 中文、英文分两栏 (手机上一次看一栏: #/news/live/en 是英文那栏); 开着时几分钟自己刷新一次
+// 新闻 (v1.74, v1.75 重新排过): 像新闻网站那样的几页 (新闻从哪来、怎么存见 ../news.js)
+//   #/news          中文 (#/news/en 英文): 最上面一个大方块「快讯」(24 小时内各家的标题, 点了去原网站),
+//                   下面「长文章」(美国之音、自由亚洲电台 / 卫报、NASA, 在温故里读全文); 开着时几分钟自己刷新一次
+//                   (v1.74 的 #/news/live 快讯页去掉了, 那个网址现在也打开这一页)
 //   #/news/a/<编号> 一篇全文: 标题、作者、图、正文、原文链接、出处; 可以朗读
-// 中新网、BBC、NPR 只有标题和摘要, 点了在新的网页里打开原网站
-// 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边; 卫报的内容只给个人、非商业阅读
+// 用户要页面简洁 (v1.75): 不写「在温故里读全文」「点了去原网站看」这种说明, 快讯、长文章都不按来源分
+// 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边 (长文章的标题旁边)
 
 import { h, fill, icon, toast } from '../dom.js';
-import { loadIndex, cachedIndex, loadArticle, LANGS, itemsFor, liveItems, sourcesFor, frontPage, byDay, localDay, clock, dayLabel, agoText, itemHref, langHref, liveHref, itemOf, spokenParts, lastSeen, markSeen } from '../news.js';
+import { loadIndex, cachedIndex, loadArticle, LANGS, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
 
-const LIVE_REFRESH_MS = 3 * 60 * 1000; // 快讯页开着时多久刷新一次
+const REFRESH_MS = 3 * 60 * 1000; // 新闻页开着时多久刷新一次
 
 const ext = (href, ...children) => h('a', { href, target: '_blank', rel: 'noopener' }, ...children);
 
@@ -52,188 +52,87 @@ function newsPage(cls, draw, { maxAge } = {}) {
 }
 
 function offline(retry) {
-  return h(
-    'div',
-    { class: 'empty' },
-    h('h1', {}, '新闻'),
-    h('p', {}, '还没拿到新闻。请连上网再试一次（拿到过一次以后，断网也能看上次的）。'),
-    h('button', { class: 'btn primary', type: 'button', onclick: retry }, '再试一次'),
-  );
+  return h('div', { class: 'empty' }, h('h1', {}, '新闻'), h('p', {}, '还没拿到新闻，连上网再试一次。'), h('button', { class: 'btn primary', type: 'button', onclick: retry }, '再试一次'));
 }
 
 // 图: 拿不到 (断网) 就不占地方
-function picture(src, { alt = '', cls = '' } = {}) {
+function picture(src, { alt = '' } = {}) {
   if (!src) return null;
-  return h('img', { class: cls, src, alt, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', onerror: (e) => (e.target.closest('.news-thumb, .news-lead-pic, .news-card-pic') ?? e.target).remove() });
+  return h('img', { src, alt, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', onerror: (e) => (e.target.closest('.news-pic-box') ?? e.target).remove() });
 }
 
 const srcName = (data, x) => data.sources[x.src]?.name ?? x.src;
-const tag = (data, x, { time = true } = {}) => h('span', { class: 'news-tag' }, srcName(data, x), x.sec ? ` · ${x.sec}` : '', time ? h('span', { class: 'news-time' }, ` · ${agoText(x.at)}`) : null);
-// 只有标题的: 在新的网页里打开原网站
-const linkProps = (x, cls) => (x.full ? { class: cls, href: itemHref(x) } : { class: `${cls} external`, href: itemHref(x), target: '_blank', rel: 'noopener' });
-const outMark = (x) => (x.full ? null : h('span', { class: 'news-out', 'aria-label': '（打开原网站）' }, ' ↗'));
-
-function row(data, x) {
-  return h(
-    'li',
-    {},
-    h('a', linkProps(x, 'news-row'), h('span', { class: 'news-row-text' }, tag(data, x), h('strong', { class: 'news-row-title' }, x.t, outMark(x)), x.s ? h('span', { class: 'news-row-sum' }, x.s) : null), x.img ? h('span', { class: 'news-thumb' }, picture(x.img.src)) : null),
-  );
-}
-
-function lead(data, x) {
-  return h('a', linkProps(x, 'news-lead'), h('span', { class: 'news-lead-pic' }, picture(x.img.src, { alt: x.t })), h('span', { class: 'news-lead-text' }, tag(data, x), h('strong', { class: 'news-lead-title' }, x.t), x.s ? h('span', { class: 'news-lead-sum' }, x.s) : null));
-}
-
-function card(data, x) {
-  return h('a', linkProps(x, 'news-card'), h('span', { class: 'news-card-pic' }, picture(x.img.src)), tag(data, x), h('strong', { class: 'news-card-title' }, x.t));
-}
-
-function head(data, rec, refresh, lang) {
-  return [
-    h(
-      'div',
-      { class: 'page-head news-head' },
-      h('h1', {}, '新闻'),
-      h(
-        'span',
-        { class: 'news-head-tools' },
-        h('a', { class: 'btn small news-live-btn', href: liveHref(lang) }, '快讯'),
-        h('span', { class: 'news-updated muted small' }, `${agoText(data.at)}更新`),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': '看看有没有新的', title: '看看有没有新的', onclick: () => refresh(true) }, icon('refresh', 18)),
-      ),
-    ),
-    rec.stale ? h('p', { class: 'news-stale' }, `没连上网，这是上次拿到的新闻（${agoText(data.at)}更新）。`) : null,
-  ];
-}
+const meta = (data, x) => h('span', { class: 'news-meta-line' }, h('span', { class: 'news-src' }, srcName(data, x)), ` · ${agoText(x.at)}`);
 
 // 中文 | English
 const langTabs = (lang, href) => h('nav', { class: 'news-langs', 'aria-label': '语言' }, Object.entries(LANGS).map(([k, name]) => h('a', { class: `news-lang${k === lang ? ' on' : ''}`, href: href(k), 'aria-current': k === lang ? 'page' : null }, name)));
 
-// 页面最下面: 各家的出处、授权
-function sourceNote(data, lang) {
-  const list = Object.entries(data.sources).filter(([, s]) => s.lang === lang);
-  return h(
-    'footer',
-    { class: 'news-source muted small' },
-    h('p', {}, '新闻每 15 分钟更新一次。', lang === 'zh' ? '美国之音、自由亚洲电台的文章在温故里读全文；中新网只有标题和摘要，点了去中新网看。' : '卫报、NASA 的文章在温故里读全文（卫报的文章只留 24 小时，仅供个人、非商业阅读）；BBC、NPR 只有标题和摘要，点了去原网站看。'),
+// 最上面: 标题、中文 | English、几分钟前更新、刷新
+function head(title, data, rec, refresh, lang, href) {
+  return [
     h(
-      'p',
-      {},
-      list.map(([, s], i) => [i ? ' · ' : '', ext(s.home, s.name)]),
+      'div',
+      { class: 'news-head' },
+      h('h1', {}, title),
+      langTabs(lang, href),
+      h(
+        'span',
+        { class: 'news-head-tools' },
+        h('span', { class: 'news-updated muted small' }, `${agoText(data.at)}更新`),
+        h('button', { class: 'icon-btn', type: 'button', 'aria-label': '刷新', title: '刷新', onclick: () => refresh(true) }, icon('refresh', 18)),
+      ),
     ),
+    rec.stale ? h('p', { class: 'news-stale' }, '没连上网，这是上次的新闻。') : null,
+  ];
+}
+
+// 快讯的一条: 时间、哪家、标题 (在新的网页里打开原网站)
+function liveRow(data, x) {
+  return h('li', {}, h('a', { class: 'news-live-row', href: itemHref(x), target: '_blank', rel: 'noopener' }, h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-text' }, h('span', { class: 'news-src' }, srcName(data, x)), h('span', { class: 'news-live-title' }, x.t))));
+}
+
+// 长文章: 第一篇大一点 (有摘要、大图), 其余一行一篇 (右边小图)
+function longRow(data, x, big = false) {
+  return h(
+    'li',
+    { class: big ? 'news-long-lead' : null },
+    h('a', { class: 'news-long-row', href: itemHref(x) }, h('span', { class: 'news-long-text' }, meta(data, x), h('strong', { class: 'news-long-title' }, x.t), big && x.s ? h('span', { class: 'news-long-sum' }, x.s) : null), x.img ? h('span', { class: 'news-pic-box' }, picture(x.img.src, { alt: big ? x.t : '' })) : null),
   );
 }
 
-// ---- 新闻首页 (一种语言) ----
+// ---- 新闻 (一种语言) ----
+// 快讯方块: 24 小时内各家的标题全列出来, 新的在上面, 不分来源 (用户 v1.75 说的); 方块里面上下翻, 不把长文章挤到老远
 export function renderNews(ctx, lang = 'zh') {
-  let only = null; // 只看一家
-  const { box } = newsPage('news-home', ({ data, ...rec }, { refresh }) => {
-    const all = itemsFor(data, lang);
-    const srcs = sourcesFor(data, lang);
-    if (only && !srcs.some((s) => s.id === only)) only = null;
-    const today = localDay(new Date().toISOString());
-    const chips = () =>
-      h(
-        'nav',
-        { class: 'news-secs', 'aria-label': '来源' },
-        [{ id: null, name: '全部', n: all.length }, ...srcs].map((s) =>
-          h(
-            'button',
-            {
-              class: `chip${only === s.id ? ' on' : ''}`,
-              type: 'button',
-              'aria-pressed': String(only === s.id),
-              onclick: () => {
-                only = s.id;
-                fill(box, draw());
-              },
-            },
-            s.name,
-            h('span', { class: 'news-n' }, ` ${s.n}`),
-          ),
-        ),
-      );
-    const draw = () => {
-      const items = only ? all.filter((x) => x.src === only) : all;
-      const { lead: top, cards, rest } = frontPage(items);
-      return [
-        head(data, rec, refresh, lang),
-        langTabs(lang, langHref),
-        chips(),
-        // 卫报的标志放在卫报的内容旁边 (英文页的最上面)
-        lang === 'en' && srcs.some((s) => s.id === 'guardian') && (!only || only === 'guardian') ? h('p', { class: 'news-gu-note muted small' }, guardianLogo(), '卫报的文章来自卫报开放平台，只留 24 小时，仅供个人、非商业阅读。') : null,
-        top ? h('section', { class: 'news-top', 'aria-label': '头条' }, lead(data, top), cards.length ? h('div', { class: 'news-cards' }, cards.map((x) => card(data, x))) : null) : null,
-        byDay(rest).map((d) => [h('div', { class: 'list-head' }, h('h2', {}, dayLabel(d.day, today)), h('span', { class: 'muted small' }, `${d.items.length} 条`)), h('ul', { class: 'news-list' }, d.items.map((x) => row(data, x)))]),
-        items.length ? null : h('p', { class: 'muted' }, '现在没有新闻。'),
-        sourceNote(data, lang),
-      ];
-    };
-    return draw();
-  });
-  return { title: lang === 'en' ? 'English · 新闻' : '新闻', el: box };
-}
-
-// ---- 快讯 ----
-export function renderLive(ctx, lang = 'zh') {
-  const seen = lastSeen(); // 上次看到哪: 之后来的标「新」
-  let newest = '';
-  const column = (data, l) => {
-    const items = liveItems(data, l);
-    const today = localDay(new Date().toISOString());
-    const hasGuardian = items.some((x) => x.src === 'guardian');
-    return h(
-      'section',
-      { class: `news-live-col${l === lang ? ' on' : ''}`, 'aria-label': LANGS[l] },
-      h('h2', { class: 'news-live-head' }, LANGS[l], h('span', { class: 'muted small' }, ` ${items.length} 条`)),
-      hasGuardian ? h('p', { class: 'news-gu-note muted small' }, guardianLogo()) : null,
-      items.length
-        ? byDay(items).map((d) => [
-            h('h3', { class: 'news-live-day' }, dayLabel(d.day, today)),
-            h(
-              'ul',
-              { class: 'news-live-list' },
-              d.items.map((x) => {
-                if (x.at > newest) newest = x.at;
-                const fresh = seen && x.at > seen;
-                return h('li', { class: fresh ? 'fresh' : null }, h('a', linkProps(x, 'news-live-row'), h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-src' }, srcName(data, x)), h('span', { class: 'news-live-title' }, fresh ? h('span', { class: 'news-new' }, '新') : null, x.t, outMark(x))));
-              }),
-            ),
-          ])
-        : h('p', { class: 'muted' }, '24 小时内没有新闻。'),
-    );
-  };
   const page = newsPage(
-    'news-live',
+    'news-home',
     ({ data, ...rec }, { refresh }) => {
-      newest = '';
-      const cols = [column(data, 'zh'), column(data, 'en')];
-      markSeen(newest);
+      const live = liveItems(data, lang);
+      const longs = longItems(data, lang);
+      // 第一篇: 最新的有图的那篇放最上面
+      const leadAt = Math.max(0, longs.findIndex((x) => x.img));
+      const ordered = longs.length ? [longs[leadAt], ...longs.filter((_, i) => i !== leadAt)] : [];
       return [
-        h('a', { class: 'back', href: langHref(lang) }, '← 新闻'),
-        h(
-          'div',
-          { class: 'page-head news-head' },
-          h('h1', {}, '快讯'),
-          h(
-            'span',
-            { class: 'news-head-tools' },
-            h('span', { class: 'news-updated muted small' }, `每 15 分钟更新 · ${agoText(data.at)}更新`),
-            h('button', { class: 'icon-btn', type: 'button', 'aria-label': '看看有没有新的', title: '看看有没有新的', onclick: () => refresh(true) }, icon('refresh', 18)),
-          ),
-        ),
-        rec.stale ? h('p', { class: 'news-stale' }, `没连上网，这是上次拿到的快讯（${agoText(data.at)}更新）。`) : null,
-        // 手机上一次看一栏
-        langTabs(lang, liveHref),
-        h('div', { class: 'news-live-cols' }, cols),
-        h('p', { class: 'news-source muted small' }, '24 小时内各家的新闻标题，新的在上面。美国之音、自由亚洲电台、卫报、NASA 的在温故里读全文，带 ↗ 的打开原网站。'),
+        head('新闻', data, rec, refresh, lang, langHref),
+        h('section', { class: 'news-flash', 'aria-label': '快讯' }, h('h2', { class: 'news-flash-head' }, '快讯'), live.length ? h('ul', { class: 'news-live-list news-flash-list' }, live.map((x) => liveRow(data, x))) : h('p', { class: 'muted' }, '24 小时内没有快讯。')),
+        ordered.length
+          ? h(
+              'section',
+              { class: 'news-long', 'aria-label': '长文章' },
+              h('div', { class: 'news-long-head' }, h('h2', {}, '长文章'), longs.some((x) => x.src === 'guardian') ? guardianLogo() : null),
+              h(
+                'ul',
+                { class: 'news-long-list' },
+                ordered.map((x, i) => longRow(data, x, i === 0)),
+              ),
+            )
+          : null,
       ];
     },
-    { maxAge: LIVE_REFRESH_MS - 10000 },
+    { maxAge: REFRESH_MS - 10000 },
   );
   // 开着时几分钟自己刷新一次
-  const timer = setInterval(() => page.box.isConnected && page.refresh(), LIVE_REFRESH_MS);
-  return { title: '快讯', el: page.box, cleanup: () => clearInterval(timer) };
+  const timer = setInterval(() => page.box.isConnected && page.refresh(), REFRESH_MS);
+  return { title: lang === 'en' ? 'English · 新闻' : '新闻', el: page.box, cleanup: () => clearInterval(timer) };
 }
 
 // ---- 一篇全文 ----
@@ -313,8 +212,8 @@ export function renderArticle(ctx, id) {
         box,
         back(lang),
         h('h1', {}, x?.t ?? '看不到这篇文章'),
-        h('p', { class: 'muted' }, x?.src === 'guardian' ? '卫报的文章按卫报的规定只留 24 小时，这篇已经撤下来了。' : '这篇文章可能已经撤下来了，或者现在没连上网（打开过的文章断网也能看）。'),
-        x?.u ? h('p', {}, ext(x.u, `到${srcName(data, x)}网站看原文 ↗`)) : null,
+        h('p', { class: 'muted' }, x?.src === 'guardian' ? '这篇已经撤下来了。' : '这篇可能已经撤下来了，或者没连上网。'),
+        x?.u ? h('p', {}, ext(x.u, `到${srcName(data, x)}网站看原文`)) : null,
       );
     }
     const s = data?.sources[a.src] ?? { name: a.src, note: '' };
@@ -322,7 +221,7 @@ export function renderArticle(ctx, id) {
     const article = h(
       'article',
       { class: 'news-article', lang: lang === 'en' ? 'en' : 'zh-CN' },
-      h('p', { class: 'news-meta' }, h('span', { class: 'news-tag' }, s.name, a.sec ? ` · ${a.sec}` : ''), h('span', { class: 'muted' }, ` · ${dayLabel(localDay(a.at))} ${clock(a.at)}`)),
+      h('p', { class: 'news-meta' }, h('span', { class: 'news-src' }, s.name, a.sec ? ` · ${a.sec}` : ''), h('span', { class: 'muted' }, ` · ${dayLabel(localDay(a.at))} ${clock(a.at)}`)),
       h('h1', { 'data-k': 'title' }, a.t),
       // 作者 (RFA 写的是「记者：……」这样, 自己带着身份的不再加「作者：」)
       a.by ? h('p', { class: 'news-by muted' }, /[：:]/.test(a.by) || /^by\s/i.test(a.by) ? a.by : lang === 'en' ? `By ${a.by}` : `作者：${a.by}`) : null,
@@ -339,7 +238,7 @@ export function renderArticle(ctx, id) {
         button ? h('div', { class: 'news-tools' }, button) : null,
         a.img ? h('figure', { class: 'news-pic' }, picture(a.img.src, { alt: a.t }), a.img.cap ? h('figcaption', { class: 'news-credit' }, a.img.cap) : null) : null,
         ...bodyBlocks(a.body, a.u),
-        h('p', { class: 'news-original' }, ext(a.u, `在${s.name}网站上看原文 ↗`)),
+        h('p', { class: 'news-original' }, ext(a.u, `在${s.name}网站上看原文`)),
         s.note ? h('p', { class: 'news-credit-box muted small' }, s.note) : null,
       ].filter(Boolean),
     );

@@ -1,7 +1,7 @@
 // 新闻 (v1.74): 拿新闻、存一份在这台设备上 (断网也能看上次的), 还有新闻页要用的小工具。页面在 views/news.js
 //
 // 新闻从哪来: GitHub Actions 每 15 分钟拿一次各家的新闻 (tools/news.mjs), 放在仓库 news 分支:
-//   latest.json  所有新闻的标题、摘要、时间、链接 (来源: 美国之音、自由亚洲电台、中新网、卫报、NASA、BBC、NPR)
+//   latest.json  所有新闻的标题、时间、链接 (长文章还有摘要、图); 有哪几家见 tools/news.mjs 的 SOURCES
 //   a/<编号>.json 能放全文的那几家 (美国之音、自由亚洲电台、卫报、NASA), 一篇一个
 // 先从 GitHub 拿 (raw.githubusercontent.com), 拿不到再试 jsDelivr (同一份文件, 国内有时候更好连)。
 // 在自己电脑上跑 (npm start) 时先用本地的 news/ (node tools/news.mjs 生成的)。
@@ -142,26 +142,14 @@ export function itemsFor(data, lang, { src = null, now = Date.now() } = {}) {
   return visibleItems(data, now).filter((x) => x.lang === lang && (!src || x.src === src));
 }
 
-// 快讯: 24 小时内的标题
-export function liveItems(data, lang, now = Date.now()) {
-  return itemsFor(data, lang, { now }).filter((x) => now - Date.parse(x.at) < LIVE_MS);
+// 快讯 (v1.75): 只有标题的那几家 (点了去原网站), 24 小时内的; src: 只要这一家
+export function liveItems(data, lang, now = Date.now(), src = null) {
+  return itemsFor(data, lang, { src, now }).filter((x) => !x.full && now - Date.parse(x.at) < LIVE_MS);
 }
 
-// 这种语言有哪几家 (照 sources 的次序), 各有几条
-export function sourcesFor(data, lang, now = Date.now()) {
-  const items = itemsFor(data, lang, { now });
-  return Object.entries(data?.sources ?? {})
-    .filter(([, s]) => s.lang === lang)
-    .map(([id, s]) => ({ id, ...s, n: items.filter((x) => x.src === id).length }))
-    .filter((s) => s.n);
-}
-
-// 首页: 头条 (最新的、能读全文、有图的一条), 下面几格 (再几条这样的), 其余的按日子列
-export function frontPage(items, { cards = 4 } = {}) {
-  const pics = items.filter((x) => x.full && x.img);
-  const top = pics.slice(0, 1 + cards);
-  const used = new Set(top.map((x) => x.id));
-  return { lead: top[0] ?? null, cards: top.slice(1), rest: items.filter((x) => !used.has(x.id)) };
+// 长文章: 能在温故里读全文的, 新的在前
+export function longItems(data, lang, now = Date.now()) {
+  return itemsFor(data, lang, { now }).filter((x) => x.full);
 }
 
 // 按日子分组 (照这台设备的时间): [{ day: 'YYYY-MM-DD', items }]
@@ -212,7 +200,6 @@ export function agoText(iso, now = Date.now()) {
 // 列表里一条点了去哪: 能读全文的在温故里读, 其余的打开原网站
 export const itemHref = (x) => (x.full ? `#/news/a/${encodeURIComponent(x.id)}` : x.u);
 export const langHref = (lang) => (lang === 'en' ? '#/news/en' : '#/news');
-export const liveHref = (lang) => (lang === 'en' ? '#/news/live/en' : '#/news/live');
 export const itemOf = (data, id) => data?.items.find((x) => x.id === id) ?? null;
 
 // 段落里的一段段 (字、链接、粗体……) → 纯文字 (朗读用)
@@ -227,21 +214,4 @@ export function spokenParts(a) {
     if (text.trim()) parts.push({ k: i, text });
   });
   return parts;
-}
-
-// 快讯: 上次看到哪 (这台设备上), 新来的标一下
-const SEEN_KEY = 'wengu:news-seen';
-export function lastSeen() {
-  try {
-    return localStorage.getItem(SEEN_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-export function markSeen(iso) {
-  try {
-    if (iso && iso > lastSeen()) localStorage.setItem(SEEN_KEY, iso);
-  } catch {
-    // 记不住就算了
-  }
 }

@@ -3,6 +3,14 @@
 # news 分支每次整个盖掉 (只留最新的一份), 不往 main 里加提交, 仓库不会越来越大; 卫报的文章过了 24 小时也就跟着没了 (卫报的规定)。
 # 卫报的 API 要密钥: 仓库 Settings › Secrets and variables › Actions 里的 GUARDIAN_API_KEY (没有就不拿卫报)。
 # 跟上次一样的不推。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上跑一次。
+#
+# 接力 (v1.75): GitHub 的定时 (schedule) 靠不住 —— v1.74 合并后好几个小时一次都没按时跑 (关掉再打开也没用)。
+# 所以每次拿完新闻, 最后一步 (next) 自己排下一次 (workflow_dispatch, relay=true); 下一次先在 news-wait 环境里等
+# (环境的「等待计时」14 分钟, 等的时候不占机器), 再拿新闻, 再排下一次……这样一直接下去, 大约 15 分钟一次。
+#   news-wait 环境要先建好: 仓库 Settings › Environments › news-wait › Wait timer 14 (分钟)
+#   已经有一次在等着、排着队的, 就不再排 (免得越接越多); 定时如果哪天跑了, 也只是多拿一次
+#   要停: Actions › 新闻 › ··· › Disable workflow (停用以后排不上下一次, 接力就断了)
+#   接力断了 (GitHub 出问题之类): 手动 Run workflow 一次, 或者合并改了这个文件的提交, 就又接上了
 
 name: 新闻
 
@@ -11,22 +19,41 @@ on:
     # 每 15 分钟。不用整点、一刻钟 (0、15、30、45 分): GitHub 说那几分钟最忙, 定时任务会晚, 太忙时会被跳过
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
+    inputs:
+      relay:
+        description: 接力 (自动排的下一次用; 手动跑不用勾)
+        type: boolean
+        default: false
   # 改了拿新闻的程序 (合进 main 的时候) 马上跑一次
   push:
     branches: [main]
     paths: [tools/news.mjs, .github/workflows/news.yml]
 
 permissions:
-  contents: write
-
-concurrency:
-  group: news
-  cancel-in-progress: false
+  contents: write # 推 news 分支
+  actions: write # 排下一次
 
 jobs:
+  # 接力排的那一次: 先等 14 分钟 (news-wait 环境的等待计时; deployment: false 不留部署记录)
+  wait:
+    if: inputs.relay == true
+    runs-on: ubuntu-latest
+    environment:
+      name: news-wait
+      deployment: false
+    steps:
+      - run: echo 等好了
+
   news:
+    needs: wait
+    # 不是接力的 (手动、合并、定时): wait 跳过了, 直接拿
+    if: ${{ !cancelled() && needs.wait.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # 同一时间只有一个在拿 (两个一起推 news 分支会打架)
+    concurrency:
+      group: news
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
 
@@ -34,7 +61,11 @@ jobs:
         with:
           node-version: 22
 
-      # 上次的新闻: 已经拿过的全文不用再拿, 中新网挤掉的标题还留 24 小时
+      # 繁体的标题 (香港电台、中央社、BBC 中文) 转成简体用 (只装这一个, 不改 package.json)
+      - name: 装繁转简
+        run: npm install --no-save --no-package-lock --no-audit --no-fund opencc-js@1.4.2
+
+      # 上次的新闻: 已经拿过的全文不用再拿, RSS 里挤掉的标题还留 24 小时
       - name: 拿上次的
         run: |
           mkdir -p news
@@ -62,9 +93,9 @@ jobs:
           cat > "$out/README.md" <<'EOF'
           # 温故的新闻
 
-          这个分支是自动生成的：GitHub Actions（`.github/workflows/news.yml`）每 15 分钟用 `tools/news.mjs` 拿一次各家的新闻，写成 `latest.json`（所有新闻的标题、摘要）和 `a/`（能放全文的几家，一篇一个文件），温故的「新闻」「快讯」页读这些。每次整个覆盖，只留最新的一份，不要在这里改东西。
+          这个分支是自动生成的：GitHub Actions（`.github/workflows/news.yml`）每 15 分钟用 `tools/news.mjs` 拿一次各家的新闻，写成 `latest.json`（所有新闻的标题、摘要）和 `a/`（能放全文的几家，一篇一个文件），温故的新闻页读这些。每次整个覆盖，只留最新的一份，不要在这里改东西。
 
-          全文来自美国之音（公共财产）、自由亚洲电台（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia, 2025 M St. NW, Suite 300, Washington DC 20036.）、卫报开放平台（Powered by The Guardian；仅供个人、非商业阅读，24 小时内更新）、NASA（公共财产）；中新网、BBC、NPR 只有标题、摘要和链接，版权归各家。
+          全文来自美国之音（公共财产）、自由亚洲电台（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia, 2025 M St. NW, Suite 300, Washington DC 20036.）、卫报开放平台（Powered by The Guardian；仅供个人、非商业阅读，24 小时内更新）、NASA（公共财产）；快讯的各家只有标题和链接，版权归各家。
           EOF
           cd "$out"
           git init -q -b news
@@ -75,3 +106,36 @@ jobs:
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" news
           # 备用的 jsDelivr 也马上换成新的 (没成功也不要紧, 它过一阵自己会换)
           curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@news/latest.json" > /dev/null || true
+
+  # 排下一次 (拿新闻失败了也排, 下次再试)
+  next:
+    needs: news
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 排下一次
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 保险: news-wait 没设等待计时的话, 接力会一次接一次不停地跑, 所以不接
+          wait_min=$(gh api "repos/$GITHUB_REPOSITORY/environments/news-wait" --jq '[.protection_rules[]? | select(.type == "wait_timer") | .wait_timer] | max // 0' 2>/dev/null || echo 0)
+          if [ "${wait_min:-0}" -lt 10 ]; then
+            echo "news-wait 环境没有设等待计时 (要 14 分钟), 不接力"
+            exit 0
+          fi
+          waiting=$(gh run list -R "$GITHUB_REPOSITORY" --workflow news.yml --limit 30 --json databaseId,status \
+            --jq '[.[] | select(.databaseId != ${{ github.run_id }}) | select(.status == "waiting" or .status == "queued" or .status == "pending" or .status == "requested")] | length')
+          if [ "$waiting" -gt 0 ]; then
+            echo "已经有一次在等着了, 不再排"
+            exit 0
+          fi
+          # 排不上 (GitHub 偶尔出错) 就等一会儿再试, 试 5 次
+          for i in 1 2 3 4 5; do
+            if gh workflow run news.yml -R "$GITHUB_REPOSITORY" --ref main -f relay=true; then
+              echo "排好了: 大约 15 分钟后再拿"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "排不上下一次, 接力断了 (手动 Run workflow 一次就又接上)"
+          exit 1

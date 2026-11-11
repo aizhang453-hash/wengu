@@ -14,21 +14,29 @@
 //                       标了「法律敏感」(多是英国正在审的案子, 法庭对报道有限制) 的照放, 页面上写明「这篇涉及正在进行的诉讼, 内容可能会被修改」;
 //                       卫报改了、撤了的, 下一次整批重新拿 (最多一小时) 时跟着改、跟着没
 //     NASA              美国政府的作品, RSS 带全文
-//   只放标题和链接 (点了去原网站): 中新网 (即时新闻、要闻)、BBC、NPR
-// 快讯页用所有来源的标题, 留最近 24 小时; 中新网的即时新闻一次只给 30 条 (两个小时左右), 所以跟上次的合起来。
+//   快讯 (只放标题和链接, 点了去原网站; v1.75 加了很多家, 都是不用付费、没有付费墙的, 2026-11 在美国打开看过):
+//     中文: 中新网 (要闻)、央视新闻、界面新闻、BBC 中文、德国之声、法广、香港电台、中央社
+//     英文: NPR、Al Jazeera、PBS NewsHour、DW、France 24、CBS News、ABC News
+//     BBC 英文版 2025 年 6 月起在美国有付费墙, 不要了 (BBC 中文这些语言版不收费); 视频页 (/video/) 不要, 只要能读的文章
+//     央视没有正式的 RSS, 用它自己网页拿新闻列表的那个地址 (news_1.jsonp); 央视改了网站可能就拿不到了 (拿不到的那家用上次的, 别的照常)
+//     香港电台、中央社、BBC 中文给的是繁体: 标题用 opencc-js 转成简体 (BBC 的链接也换成简体版 /simp)
+//   人民网 (2025 年 6 月停更)、新华网、澎湃、环球网、光明网、新京报、凤凰网没有能用的 RSS (2026-11 查的)
+// 快讯只列 24 小时内的, 所以只有标题的留 24 小时; 各家 RSS 一次只给二三十条, 跟上次的合起来。
 //
 // 跑法: node tools/news.mjs            (读上次的 news/, 写新的)
 //       node tools/news.mjs --dry      (只打出来看, 不写)
 // 要 Node 22 以上 (自带 fetch)。在要走代理的机器上加 NODE_USE_ENV_PROXY=1。没有 GUARDIAN_API_KEY 就不拿卫报
+// 繁转简要 opencc-js 1.4.2: GitHub Actions 里先 npm install; 自己电脑上没装的话, OPENCC_JS=<opencc-js 的 dist/esm/full.js> (都没有就照繁体放)
 // 写明是谁在拿 (User-Agent): GitHub Actions 里用 NEWS_UA 写上仓库的网址
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const UA = process.env.NEWS_UA || 'WenguNews/1.0 (personal study app)';
 // 两次请求之间等多久 (毫秒); 测试里改成 0
 export const options = { gap: 800 };
-const KEEP_H = 48; // 只有标题的新闻留多久 (小时; 快讯页只显示 24 小时内的)
+const KEEP_H = 24; // 只有标题的新闻留多久 (小时; 快讯只列 24 小时内的)
 const KEEP_FULL_H = 7 * 24; // 能读全文的留一个星期 (RFA 一天才两三篇)
 const GUARDIAN_KEEP_H = 24; // 卫报的规定: 最多留 24 小时
 const GUARDIAN_EVERY_MIN = 55; // 卫报多久重新拿一次 (每天 500 次的额度, 每小时一次足够)
@@ -37,16 +45,44 @@ const SUMMARY_MAX = 140;
 
 export const RFA_CREDIT = 'Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia, 2025 M St. NW, Suite 300, Washington DC 20036.';
 
-// 来源: full 能放全文; home 原网站; note 写在文章下面的出处
+// 来源: full 能放全文; home 原网站; note 写在文章下面的出处; rss 或 cctv (央视的新闻列表);
+// hant 给的是繁体 ('hk' 香港、'tw' 台湾的写法, 转成简体); link 链接要改一下的
+// 次序就是页面上来源按钮的次序
 export const SOURCES = {
   voa: { name: '美国之音', lang: 'zh', full: true, home: 'https://www.voachinese.com/', rss: ['https://www.voachinese.com/api/zm_yql-vomx-tpeybti'], note: '来源：美国之音（voanews.com）' },
   rfa: { name: '自由亚洲电台', lang: 'zh', full: true, home: 'https://www.rfa.org/mandarin/', rss: ['https://www.rfa.org/mandarin/rss'], note: RFA_CREDIT },
-  cns: { name: '中新网', lang: 'zh', full: false, home: 'https://www.chinanews.com.cn/', rss: ['https://www.chinanews.com.cn/rss/scroll-news.xml', 'https://www.chinanews.com.cn/rss/importnews.xml'] },
+  cns: { name: '中新网', lang: 'zh', full: false, home: 'https://www.chinanews.com.cn/', rss: ['https://www.chinanews.com.cn/rss/importnews.xml'] },
+  cctv: { name: '央视新闻', lang: 'zh', full: false, home: 'https://news.cctv.com/', cctv: 'https://news.cctv.com/2019/07/gaiban/cmsdatainterface/page/news_1.jsonp' },
+  jiemian: { name: '界面新闻', lang: 'zh', full: false, home: 'https://www.jiemian.com/', rss: ['https://a.jiemian.com/index.php?m=article&a=rss'] },
+  bbczh: { name: 'BBC 中文', lang: 'zh', full: false, home: 'https://www.bbc.com/zhongwen/simp', rss: ['https://feeds.bbci.co.uk/zhongwen/simp/rss.xml'], hant: 'tw', link: (u) => u.replace(/\/trad(?=$|[?#])/, '/simp') },
+  dwzh: { name: '德国之声', lang: 'zh', full: false, home: 'https://www.dw.com/zh/', rss: ['https://rss.dw.com/rdf/rss-chi-all'] },
+  rfi: { name: '法广', lang: 'zh', full: false, home: 'https://www.rfi.fr/cn/', rss: ['https://www.rfi.fr/cn/rss'] },
+  rthk: { name: '香港电台', lang: 'zh', full: false, home: 'https://news.rthk.hk/rthk/ch/', rss: ['https://rthk.hk/rthk/news/rss/c_expressnews_greaterchina.xml', 'https://rthk.hk/rthk/news/rss/c_expressnews_cinternational.xml'], hant: 'hk' },
+  cna: { name: '中央社', lang: 'zh', full: false, home: 'https://www.cna.com.tw/', rss: ['https://feeds.feedburner.com/rsscna/mainland', 'https://feeds.feedburner.com/rsscna/intworld'], hant: 'tw' },
   guardian: { name: 'The Guardian', lang: 'en', full: true, home: 'https://www.theguardian.com/', note: '© Guardian News & Media Limited. Powered by The Guardian Open Platform; for personal, non-commercial reading only.' },
   nasa: { name: 'NASA', lang: 'en', full: true, home: 'https://www.nasa.gov/news/', rss: ['https://www.nasa.gov/news-release/feed/'], note: 'Source: NASA (nasa.gov)' },
-  bbc: { name: 'BBC News', lang: 'en', full: false, home: 'https://www.bbc.co.uk/news', rss: ['https://feeds.bbci.co.uk/news/rss.xml'] },
   npr: { name: 'NPR', lang: 'en', full: false, home: 'https://www.npr.org/sections/news/', rss: ['https://feeds.npr.org/1001/rss.xml'] },
+  aljazeera: { name: 'Al Jazeera', lang: 'en', full: false, home: 'https://www.aljazeera.com/', rss: ['https://www.aljazeera.com/xml/rss/all.xml'] },
+  pbs: { name: 'PBS NewsHour', lang: 'en', full: false, home: 'https://www.pbs.org/newshour/', rss: ['https://www.pbs.org/newshour/feeds/rss/headlines'] },
+  dwen: { name: 'DW', lang: 'en', full: false, home: 'https://www.dw.com/en/', rss: ['https://rss.dw.com/rdf/rss-en-all'] },
+  f24: { name: 'France 24', lang: 'en', full: false, home: 'https://www.france24.com/en/', rss: ['https://www.france24.com/en/rss'] },
+  cbs: { name: 'CBS News', lang: 'en', full: false, home: 'https://www.cbsnews.com/', rss: ['https://www.cbsnews.com/latest/rss/main'] },
+  abc: { name: 'ABC News', lang: 'en', full: false, home: 'https://abcnews.go.com/', rss: ['https://feeds.abcnews.com/abcnews/topstories'] },
 };
+
+// 视频页 (Al Jazeera、France 24、CBS、ABC 的 RSS 里一半是视频): 快讯只要能读的文章
+export const isVideo = (u, t = '') => /\/videos?\//i.test(String(u).replace(/[?#].*$/, '')) || /^(watch|video)\s*:/i.test(String(t));
+
+// 繁体 → 简体: { hk: 转换的函数, tw: …… } (拿不到 opencc-js 就是 null, 照繁体放)
+async function loadHans(log) {
+  try {
+    const O = await import(process.env.OPENCC_JS ? pathToFileURL(process.env.OPENCC_JS).href : 'opencc-js');
+    return { hk: O.Converter({ from: 'hk', to: 'cn' }), tw: O.Converter({ from: 'tw', to: 'cn' }) };
+  } catch (e) {
+    log(`没有 opencc-js, 繁体的标题照繁体放 (${e.message})`);
+    return null;
+  }
+}
 
 // 通讯社的照片 (VOA、RFA 用了也不许别人转): 图的说明、作者里有这些字的不要
 const WIRE = /美联社|美聯社|路透|法新社|欧新社|歐新社|彭博|共同社|韩联社|韓聯社|盖帝|蓋帝|AP Photo|\bAP\b|Associated Press|Reuters|\bAFP\b|Getty|\bEPA\b|Bloomberg|Kyodo|Yonhap/i;
@@ -311,13 +347,31 @@ export function hashId(s) {
 }
 export const idOf = (src, link) => `${src}-${hashId(String(link).replace(/[?#].*$/, ''))}`;
 
-// RSS 的一条 → 列表里的一条 (还没有全文)
-export function itemFrom(src, r) {
+// RSS 的一条 → 列表里的一条 (还没有全文)。快讯 (只有标题的) 只要标题、链接、时间 (页面上只列标题);
+// hans: loadHans 给的繁转简 (繁体的那几家用)
+export function itemFrom(src, r, hans = null) {
   if (!r.title || !r.link || !r.at) return null;
   const s = SOURCES[src];
+  const u = s.link ? s.link(r.link) : r.link;
+  if (!s.full && isVideo(u, r.title)) return null;
+  if (!s.full) return { id: idOf(src, u), src, lang: s.lang, t: s.hant && hans ? hans[s.hant](r.title) : r.title, u, at: r.at };
   const summary = cut(plain(r.desc), SUMMARY_MAX);
-  const img = r.image && !(s.full && wirePhoto(`${r.image.cap} ${r.image.credit}`)) ? { src: r.image.src } : null;
-  return { id: idOf(src, r.link), src, lang: s.lang, t: r.title, ...(summary && summary !== r.title ? { s: summary } : {}), u: r.link, at: r.at, ...(img ? { img } : {}), ...(r.author ? { by: r.author } : {}) };
+  const img = r.image && !wirePhoto(`${r.image.cap} ${r.image.credit}`) ? { src: r.image.src } : null;
+  return { id: idOf(src, u), src, lang: s.lang, t: r.title, ...(summary && summary !== r.title ? { s: summary } : {}), u, at: r.at, ...(img ? { img } : {}), ...(r.author ? { by: r.author } : {}) };
+}
+
+// 央视新闻的新闻列表 (news_1.jsonp: news({"data":{"list":[{ title, url, focus_date: '2026-11-11 08:53:31' (北京时间) }]}})) → 快讯
+export function cctvItems(text) {
+  const s = String(text);
+  const d = JSON.parse(s.slice(s.indexOf('(') + 1, s.lastIndexOf(')')));
+  return (d?.data?.list ?? [])
+    .map((x) => {
+      const at = Date.parse(`${String(x.focus_date ?? '').replace(' ', 'T')}+08:00`);
+      const t = plain(x.title ?? '');
+      const u = String(x.url ?? '');
+      return t && /^https:\/\//.test(u) && Number.isFinite(at) ? { id: idOf('cctv', u), src: 'cctv', lang: 'zh', t, u, at: new Date(at).toISOString() } : null;
+    })
+    .filter(Boolean);
 }
 
 // VOA 的文章页 → 全文 (正文在 <div class="wsw">, 主图在 cover-media, 说明里写着通讯社的不要)
@@ -365,7 +419,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function get(url, { headers = {}, json = false } = {}) {
   for (let i = 0; ; i++) {
-    const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers } });
+    let res;
+    try {
+      res = await fetch(url, { headers: { 'User-Agent': UA, ...headers } });
+    } catch (e) {
+      // 连不上 (偶尔会): 等一下再试, 试三次
+      if (i >= 2) throw e;
+      await sleep(options.gap ? 3000 : 0);
+      continue;
+    }
     if ((res.status === 429 || res.status >= 500) && i < 3) {
       const wait = Math.max(Number(res.headers.get('retry-after')) || 0, 10 * 2 ** i);
       console.error(`  ${new URL(url).host} 回 ${res.status}, 等 ${wait} 秒`);
@@ -380,14 +442,15 @@ async function get(url, { headers = {}, json = false } = {}) {
 }
 
 // 一家 RSS → { items, articles }; 全文的: RFA、NASA 从 RSS 里拿, VOA 去文章页拿 (上次拿过的照用)
-async function fromRss(src, prevArticles, log) {
+async function fromRss(src, prevArticles, log, hans) {
   const s = SOURCES[src];
   const items = [];
   const articles = {};
   let pages = 0;
+  if (s.cctv) return { items: cctvItems(await get(s.cctv)), articles };
   for (const url of s.rss) {
     for (const r of parseRss(await get(url))) {
-      const item = itemFrom(src, r);
+      const item = itemFrom(src, r, hans);
       if (!item || items.some((x) => x.id === item.id)) continue;
       if (s.full) {
         let art = prevArticles[item.id] ?? null;
@@ -438,6 +501,7 @@ export function merge({ prev = [], fresh = [], now = Date.now() }) {
   for (const x of prev) byId.set(x.id, x);
   for (const x of fresh) byId.set(x.id, x);
   return [...byId.values()]
+    .filter((x) => SOURCES[x.src] && (SOURCES[x.src].full || !isVideo(x.u, x.t))) // 不要了的来源、视频页 (上次存着的) 去掉
     .filter((x) => now - Date.parse(x.at) < (SOURCES[x.src]?.full ? KEEP_FULL_H : KEEP_H) * 3600000 && Date.parse(x.at) <= now + 3600000)
     .filter((x) => x.src !== 'guardian' || now - Date.parse(x.got) < GUARDIAN_KEEP_H * 3600000)
     .sort((a, b) => b.at.localeCompare(a.at));
@@ -447,10 +511,11 @@ export async function collect({ prev = null, prevArticles = {}, now = Date.now()
   const fresh = [];
   const articles = {};
   const failed = [];
-  for (const src of Object.keys(SOURCES).filter((x) => SOURCES[x].rss)) {
+  const hans = await loadHans(log);
+  for (const src of Object.keys(SOURCES).filter((x) => SOURCES[x].rss || SOURCES[x].cctv)) {
     log(`拿 ${SOURCES[src].name}`);
     try {
-      const got = await fromRss(src, prevArticles, log);
+      const got = await fromRss(src, prevArticles, log, hans);
       fresh.push(...got.items);
       Object.assign(articles, got.articles);
     } catch (e) {

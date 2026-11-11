@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHtml, decode, blocksFrom, parseRss, itemFrom, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT } from '../tools/news.mjs';
-import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, sourcesFor, frontPage, byDay, dayLabel, agoText, itemHref, langHref, liveHref, inlineText, spokenParts } from '../js/news.js';
+import { parseHtml, decode, blocksFrom, parseRss, itemFrom, cctvItems, isVideo, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT } from '../tools/news.mjs';
+import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, longItems, byDay, dayLabel, agoText, itemHref, langHref, inlineText, spokenParts } from '../js/news.js';
 
 options.gap = 0; // 测试不用等
 
@@ -70,15 +70,34 @@ test('新闻: RSS — CDATA、各种时间写法、图 (media:content、enclosur
   assert.equal(r[2].image.src, 'https://gdb.voanews.com/a_w800_h450.jpg');
   assert.equal(r[3].image.src, 'https://ichef.bbci.co.uk/240/a.png');
 
-  // 变成列表里的一条: 能放全文的来源, 通讯社的图不要; 只有标题的来源 (BBC) 照放; 没有日子的不要
+  // 变成列表里的一条: 能放全文的来源, 通讯社的图不要; 快讯 (只有标题的, 像 BBC) 只要标题、链接、时间; 没有日子的不要
   const rfa = itemFrom('rfa', r[0]);
   assert.equal(rfa.img, undefined);
   assert.equal(rfa.s, '美国人工智能芯片龙头……');
   assert.equal(rfa.lang, 'zh');
   assert.equal(rfa.id, idOf('rfa', 'https://www.rfa.org/mandarin/a/1/'));
-  assert.equal(itemFrom('bbc', r[3]).img.src, 'https://ichef.bbci.co.uk/240/a.png');
-  assert.equal(itemFrom('bbc', r[3]).id, idOf('bbc', 'https://www.bbc.co.uk/news/articles/c1')); // 网址后面的 ?at_medium 不算
+  assert.equal(itemFrom('voa', r[2]).img.src, 'https://gdb.voanews.com/a_w800_h450.jpg');
+  assert.deepEqual(itemFrom('npr', r[3]), { id: idOf('npr', 'https://www.bbc.co.uk/news/articles/c1'), src: 'npr', lang: 'en', t: 'US soldier arrested', u: 'https://www.bbc.co.uk/news/articles/c1?at_medium=RSS', at: '2026-11-10T20:20:04.000Z' });
+  assert.equal(itemFrom('npr', r[3]).id, idOf('npr', 'https://www.bbc.co.uk/news/articles/c1')); // 网址后面的 ?at_medium 不算
+  // 视频页不要 (快讯只要能读的文章)
+  assert.equal(itemFrom('cbs', { ...r[3], link: 'https://www.cbsnews.com/video/abc/' }), null);
+  assert.equal(itemFrom('abc', { ...r[3], title: 'WATCH: Rescue in Oregon' }), null);
+  assert.equal(isVideo('https://www.aljazeera.com/video/newsfeed/2026/11/11/x'), true);
+  assert.equal(isVideo('https://www.aljazeera.com/news/2026/11/11/x?ref=video/'), false);
   assert.equal(itemFrom('cns', r[4]), null);
+});
+
+test('新闻: 繁体的那几家标题转简体, BBC 中文的链接换成简体版; 央视的新闻列表 (news_1.jsonp)', () => {
+  const r = { title: '美國眾議院', link: 'https://www.bbc.com/zhongwen/articles/c1/trad?at_medium=RSS', at: '2026-11-11T00:00:00.000Z', desc: '摘要' };
+  const hans = { tw: (s) => `简:${s}`, hk: (s) => `港:${s}` };
+  const bbc = itemFrom('bbczh', r, hans);
+  assert.equal(bbc.t, '简:美國眾議院');
+  assert.equal(bbc.u, 'https://www.bbc.com/zhongwen/articles/c1/simp?at_medium=RSS');
+  assert.equal(itemFrom('rthk', { ...r, link: 'https://news.rthk.hk/1.htm' }, hans).t, '港:美國眾議院');
+  assert.equal(itemFrom('cna', r).t, '美國眾議院'); // 没有转换的工具: 照繁体放
+  assert.equal(itemFrom('cns', r, hans).t, '美國眾議院'); // 本来就是简体的那几家不转
+  const list = cctvItems('news({"data":{"total":2,"list":[{"title":"中东部快速升温","url":"https://news.cctv.com/2026/11/11/ARTI1.shtml","focus_date":"2026-11-11 08:53:31","brief":"……"},{"title":"","url":"https://news.cctv.com/2"},{"title":"没有时间","url":"https://news.cctv.com/3","focus_date":""}]}})');
+  assert.deepEqual(list, [{ id: idOf('cctv', 'https://news.cctv.com/2026/11/11/ARTI1.shtml'), src: 'cctv', lang: 'zh', t: '中东部快速升温', u: 'https://news.cctv.com/2026/11/11/ARTI1.shtml', at: '2026-11-11T00:53:31.000Z' }]);
 });
 
 test('新闻: VOA 的文章页 — 正文在 wsw 里, 开头的地点并进第一段, 主图的说明写着通讯社的不要', () => {
@@ -120,12 +139,12 @@ test('新闻: 卫报 API 的一篇 — 直播不要, 法律敏感的照放但记
   assert.deepEqual(legal.article.body, [{ p: ['Para one.'] }, { p: ['Para two.'] }]);
 });
 
-test('新闻: 跟上次的合起来 — 这次的为准; 只有标题的留 48 小时、能读全文的留一个星期; 卫报拿来超过 24 小时的不要', () => {
+test('新闻: 跟上次的合起来 — 这次的为准; 只有标题的留 24 小时、能读全文的留一个星期; 卫报拿来超过 24 小时的不要', () => {
   const now = Date.parse('2026-11-11T12:00:00Z');
   const h = (n) => new Date(now - n * 3600000).toISOString();
   const prev = [
-    { id: 'cns-old', src: 'cns', at: h(50), t: '太旧' },
-    { id: 'cns-a', src: 'cns', at: h(30), t: '上次的' },
+    { id: 'cns-old', src: 'cns', at: h(30), t: '太旧' },
+    { id: 'cns-a', src: 'cns', at: h(20), t: '上次的' },
     { id: 'rfa-a', src: 'rfa', at: h(100), t: '四天前的全文' },
     { id: 'rfa-old', src: 'rfa', at: h(200), t: '八天前' },
     { id: 'guardian-a', src: 'guardian', at: h(2), got: h(25), t: '过期' },
@@ -134,7 +153,9 @@ test('新闻: 跟上次的合起来 — 这次的为准; 只有标题的留 48 �
   ];
   const fresh = [
     { id: 'cns-b', src: 'cns', at: h(1), t: '新标题' },
-    { id: 'bbc-future', src: 'bbc', at: new Date(now + 3 * 3600000).toISOString(), t: '时间写错了' },
+    { id: 'npr-future', src: 'npr', at: new Date(now + 3 * 3600000).toISOString(), t: '时间写错了' },
+    { id: 'bbc-a', src: 'bbc', at: h(1), t: '不要了的来源' },
+    { id: 'cbs-v', src: 'cbs', at: h(1), t: '视频', u: 'https://www.cbsnews.com/video/x/' },
   ];
   assert.deepEqual(
     merge({ prev, fresh, now }).map((x) => `${x.id}:${x.t}`),
@@ -150,11 +171,9 @@ function fakeWeb(now, { failRfa = false } = {}) {
     'https://www.voachinese.com/api/zm_yql-vomx-tpeybti': rss(`<item><title>VOA 一</title><link>https://www.voachinese.com/a/1.html</link><pubDate>${at(1)}</pubDate><description>摘要</description><enclosure url="https://gdb.voanews.com/1_w800_h450.jpg" type="image/jpeg"/></item>`),
     'https://www.voachinese.com/a/1.html': '<div class="wsw"><p>VOA 全文。</p></div>',
     'https://www.rfa.org/mandarin/rss': rss(`<item><title>RFA 一</title><link>https://www.rfa.org/mandarin/1/</link><pubDate>${at(2)}</pubDate><content:encoded><![CDATA[<p>RFA 全文</p>]]></content:encoded></item>`),
-    'https://www.chinanews.com.cn/rss/scroll-news.xml': rss(`<item><title>中新 一</title><link>https://www.chinanews.com.cn/1.shtml</link><pubDate>${at(0.5)}</pubDate></item>`),
-    'https://www.chinanews.com.cn/rss/importnews.xml': rss(''),
+    'https://www.chinanews.com.cn/rss/importnews.xml': rss(`<item><title>中新 一</title><link>https://www.chinanews.com.cn/1.shtml</link><pubDate>${at(0.5)}</pubDate></item>`),
     'https://www.nasa.gov/news-release/feed/': rss(`<item><title>NASA one</title><link>https://www.nasa.gov/1/</link><pubDate>${at(3)}</pubDate><content:encoded><![CDATA[<figure><img src="https://www.nasa.gov/p.jpg"></figure><p>NASA text</p>]]></content:encoded></item>`),
-    'https://feeds.bbci.co.uk/news/rss.xml': rss(`<item><title>BBC one</title><link>https://www.bbc.co.uk/news/1</link><pubDate>${at(0.2)}</pubDate></item>`),
-    'https://feeds.npr.org/1001/rss.xml': rss(''),
+    'https://feeds.npr.org/1001/rss.xml': rss(`<item><title>NPR one</title><link>https://www.npr.org/1</link><pubDate>${at(0.2)}</pubDate></item>`),
   };
   const fetch = async (url, init) => {
     calls.push(url);
@@ -177,7 +196,7 @@ test('新闻: 拿一次 — 全文的放进 articles; 卫报一小时内不再�
     globalThis.fetch = web.fetch;
     const first = await collect({ now, guardianKey: 'k', log });
     const srcs = first.index.items.map((x) => x.src);
-    assert.deepEqual(srcs, ['bbc', 'cns', 'voa', 'guardian', 'rfa', 'nasa']); // 新的在前
+    assert.deepEqual(srcs, ['npr', 'cns', 'voa', 'guardian', 'rfa', 'nasa']); // 新的在前
     assert.equal(first.index.v, 2);
     assert.equal(first.index.guardianAt, new Date(now).toISOString());
     assert.deepEqual(Object.keys(first.index.sources), Object.keys(SOURCES));
@@ -230,7 +249,7 @@ const DATA = {
   ],
 };
 
-test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源、快讯只要 24 小时内; 首页的头条和几格', () => {
+test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源; 快讯是 24 小时内只有标题的, 长文章是能读全文的', () => {
   assert.equal(validIndex(DATA), true);
   assert.equal(validIndex({ ...DATA, v: 1 }), false);
   assert.equal(validIndex({ ...DATA, items: [] }), false);
@@ -252,24 +271,19 @@ test('新闻页: 卫报过了 24 小时不显示; 按语言、按来源、快讯
   );
   assert.deepEqual(
     liveItems(DATA, 'zh', NOW).map((x) => x.id),
-    ['cns-1', 'voa-1'],
+    ['cns-1'],
   );
   assert.deepEqual(
-    sourcesFor(DATA, 'en', NOW).map((s) => [s.id, s.n]),
-    [
-      ['guardian', 1],
-      ['bbc', 1],
-    ],
-  ); // NPR 一条都没有: 不列
-  const page = frontPage(itemsFor(DATA, 'zh', { now: NOW }), { cards: 1 });
-  assert.equal(page.lead.id, 'voa-1');
-  assert.deepEqual(
-    page.cards.map((x) => x.id),
-    ['voa-2'],
+    liveItems(DATA, 'en', NOW).map((x) => x.id),
+    ['bbc-1'],
   );
   assert.deepEqual(
-    page.rest.map((x) => x.id),
-    ['cns-1', 'voa-3'],
+    longItems(DATA, 'zh', NOW).map((x) => x.id),
+    ['voa-1', 'voa-2', 'voa-3'],
+  ); // 长文章不只 24 小时
+  assert.deepEqual(
+    longItems(DATA, 'en', NOW).map((x) => x.id),
+    ['guardian-1'],
   );
 });
 
@@ -278,7 +292,6 @@ test('新闻页: 点了去哪、日子、几小时前、朗读的内容', () => 
   assert.equal(itemHref(DATA.items[0]), 'https://cns/1'); // 只有标题的: 原网站
   assert.equal(langHref('en'), '#/news/en');
   assert.equal(langHref('zh'), '#/news');
-  assert.equal(liveHref('en'), '#/news/live/en');
   assert.deepEqual(
     byDay([{ at: '2026-11-11T09:00:00' }, { at: '2026-11-11T08:00:00' }, { at: '2026-11-10T23:00:00' }]).map((d) => [d.day, d.items.length]),
     [

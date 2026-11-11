@@ -255,39 +255,14 @@ function shelf(s, books, row) {
 // 创作背景 (yizhu 的 bg): 一段话, 或者几段 (数组)
 const bgOf = (entry) => [entry?.bg ?? []].flat().filter(Boolean);
 
-// 注释和译文是温故自己写的 (原文的资料里没有); 有创作背景、成语名句的也提一句。
-// 古文 (有成语、没有创作背景) 原文也对照维基文库核对过; 有创作背景的诗对照过古人的书
-const yizhuNote = (entry) => {
-  const bg = bgOf(entry).length > 0;
-  const cy = Boolean(entry.cy?.length);
-  const kinds = new Set((entry.cy ?? []).map((x) => x.kind ?? '成语'));
-  const cyWord = kinds.size > 1 ? '成语名句' : kinds.has('名句') ? '名句' : '成语';
-  const what = ['注释', '译文', bg && '创作背景', cy && cyWord].filter(Boolean);
-  const parts = [`${what.slice(0, -1).join('、')}和${what.at(-1)}是温故自己写的，讲法照通行的课本注释，有两种讲法的写了「一说」`];
-  if (bg) parts.push('哪年写的、为什么写，没有可靠说法的就不写');
-  if (cy) parts.push(`${cyWord}只收出自这篇的${kinds.has('成语') ? '，化用别的书的写明了' : ''}`);
-  const checked = bg
-    ? '讲法对照古诗文网和维基文库上的古书（像仇兆鳌的《杜诗详注》、计有功的《唐诗纪事》）核对过'
-    : cy
-      ? '原文和讲法对照维基文库、古诗文网核对过'
-      : '讲法对照古诗文网等资料核对过';
-  return `${parts.join('；')}。${checked}，难免还有疏漏，欢迎指出。`;
-};
+// 注释和译文是温故自己写的 (原文的资料里没有), 底下一句话说明就够了 (v1.75: 用户嫌原来那一大段像注释一样长)
+const YIZHU_NOTE = '注释、译文是温故自己写的，仅供参考。';
 
-// 原文从哪来: 诗词、古文和启蒙读物是 chinese-poetry; 小说 (书目里写了 src 的) 是维基文库、古登堡计划
+// 原文从哪来: 诗词、古文和启蒙读物是 chinese-poetry; 小说 (书目里写了 src 的) 是维基文库、古登堡计划。只列名字和链接 (v1.75 改短)
 const link = (x) => h('a', { href: x.url, target: '_blank', rel: 'noopener' }, x.name);
 const sourceNote = () => {
-  const novels = BOOKS.filter((b) => b.src?.length);
-  const others = [...new Map(novels.flatMap((b) => b.src).map((x) => [x.url, x])).values()];
-  return h(
-    'p',
-    { class: 'muted small read-source' },
-    '原文来自开源项目 ',
-    link(SOURCE),
-    `（${SOURCE.license} 许可）`,
-    novels.length ? ['；', novels.map((b) => `《${b.title}》`).join(''), '来自', others.map((x, k) => [k ? '、' : '', link(x)]), '（古书，版权早已过期）'] : null,
-    '。原书是繁体，简体是自动转换的，个别字可能有出入，读一篇时可以切换成繁体看原文。',
-  );
+  const others = [...new Map(BOOKS.flatMap((b) => b.src ?? []).map((x) => [x.url, x])).values()];
+  return h('p', { class: 'muted small read-source' }, '原文来自 ', [SOURCE, ...others].map((x, k) => [k ? '、' : '', link(x)]), '。');
 };
 
 // ---- 一本书的目录 ----
@@ -544,7 +519,7 @@ export function renderPiece({ store, go }, id, n) {
           )
         : null,
       entry?.zhi?.length ? h('section', { class: 'read-cy read-zhi', lang: 'zh-Hans', 'aria-label': '知道吗' }, h('h2', {}, '知道吗'), h('ul', {}, entry.zhi.map(zhiItem))) : null,
-      entry ? h('p', { class: 'read-notes muted small' }, yizhuNote(entry)) : null,
+      entry ? h('p', { class: 'read-notes muted small' }, YIZHU_NOTE) : null,
       gloss,
     ];
   };
