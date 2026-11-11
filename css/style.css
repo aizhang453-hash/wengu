@@ -10207,18 +10207,6 @@ button.pick-row:hover {
   text-decoration: none;
 }
 
-/* 广播页的「中文 | 全世界」是按钮: 去掉按钮自带的框和底色 */
-button.news-lang {
-  border: none;
-  font: inherit;
-  font-size: 0.92rem;
-  cursor: pointer;
-}
-
-button.news-lang:not(.on) {
-  background: transparent;
-}
-
 .news-lang.on {
   background: var(--surface);
   box-shadow: var(--shadow);

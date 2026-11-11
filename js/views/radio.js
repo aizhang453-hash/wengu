@@ -1,16 +1,16 @@
 // 广播 (v1.78, #/radio): 全世界的网络电台 (电台目录和规矩见 ../radio.js; 播放和底下那一条见 radiobar.js)
-//   最上面搜电台 (名字或种类: BBC、中国之声、jazz……); 没搜的时候列「收藏」和「热门」(中文 | 全世界, 听的人最多的)
+//   最上面搜电台 (名字或种类: BBC、中国之声、jazz……); 没搜的时候列「收藏」和「热门」
+//   (v1.78.1: 用户说不要「中文 | 全世界」分开; 热门是一个列表, 先中文台再全世界的, 见 ../radio.js 的 topStations)
 //   点一个台就放, 再点暂停; ☆ 收藏
 
 import { h, fill, icon } from '../dom.js';
-import { LANGS, topStations, searchStations, favorites, isFavorite, toggleFavorite } from '../radio.js';
+import { topStations, searchStations, favorites, isFavorite, toggleFavorite } from '../radio.js';
 import { playStation, radioNow, onRadioChange, stationIcon } from './radiobar.js';
 
 export function renderRadio() {
-  let lang = 'zh';
   let query = '';
+  let hot = null; // 热门 (null: 还没拿)
   let found = null; // 搜到的 (null: 没在搜)
-  let hot = { zh: null, all: null }; // 热门 (null: 还没拿)
   let note = ''; // 正在找、没连上网……
   const box = h('section', { class: 'radio-page' });
   const input = h('input', { type: 'search', class: 'input radio-search', placeholder: '搜电台：名字或种类，比如 BBC、中国之声、jazz', enterkeyhint: 'search', 'aria-label': '搜电台' });
@@ -61,49 +61,8 @@ export function renderRadio() {
             h('div', { class: 'radio-section-head' }, h('h2', {}, `「${query}」`), h('button', { class: 'link-btn', type: 'button', onclick: clear }, '不搜了')),
             found.length ? list(found) : note ? null : h('p', { class: 'muted' }, '没找到这样的电台。'),
           ]
-        : [
-            favs.length ? [h('div', { class: 'radio-section-head' }, h('h2', {}, '收藏')), list(favs)] : null,
-            h(
-              'div',
-              { class: 'radio-section-head' },
-              h('h2', {}, '热门'),
-              h(
-                'nav',
-                { class: 'news-langs', 'aria-label': '哪里的' },
-                Object.entries(LANGS).map(([k, name]) =>
-                  h(
-                    'button',
-                    {
-                      class: `news-lang${k === lang ? ' on' : ''}`,
-                      type: 'button',
-                      'aria-pressed': String(k === lang),
-                      onclick: () => {
-                        lang = k;
-                        loadHot();
-                      },
-                    },
-                    name,
-                  ),
-                ),
-              ),
-            ),
-            hot[lang] ? list(hot[lang]) : null,
-          ],
+        : [favs.length ? [h('div', { class: 'radio-section-head' }, h('h2', {}, '收藏')), list(favs)] : null, hot?.length ? [h('div', { class: 'radio-section-head' }, h('h2', {}, '热门')), list(hot)] : null],
     );
-  }
-
-  async function loadHot() {
-    note = hot[lang] ? '' : '正在拿电台……';
-    draw();
-    if (hot[lang]) return;
-    const want = lang;
-    try {
-      hot[want] = await topStations(want);
-      note = '';
-    } catch {
-      note = '没连上网，拿不到电台。';
-    }
-    if (box.isConnected && want === lang) draw();
   }
 
   async function search() {
@@ -141,6 +100,17 @@ export function renderRadio() {
   });
   // 播放的台、状态变了: 重画 (哪个在放、按钮是 ▶ 还是 ⏸)
   const off = onRadioChange(() => box.isConnected && draw());
-  loadHot();
+  // 热门: 打开时拿一次
+  note = '正在拿电台……';
+  draw();
+  topStations()
+    .then((got) => {
+      hot = got;
+      if (found === null) note = ''; // 正在搜的话, 「正在找」留着
+    })
+    .catch(() => {
+      if (found === null) note = '没连上网，拿不到电台。';
+    })
+    .then(() => box.isConnected && draw());
   return { title: '广播', el: box, cleanup: off };
 }

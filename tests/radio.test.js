@@ -15,21 +15,24 @@ test('广播: 电台目录的一条 → 温故用的; 只要 https 的; HLS 只�
   assert.deepEqual(stationsOf([RAW, hls], { hls: true }).map((s) => s.id), ['u1', 'u2']);
 });
 
-test('广播: 热门 (中文 / 全世界)、搜 (名字和种类), 都只要 https、没坏的、按听的人数排', async () => {
+test('广播: 搜 (名字和种类), 只要 https、没坏的、按听的人数排; 第一个地址连不上换下一个', async () => {
   const urls = [];
   const fetchJson = async (u) => (urls.push(u), [RAW]);
-  assert.equal((await topStations('zh', { fetchJson }))[0].name, 'BBC World Service');
-  assert.match(urls[0], /^https:\/\/de1\.api\.radio-browser\.info\/json\/stations\/search\?hidebroken=true&is_https=true&order=clickcount&reverse=true&limit=40&language=chinese$/);
-  await topStations('all', { fetchJson });
-  assert.doesNotMatch(urls[1], /language=/);
-  urls.length = 0;
   const found = await searchStations(' Jazz ', { fetchJson });
   assert.deepEqual(found.map((s) => s.id), ['u1']); // 名字、种类都找到同一个台: 只留一个
-  assert.ok(urls.some((u) => u.includes('name=Jazz')));
+  assert.ok(urls.some((u) => /^https:\/\/de1\.api\.radio-browser\.info\/json\/stations\/search\?hidebroken=true&is_https=true&order=clickcount&reverse=true&limit=40&name=Jazz$/.test(u)));
   assert.ok(urls.some((u) => u.includes('tag=jazz')));
   assert.deepEqual(await searchStations('  ', { fetchJson }), []);
-  // 第一个地址连不上: 换下一个
   const tried = [];
-  await topStations('zh', { fetchJson: async (u) => (tried.push(u), u.startsWith(API_BASES[0]) ? Promise.reject(new Error('x')) : [RAW]) });
-  assert.equal(tried.length, 2);
+  await searchStations('bbc', { fetchJson: async (u) => (tried.push(u), u.startsWith(API_BASES[0]) ? Promise.reject(new Error('x')) : [RAW]) });
+  assert.ok(tried.some((u) => u.startsWith(API_BASES[1])));
+});
+
+test('广播: 热门是一个列表, 先中文台再全世界的, 去掉重复的', async () => {
+  const urls = [];
+  const zh = { ...RAW, stationuuid: 'zh1', name: '中国之声' };
+  const fetchJson = async (u) => (urls.push(u), u.includes('language=chinese') ? [zh] : [RAW, zh]);
+  assert.deepEqual((await topStations({ fetchJson })).map((s) => s.id), ['zh1', 'u1']);
+  assert.ok(urls.some((u) => u.includes('limit=20&language=chinese')));
+  assert.ok(urls.some((u) => !u.includes('language=')));
 });

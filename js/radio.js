@@ -6,7 +6,6 @@
 
 export const API_BASES = ['https://de1.api.radio-browser.info', 'https://all.api.radio-browser.info'];
 export const FAV_KEY = 'wengu:radio-favs'; // [电台, ...]
-export const LANGS = { zh: '中文', all: '全世界' };
 
 const read = (key, fallback) => {
   try {
@@ -72,12 +71,15 @@ async function getJson(path, { fetchJson } = {}) {
   throw error ?? new Error('拿不到电台');
 }
 
+// 搜到的按听的人多少排 (多的在前)
 const COMMON = { hidebroken: 'true', is_https: 'true', order: 'clickcount', reverse: 'true' };
 
-// 热门: 听的人最多的 (中文的、或者全世界的)
-export async function topStations(lang = 'zh', { limit = 40, fetchJson } = {}) {
-  const q = new URLSearchParams({ ...COMMON, limit: String(limit), ...(lang === 'zh' ? { language: 'chinese' } : {}) });
-  return stationsOf(await getJson(`/json/stations/search?${q}`, { fetchJson }));
+// 热门: 听的人最多的台, 一个列表 (v1.78.1: 用户不要「中文 | 全世界」分开): 先中文的、再全世界的, 去掉重复的
+// (全世界混在一起排的话, 前几十个都是欧洲的音乐台, 中文台要排到三十名以后, 所以中文的放前面)
+export async function topStations({ limit = 20, fetchJson } = {}) {
+  const ask = (more) => getJson(`/json/stations/search?${new URLSearchParams({ ...COMMON, limit: String(limit), ...more })}`, { fetchJson });
+  const [zh, all] = await Promise.all([ask({ language: 'chinese' }), ask({}).catch(() => [])]);
+  return stationsOf([...zh, ...all]);
 }
 
 // 搜: 名字里有这几个字的, 加上标签 (jazz、news……) 是这个的
