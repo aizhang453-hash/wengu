@@ -21,6 +21,10 @@
 	<string>public.app-category.education</string>
 	<key>NSCameraUsageDescription</key>
 	<string>拍照记错题、给卡片配图时使用相机。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>邸报显示当地天气时用你的大概位置。</string>
 	<key>NSMicrophoneUsageDescription</key>

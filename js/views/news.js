@@ -114,7 +114,8 @@ function longRow(data, x, big = false) {
 
 // ---- 天气 (v1.76): 邸报页右上角一小块; 先自动定位, 不给位置就自己填城市 ----
 function weatherChip() {
-  const el = h('button', { class: 'news-weather', type: 'button', title: '天气（点这里换城市）', onclick: () => placeDialog() });
+  // 先写「天气」: 等定位 (浏览器问要不要给位置的时候) 不是一个空框
+  const el = h('button', { class: 'news-weather', type: 'button', title: '天气（点这里换城市）', onclick: () => placeDialog() }, icon('cloud', 16), ' 天气');
   const show = (place, w) => fill(el, icon(w && w.now.code <= 1 ? 'sun' : 'cloud', 16), ' ', place && w ? weatherLine(place, w) : place ? `${place.name} 天气拿不到` : '填城市看天气');
   const update = async (place) => {
     if (!place) return show(null, null);
@@ -151,7 +152,8 @@ function weatherChip() {
         fill(list, h('p', { class: 'muted' }, '没连上网，等一下再试。'));
       }
     };
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), search()));
+    // 中文输入法正在选字时的回车不算 (不然拼音还没变成字就去搜了)
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && !e.isComposing && (e.preventDefault(), search()));
     const here = h('button', { class: 'btn small', type: 'button', onclick: async () => {
       fill(list, h('p', { class: 'muted' }, '正在定位……'));
       try {
@@ -183,7 +185,7 @@ function dailyWordCard() {
   const today = dayIndex();
   const guesses = state?.day === today ? (state.guesses ?? []) : [];
   const d = new Date();
-  const status = guesses.length === 0 ? '今天的还没猜' : guesses.length >= TRIES ? '今天的猜完了' : `今天猜了 ${guesses.length} 次`;
+  const status = guesses.length === 0 ? '今天的还没猜' : state.won ? '今天猜中了' : guesses.length >= TRIES ? '今天没猜出来' : `今天猜了 ${guesses.length} 次`;
   return h('a', { class: 'news-word', href: '#/news/word' }, h('span', { class: 'news-word-title' }, '每日猜词'), h('span', { class: 'muted small' }, `${d.getMonth() + 1}月${d.getDate()}日 · ${status}`), h('span', { class: 'news-word-go', 'aria-hidden': 'true' }, '→'));
 }
 

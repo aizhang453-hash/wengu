@@ -91,6 +91,7 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         item('#/mistakes', 'book', '题目集', { badge: mistakes, match: starts('#/mistakes') }),
         item('#/read', 'read', '书斋', { match: starts('#/read') }),
         item('#/news', 'news', '邸报', { match: starts('#/news') }),
+        item('#/radio', 'radio', '广播', { match: starts('#/radio') }),
         item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
         folders.length
           ? [

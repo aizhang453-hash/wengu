@@ -10207,6 +10207,18 @@ button.pick-row:hover {
   text-decoration: none;
 }
 
+/* 广播页的「中文 | 全世界」是按钮: 去掉按钮自带的框和底色 */
+button.news-lang {
+  border: none;
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+button.news-lang:not(.on) {
+  background: transparent;
+}
+
 .news-lang.on {
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -10654,4 +10666,199 @@ button.pick-row:hover {
 .news-original {
   margin-top: 1.6em;
   font-weight: 600;
+}
+
+/* ==== 广播 (v1.78): #/radio, 和底下浮着的播放条 ==== */
+.radio-page {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.radio-search-row {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+
+.radio-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.radio-note {
+  margin: 8px 0;
+}
+
+.radio-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 6px;
+}
+
+.radio-section-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.radio-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.radio-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 4px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.radio-row-main:hover strong,
+.radio-row.on strong {
+  color: var(--accent);
+}
+
+.radio-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.radio-row-text strong,
+.radio-row-text span,
+.radio-bar-text strong,
+.radio-bar-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-row-play {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.radio-row.on .radio-row-play {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.radio-fav {
+  flex: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+}
+
+.radio-fav.on {
+  color: var(--star);
+}
+
+.radio-icon {
+  flex: none;
+  border-radius: 8px;
+  background: var(--surface-2);
+  object-fit: contain;
+}
+
+.radio-icon-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+/* 底下的播放条: 换页面也在 */
+.radio-bar {
+  position: fixed;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: min(560px, calc(100% - 24px));
+  padding: 8px 8px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lift);
+  transform: translateX(-50%);
+}
+
+.radio-bar[hidden] {
+  display: none;
+}
+
+.radio-bar-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.radio-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.radio-bar-status {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.radio-bar-status.bad {
+  color: var(--bad);
+}
+
+/* 放着广播时: 页面底下留出播放条的地方, 温温、提示、「停止朗读」往上挪 */
+body.radio-on main:not(:has(.game-page)) {
+  padding-bottom: 140px;
+}
+
+body.radio-on .pet {
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 70px);
+}
+
+body.radio-on .toast {
+  bottom: 94px;
+}
+
+body.radio-on .read-stop {
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+/* 全屏的游戏页上不显示播放条 (声音照样响) */
+body.radio-on:has(.game-page) .radio-bar {
+  display: none;
 }

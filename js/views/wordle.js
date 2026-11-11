@@ -134,10 +134,11 @@ export function renderDailyWord() {
       const word = current;
       const result = evaluate(word, target);
       guesses.push({ word, result });
-      save(GAME_KEY, { day: today, guesses: guesses.map((g) => g.word) });
+      const win = result.every((x) => x === 'correct');
+      // won: 邸报上那一条要写「今天猜中了」(那边不拿词表)
+      save(GAME_KEY, { day: today, guesses: guesses.map((g) => g.word), won: win });
       keys = mergeKeys(keys, word, result);
       current = '';
-      const win = result.every((x) => x === 'correct');
       done = win || guesses.length >= TRIES;
       busy = true;
       drawGrid(guesses.length - 1);
@@ -169,6 +170,9 @@ export function renderDailyWord() {
 
     fill(box, h('a', { class: 'back', href: '#/news' }, '← 邸报'), h('div', { class: 'page-head daily-word-head' }, h('h1', {}, '每日猜词'), h('span', { class: 'muted' }, `${date.getMonth() + 1}月${date.getDate()}日`)), statsEl, grid, msg, kb);
     drawAll();
+  }, () => {
+    // 拿不到词表 (断网、又没存着): 别一直停在「正在准备」 (只管拿词表失败, 上面画页面出的错不算在这里)
+    fill(box, h('a', { class: 'back', href: '#/news' }, '← 邸报'), h('h1', {}, '每日猜词'), h('p', { class: 'muted' }, '没连上网，拿不到词表。连上网再打开这一页。'));
   });
 
   return { title: '每日猜词', el: box, cleanup: () => cleanup() };

@@ -14,6 +14,7 @@
 //   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
 //   #/read/author/<作者>  作者页: 书斋里他的所有作品
 //   #/news                邸报 (v1.75 以前叫新闻): 中文 (#/news/en 英文), 上面快讯、下面长文章; #/news/a/<编号> 一篇全文; #/news/word 每日猜词
+//   #/radio               广播 (v1.78): 全世界的网络电台, 搜、收藏; 底下的播放条换页面接着响
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -47,6 +48,7 @@ import { renderBlast } from './views/blast.js';
 import { renderBlocks } from './views/blocks.js';
 import { renderGems } from './views/gems.js';
 import { renderDailyWord } from './views/wordle.js';
+import { renderRadio } from './views/radio.js';
 import { renderDiagramPractice } from './views/diagram.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
@@ -151,6 +153,7 @@ function parse(hash) {
   if (parts[0] === 'share') return { page: 'share', code: parts[1] ?? '' };
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'settings') return { page: 'settings' };
+  if (parts[0] === 'radio') return { page: 'radio' };
   if (parts[0] === 'pet') return { page: 'pet' };
   if (parts[0] === 'read' && parts[1] === 'author' && parts[2]) return { page: 'author', name: parts[2] }; // 作者页 (v1.71)
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
@@ -240,6 +243,7 @@ function render() {
   else if (route.page === 'news') view = renderNews(ctx, route.lang);
   else if (route.page === 'news-article') view = renderArticle(ctx, route.id);
   else if (route.page === 'daily-word') view = renderDailyWord(ctx);
+  else if (route.page === 'radio') view = renderRadio(ctx);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);

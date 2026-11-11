@@ -27,6 +27,7 @@
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **题目集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **书斋** | 古诗文原文免费读（以前叫「阅读」），书架分四层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）、古典小说（西游记，一回一回读）；每日一首、搜索、收藏、目录里的「接着读」、简体 / 繁体、朗读；《古文观止》里 33 篇名篇有注释、译文、出自这篇的成语和名句；搜索也能搜成语；一键做成「接下句」「字词」「成语」卡片集来背 |
+| **广播** | 全世界的网络电台：搜、收藏、热门（中文 / 全世界）；换页面接着响，底下浮着播放条 |
 | **邸报** | 新闻（以前叫「新闻」），分中文、English：上面是快讯（24 小时内各家的标题），下面是长文章（美国之音、自由亚洲电台、卫报、NASA，在温故里读全文、可以朗读）；当地天气；每日猜词；每 15 分钟自动更新，断网也能看上次的 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
@@ -37,7 +38,7 @@
 
 ### 导航
 
-- 左上角 ☰：今日、题目集、书斋、邸报、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
+- 左上角 ☰：今日、题目集、书斋、邸报、广播、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
 - 右上角「新建」：新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹。
 
 ### 卡片集
@@ -90,6 +91,12 @@
 - GitHub 的定时靠不住，所以每次拿完新闻自己排下一次（「接力」：先在仓库 Settings › Environments 的 `news-wait` 环境里等 14 分钟）。要停就在 Actions › 新闻 里 Disable workflow；接力断了，手动 Run workflow 一次就又接上。新闻一个小时没更新时，邸报最上面会提醒网站的主人（同步设置用的是放网站的那个 GitHub 账号的设备才看得到），点提醒里的链接直接到那一页。
 - 卫报的 API 要密钥：在卫报开放平台免费申请，放进仓库 Settings › Secrets and variables › Actions，名字是 `GUARDIAN_API_KEY`。没有密钥就不拿卫报，别的照常。
 
+### 广播
+
+- 在左上角 ☰ 的「广播」。上面搜电台（名字或种类，比如 BBC、中国之声、jazz），没搜的时候列「收藏」和「热门」（中文 / 全世界，听的人最多的）。点一个台就放，再点暂停；☆ 收藏（存在这台设备上）。
+- 电台目录来自 [Radio Browser](https://www.radio-browser.info/)（免费、大家一起维护）；放的是电台自己的直播，只列 https 的。
+- 换到别的页面广播接着响，屏幕最下面浮着播放条（全屏的游戏页上不显示）。锁屏、耳机的按钮也能暂停。iPad App 锁屏时也接着响。
+
 ### 导入
 
 - 粘贴 Quizlet 导出的文本，或使用 Quizlet 一键导入书签（设置 › 其他）。
@@ -132,7 +139,7 @@
 
 ## 更新记录
 
-当前版本 **v1.77**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.78**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -165,6 +172,7 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
+  - `js/radio.js` 广播：Radio Browser 搜电台、热门、收藏；`js/views/radio.js` 广播页，`js/views/radiobar.js` 底下的播放条（换页面接着响）
   - `js/weather.js` 邸报的天气（Open-Meteo）；`js/wordle.js` 每日猜词的规则，`js/words.js` 词表（`tools/words.mjs` 从 SCOWL 生成）
   - `js/news.js` 邸报（新闻）：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS、央视的新闻列表和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
   - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
