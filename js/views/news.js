@@ -124,11 +124,13 @@ const seenClick = (x) => (e) => {
 };
 
 // 快讯的一条: 时间、哪家、标题 (在新的网页里打开原网站)
+// v1.81.1: 台名后面灰色小框「外部网站」(用户 v1.75 就要过, 当时没加; 名字用户在 外部网站 / 外部链接 / 原网站 / 站外 里选的)
+const externalTag = (x) => (x.full ? null : h('span', { class: 'news-src-tag' }, '外部网站'));
 function liveRow(data, x, seen) {
   return h(
     'li',
     {},
-    h('a', { class: `news-live-row${seen.has(x.id) ? ' seen' : ''}`, href: itemHref(x), target: '_blank', rel: 'noopener', onclick: seenClick(x) }, h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-text' }, h('span', { class: 'news-live-src' }, h('span', { class: 'news-src' }, srcName(data, x)), opTag(x)), h('span', { class: 'news-live-title' }, x.t))),
+    h('a', { class: `news-live-row${seen.has(x.id) ? ' seen' : ''}`, href: itemHref(x), target: '_blank', rel: 'noopener', onclick: seenClick(x) }, h('time', { class: 'news-live-time', datetime: x.at }, clock(x.at)), h('span', { class: 'news-live-text' }, h('span', { class: 'news-live-src' }, h('span', { class: 'news-src' }, srcName(data, x)), opTag(x), externalTag(x)), h('span', { class: 'news-live-title' }, x.t))),
   );
 }
 
