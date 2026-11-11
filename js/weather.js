@@ -1,8 +1,10 @@
 // 天气 (v1.76): 邸报页最上面一小块「纽约 多云 9° · 4°/13°」。
 // 天气用 Open-Meteo (免费、不用注册、不要密钥, 网页里直接拿): https://open-meteo.com/
-// 地方: 先问浏览器要位置 (用户点允许); 不给、拿不到就自己填城市 (Open-Meteo 的地名搜索)。
+// 地方: 先问浏览器要位置 (用户点允许); 不给、拿不到就自己填城市 (places.js: 中文名问 OpenStreetMap, 英文名问 Open-Meteo)。
 //   自动定位拿到的经纬度只留两位小数 (一公里左右), 城市名用 BigDataCloud 的免费接口从经纬度查 (查不到就叫「本地」)
 // 存在这台设备上 (localStorage): 地方 wengu:weather-place, 天气 wengu:weather (半小时内不重拿)
+
+import { findPlaces } from './places.js';
 
 export const PLACE_KEY = 'wengu:weather-place'; // { name, lat, lon, auto }
 export const DATA_KEY = 'wengu:weather'; // { lat, lon, at, now: { t, code }, today: { max, min, code } }
@@ -88,10 +90,9 @@ export async function loadWeather(place, { now = Date.now(), fetchJson = getJson
   }
 }
 
-// 搜城市 (中文、英文都行) → [{ name, detail, lat, lon }]
+// 搜城市 (中文、英文都行) → [{ name, detail, lat, lon }] (v1.78.2: 以前只问 Open-Meteo, 中文的「纽约」找不到)
 export async function searchPlaces(q, { fetchJson = getJson } = {}) {
-  const d = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?${new URLSearchParams({ name: q, count: '8', language: 'zh', format: 'json' })}`);
-  return (d?.results ?? []).map((r) => ({ name: r.name, detail: [r.admin1, r.country].filter((x) => x && x !== r.name).join('，'), lat: round2(r.latitude), lon: round2(r.longitude) }));
+  return (await findPlaces(q, { fetchJson })).map(({ name, detail, lat, lon }) => ({ name, detail, lat, lon }));
 }
 
 // 问浏览器要位置 → { name, lat, lon, auto: true }; 不给、拿不到: 抛错 (code 1 是用户不给)

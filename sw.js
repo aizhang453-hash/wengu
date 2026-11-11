@@ -88,6 +88,7 @@ const FILES = [
   'js/pinball3d.js',
   'js/pindmd.js',
   'js/pinsound.js',
+  'js/places.js',
   'js/plan.js',
   'js/platform.js',
   'js/print.js',

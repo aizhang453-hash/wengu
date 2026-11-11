@@ -8,6 +8,7 @@ import { mergeData, mergeSettings, mergeSet, mergeFolder } from './merge.js';
 import { cleanPet, mergePet, bankDays } from './pet.js';
 import { cleanArcade, mergeArcade, addScore } from './arcade.js';
 import { cleanReading, mergeReading } from './reading.js';
+import { cleanRadio, mergeRadio, withFavorite, withRecent, oldFavorites } from './radio.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -31,10 +32,11 @@ export function newId() {
 // pet: 小乌龟温温 (pet.js), 还没见过是 null
 // arcade: 游戏厅的成绩 (arcade.js), 没玩过是 null
 // reading: 阅读的收藏、读到哪 (reading.js), 没读过是 null
+// radio: 广播的收藏、最近听过 (radio.js, v1.79), 没听过是 null
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null, reading: null };
+  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null, reading: null, radio: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -311,6 +313,7 @@ export function cleanData(raw) {
   data.pet = cleanPet(raw?.pet);
   data.arcade = cleanArcade(raw?.arcade);
   data.reading = cleanReading(raw?.reading);
+  data.radio = cleanRadio(raw?.radio);
   const seen = new Set();
   if (raw && Array.isArray(raw.mistakes)) {
     for (const m of raw.mistakes) {
@@ -1225,6 +1228,30 @@ export class Store {
     this.save();
   }
 
+  // 广播: 收藏 / 取消收藏一个台 (v1.79 起跟着同步)
+  setRadioFav(station, on, now = Date.now()) {
+    this.data.radio = withFavorite(this.data.radio, station, on, now);
+    this.save();
+  }
+
+  // 广播: 听了一个台, 记进最近听过
+  addRadioRecent(station, now = Date.now()) {
+    this.data.radio = withRecent(this.data.radio, station, now);
+    this.save();
+  }
+
+  // 广播: v1.78 存在这台设备上的收藏搬进来 (只搬一次; 搬完删掉)
+  moveOldRadioFavs(now = Date.now()) {
+    const old = oldFavorites({ take: true });
+    if (!old.length) return;
+    let r = this.data.radio;
+    old.reverse().forEach((s, i) => {
+      if (!r?.favs?.[s.id]) r = withFavorite(r, s, true, now + i);
+    });
+    this.data.radio = r;
+    this.save();
+  }
+
   // 温温: 改名字、换装扮 (stamp: 记下改的时间, 同步时听后改的); 解锁、长大、庆祝过的直接合
   updatePet(patch, { stamp = false, now = Date.now() } = {}) {
     const old = this.data.pet ?? cleanPet({});
@@ -1321,6 +1348,7 @@ export class Store {
     this.data.pet = mergePet(this.data.pet, incoming.pet);
     this.data.arcade = mergeArcade(this.data.arcade, incoming.arcade);
     this.data.reading = mergeReading(this.data.reading, incoming.reading);
+    this.data.radio = mergeRadio(this.data.radio, incoming.radio);
     this.applyParameters({ recompute: true });
     for (const q of incoming.qsets) {
       const i = this.data.qsets.findIndex((x) => x.id === q.id);

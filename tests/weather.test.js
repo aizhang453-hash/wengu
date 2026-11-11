@@ -24,13 +24,14 @@ test('天气: 拿天气、搜城市 (Open-Meteo); 拿不到返回 null', async (
   assert.equal(w.now.t, 9.4);
   assert.match(urls[0], /^https:\/\/api\.open-meteo\.com\/v1\/forecast\?latitude=40\.71&longitude=-74\.01&/);
   assert.equal(await loadWeather({ lat: 1, lon: 2 }, { fetchJson: async () => ({}) }), null);
-  const found = await searchPlaces('纽约', {
+  // 英文名问 Open-Meteo
+  const found = await searchPlaces('New York', {
     fetchJson: async (u) => {
-      assert.match(u, /geocoding-api\.open-meteo\.com\/v1\/search\?name=%E7%BA%BD%E7%BA%A6&count=8&language=zh/);
-      return { results: [{ name: '纽约', admin1: '纽约州', country: '美国', latitude: 40.71427, longitude: -74.00597 }] };
+      assert.match(u, /geocoding-api\.open-meteo\.com\/v1\/search\?name=New\+York&count=8&language=en/);
+      return { results: [{ name: 'New York', admin1: 'New York', country: 'United States', latitude: 40.71427, longitude: -74.00597, feature_code: 'PPL', population: 8804190 }] };
     },
   });
-  assert.deepEqual(found, [{ name: '纽约', detail: '纽约州，美国', lat: 40.71, lon: -74.01 }]);
+  assert.deepEqual(found, [{ name: 'New York', detail: 'United States', lat: 40.71, lon: -74.01 }]);
   assert.deepEqual(await searchPlaces('xx', { fetchJson: async () => ({}) }), []);
 });
 

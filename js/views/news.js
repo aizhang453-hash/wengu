@@ -166,7 +166,7 @@ function weatherChip() {
     const dialog = openDialog({
       title: '天气',
       // Open-Meteo 的数据是 CC BY 4.0, 要写出处
-      body: [place ? h('p', { class: 'muted small' }, `现在是：${place.name}${place.auto ? '（自动定位）' : ''}`) : null, h('div', { class: 'row weather-search' }, input, h('button', { class: 'btn primary small', type: 'button', onclick: search }, '找')), here, list, h('p', { class: 'muted small weather-credit' }, '天气数据：', ext('https://open-meteo.com/', 'Open-Meteo.com'))],
+      body: [place ? h('p', { class: 'muted small' }, `现在是：${place.name}${place.auto ? '（自动定位）' : ''}`) : null, h('div', { class: 'row weather-search' }, input, h('button', { class: 'btn primary small', type: 'button', onclick: search }, '找')), here, list, h('p', { class: 'muted small weather-credit' }, '天气数据：', ext('https://open-meteo.com/', 'Open-Meteo.com'), '　地名：', ext('https://www.openstreetmap.org/copyright', '© OpenStreetMap'))],
     });
     input.focus();
   }

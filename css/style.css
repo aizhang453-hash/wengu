@@ -10850,3 +10850,161 @@ body.radio-on .read-stop {
 body.radio-on:has(.game-page) .radio-bar {
   display: none;
 }
+
+/* 广播 v1.79: 正在播放的大面板 */
+.radio-now {
+  margin: 4px 0 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.radio-now-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.radio-now-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.radio-now-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* 台名长的话最多两行 */
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+
+.radio-now-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.radio-now-status.bad {
+  color: var(--bad);
+}
+
+/* 跳动的声音条: 放着的时候才动 */
+.radio-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.radio-eq i {
+  width: 3px;
+  height: 4px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.radio-now.playing .radio-eq i {
+  animation: radio-eq 0.9s ease-in-out infinite alternate;
+}
+
+.radio-now.playing .radio-eq i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+
+.radio-now.playing .radio-eq i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+
+.radio-now.playing .radio-eq i:nth-child(4) {
+  animation-delay: -0.15s;
+}
+
+@keyframes radio-eq {
+  from {
+    height: 3px;
+  }
+
+  to {
+    height: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radio-now.playing .radio-eq i {
+    animation: none;
+    height: 10px;
+  }
+}
+
+.radio-now .radio-now-fav,
+.radio-now .radio-now-close {
+  align-self: flex-start;
+}
+
+.radio-now-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 14px;
+}
+
+.radio-now-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.radio-sleep-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.radio-volume {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  max-width: 260px;
+  color: var(--muted);
+}
+
+.radio-volume input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+
+.radio-sleep-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.radio-near-note {
+  margin: 4px 0 10px;
+}
+
+/* 在广播页上不显示底下的播放条 (页面上有大面板) */
+body.radio-on:has(.radio-page) .radio-bar {
+  display: none;
+}
