@@ -10272,6 +10272,7 @@ button.pick-row:hover {
 
 /* 天气栏 (v1.80): 照报纸的天气版, 在每日猜词下面 */
 .wx {
+  scroll-margin-top: calc(var(--topbar-h) + 12px); /* 点右上角的天气跳过来时, 不被顶上那条挡住 */
   margin: 0 0 30px;
   padding: 16px 20px;
   border: 1px solid var(--line);

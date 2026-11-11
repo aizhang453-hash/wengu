@@ -167,8 +167,9 @@ function weatherBoxBody(place, w, world, change) {
 
 function weatherParts() {
   // 先写「天气」: 等定位 (浏览器问要不要给位置的时候) 不是一个空框
-  const el = h('button', { class: 'news-weather', type: 'button', title: '天气（点这里换城市）', onclick: () => placeDialog() }, icon('cloud', 16), ' 天气');
+  // v1.80.1: 点它跳到下面的天气栏 (像报纸头版报头旁边的天气, 里面才是完整的); 换城市只在天气栏里
   const box = h('section', { class: 'wx', 'aria-label': '天气' });
+  const el = h('button', { class: 'news-weather', type: 'button', title: '看天气栏', onclick: () => box.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, icon('cloud', 16), ' 天气');
   const show = (place, w, world) => {
     fill(el, icon(w && w.now.code <= 1 ? 'sun' : 'cloud', 16), ' ', place && w ? weatherLine(place, w) : place ? `${place.name} 天气拿不到` : '填城市看天气');
     fill(box, weatherBoxBody(place, w, world, () => placeDialog()));
