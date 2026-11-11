@@ -68,8 +68,8 @@ test('打陨石: 5 题升一关, 越来越快 (有上限), 分越来越多', () 
 
 // ---- 游戏板块 ----
 
-test('游戏列表: 五个游戏, 都找得到', () => {
-  assert.deepEqual(GAME_KEYS, ['match', 'blast', 'blocks', 'gems', 'wordle']);
+test('游戏列表: 四个游戏 (Wordle v1.76 搬到邸报改成每日猜词了), 都找得到', () => {
+  assert.deepEqual(GAME_KEYS, ['match', 'blast', 'blocks', 'gems']);
   for (const g of GAMES) assert.equal(gameOf(g.key), g);
   assert.equal(gameOf('nope'), null);
   assert.equal(gameOf(null), null);
@@ -84,16 +84,12 @@ test('能不能玩: 卡片不够、缺一面、没有能猜的词时说为什么
   const halfEmpty = { cards: [{ id: 'a', term: 'apple', def: '' }, { id: 'b', term: 'pear', def: '梨' }, { id: 'c', term: '', def: '桃' }] };
   assert.notEqual(whyNotPlayable('blocks', halfEmpty), '');
   assert.notEqual(whyNotPlayable('gems', halfEmpty), '');
-  // Wordle 要字母拼的词
-  const chinese = { cards: [{ id: 'a', term: '苹果', def: '一种水果' }, { id: 'b', term: '梨', def: '另一种水果' }] };
-  assert.match(whyNotPlayable('wordle', chinese), /字母/);
   assert.notEqual(whyNotPlayable('match', null), '');
 });
 
 test('最好成绩怎么写; 没玩过是空的', () => {
   assert.equal(bestText('match', { match: 12345 }), '最好 12.3 秒');
   assert.equal(bestText('blast', { blast: 320 }), '最高 320 分');
-  assert.equal(bestText('wordle', { wordle: 4 }), '最长连胜 4');
   assert.equal(bestText('gems', {}), '');
   assert.equal(bestText('gems', undefined), '');
 });

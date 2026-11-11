@@ -27,7 +27,7 @@
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **题目集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **书斋** | 古诗文原文免费读（以前叫「阅读」），书架分四层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）、古典小说（西游记，一回一回读）；每日一首、搜索、收藏、目录里的「接着读」、简体 / 繁体、朗读；《古文观止》里 33 篇名篇有注释、译文、出自这篇的成语和名句；搜索也能搜成语；一键做成「接下句」「字词」「成语」卡片集来背 |
-| **新闻** | 分中文、English：上面是快讯（24 小时内各家的标题），下面是长文章（美国之音、自由亚洲电台、卫报、NASA，在温故里读全文、可以朗读）；每 15 分钟自动更新，断网也能看上次的 |
+| **邸报** | 新闻（以前叫「新闻」），分中文、English：上面是快讯（24 小时内各家的标题），下面是长文章（美国之音、自由亚洲电台、卫报、NASA，在温故里读全文、可以朗读）；当地天气；每日猜词；每 15 分钟自动更新，断网也能看上次的 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
 | **统计** | 复习预测、学习记录、记忆率、卡片状态、学习时段分析 |
 | **同步与备份** | 通过个人 GitHub 私有仓库在多设备间同步；备份文件导出与恢复 |
@@ -37,12 +37,12 @@
 
 ### 导航
 
-- 左上角 ☰：今日、题目集、书斋、新闻、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
+- 左上角 ☰：今日、题目集、书斋、邸报、统计；「更多」中为学习游戏、游戏厅、温温；底部为设置。
 - 右上角「新建」：新建卡片集、导入卡片、新建题目集、记录错题、拍照录入错题、新建文件夹。
 
 ### 卡片集
 
-- 卡片集页提供单词卡、学习、测试、游戏（配对、打陨石、方块、宝石、Wordle），以及设置了标注图时的识图练习。
+- 卡片集页提供单词卡、学习、测试、游戏（配对、打陨石、方块、宝石），以及设置了标注图时的识图练习。
 - 统计、加入文件夹、分享、复制为文本、导出、打印、重置进度、删除位于标题旁的「更多」中。
 - 编辑页支持加粗、斜体、下划线、高亮，以及图片和录音；学习过程中也可随时编辑卡片。
 
@@ -78,9 +78,11 @@
 - 成语和名句：这 20 篇正文下面列出出自这篇的成语、名句和词语（只收出自这篇的，化用别的书的写明「语本……」），点「看原文」跳到那一段并标出那几个字；还有「知道吗」，写相关的常识，有的能点过去读书库里相关的那篇。在书架上也能搜成语，找到出处。
 - 做成卡片背：「接下句」是正面一句、背面下一句（诗的第一张是「题目第一句」），「整首 / 整段」是正面题目、背面全文，有注释的篇还能做「字词」（正面是注释的词和它在的那一小句，背面是解释）和「成语」（正面成语，背面意思和出处原句）；可以只做这一篇，也可以整本做成一个卡片集。
 
-### 新闻
+### 邸报（新闻）
 
-- 在左上角 ☰ 的「新闻」，分「中文」「English」两页。
+- 在左上角 ☰ 的「邸报」（v1.76 以前叫「新闻」；邸报是古代传抄朝廷消息的报），分「中文」「English」两页。
+- 右上角是当地天气：第一次打开会问要不要给位置，不给就点天气自己填城市（天气来自免费的 Open-Meteo；城市名来自 BigDataCloud；位置只留到两位小数，存在这台设备上）。
+- 快讯下面是「每日猜词」：每天一个五个字母的英文词，大家一样，6 次猜出来（绿：字母和位置都对；黄：有这个字母但位置不对；灰：没有）。v1.76 以前学习游戏里的 Wordle 搬到这里改成了每天一个词；词表来自开源的 SCOWL（`tools/words.mjs` 生成 `js/words.js`），常用的词排在前面。
 - 上面是「快讯」：24 小时内各家的标题，新的在上面，点了在新的网页里打开原网站。中文：中新网、央视新闻、界面新闻、BBC 中文、德国之声、法广、香港电台、中央社（繁体的转成简体）；英文：NPR、Al Jazeera、PBS NewsHour、DW、France 24、CBS News、ABC News。都是不用付费、不用登录就能看全文的网站（BBC 英文版在美国有付费墙，没放）；视频页不放。
 - 下面是「长文章」：美国之音、自由亚洲电台（中文），卫报、NASA（英文），在温故里读全文，可以朗读。
 - 来源是逐家核对过条款选的：美国之音、NASA 是美国政府的作品（美国之音转载美联社的照片不放）；自由亚洲电台允许非商业、教育用途转载，每篇写着它要求的署名；卫报用开放平台的 API，按它的规定只留 24 小时、原样显示、放「Powered by The Guardian」标志、仅供个人非商业阅读；卫报标了「法律敏感」的，文章上面写明「这篇涉及正在进行的诉讼，内容可能会被修改」。快讯只放标题和链接。
@@ -130,7 +132,7 @@
 
 ## 更新记录
 
-当前版本 **v1.75**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.76**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -156,14 +158,15 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
   - `edit.js` 编辑卡片集、`fileimport.js` 文件导入、`export.js` 导出、`cardedit.js` 卡片快速编辑、`aiprompt.js` 提示词按钮
   - `cards.js` 单词卡、`learn.js` 学习、`exam.js` 测试、`review.js` 今日复习、`plan.js` 计划与复习设置对话框、`optimize.js` 参数优化、`stats.js` 统计、`diagram.js` 标注图
   - `mistakes.js` 题目集（v1.63 以前叫错题集；所有题目集、一个题目集）、`mistakeedit.js` 记录与编辑、`mistakereview.js` 重做、`mistakeimport.js` 拍照录入
-  - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`wordle.js`、`gamequiz.js`：学习游戏；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
+  - `gamehub.js`、`gameshell.js`、`match.js`、`blast.js`、`blocks.js`、`gems.js`、`gamequiz.js`：学习游戏；`wordle.js`：邸报的每日猜词；`arcade.js`、`pinball.js`、`draft.js`：游戏厅
   - `share.js` 分享、`quizlet.js` Quizlet 书签、`sync.js` 同步设置、`pet.js` 温温、`examlist.js` 考前清单、`read.js` 阅读（书架、目录、读一篇、每日一首）、`news.js` 新闻（中文、English：快讯和长文章；一篇全文）
 - 数据与逻辑
   - `js/store.js` 存储；`js/merge.js` 合并；`js/sync.js` GitHub 同步；`js/backup.js` 备份；`js/media.js` 图片与录音（IndexedDB）
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
-  - `js/news.js` 新闻：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS、央视的新闻列表和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
+  - `js/weather.js` 邸报的天气（Open-Meteo）；`js/wordle.js` 每日猜词的规则，`js/words.js` 词表（`tools/words.mjs` 从 SCOWL 生成）
+  - `js/news.js` 邸报（新闻）：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS、央视的新闻列表和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
   - `js/mistakes.js` 错题与题目集（含旧题目的自动分组）；`js/mistakeimport.js` 错题的 AI 识别；`js/cardimport.js` 卡片的 AI 识别；`js/aitext.js` 从 AI 回复中提取 JSON、转换 LaTeX；`js/quiz.js` 旧题目集转换
   - `js/parse.js` 粘贴文本；`js/cardfile.js` 文件导入导出（`js/xlsx.js`、`js/csv.js`、`js/anki.js`、`js/zip.js`、`js/sqlite.js`、`js/vendor/fzstd.js`：MIT）
   - `js/games.js`、`js/blocks.js`、`js/gems.js`、`js/wordle.js` 游戏规则；`js/pinball.js`、`js/pinball3d.js`（`js/vendor/three.js`：MIT）、`js/pinart.js`、`js/pindmd.js`、`js/pinsound.js` 弹珠台；`js/draft.js`（规则）、`js/draftdata.js`（出身、事件、路口、结局）人生草稿；`js/arcade.js` 游戏厅的成绩与进度
@@ -177,6 +180,7 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
 ## 许可证
 
 [PolyForm Strict 1.0.0](LICENSE)：可查看代码、个人使用，不可修改后再发布或商用。
+每日猜词的词表（`js/words.js`）来自 [SCOWL](http://wordlist.aspell.net/)（许可原文见 `js/LICENSE-scowl.txt`）。
 新闻（仓库的 `news` 分支）的版权归各家：美国之音、NASA 的是美国政府的作品；自由亚洲电台的按它的条款转载（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia）；卫报的来自卫报开放平台（Powered by The Guardian，仅供个人、非商业阅读）；快讯的各家只有标题和链接。`img/guardian-powered-*.png` 是卫报提供的标志，只按卫报开放平台的规定用。
 书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。

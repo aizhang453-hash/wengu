@@ -3,15 +3,14 @@
 import { normalize } from './grade.js';
 import { shuffle } from './questions.js';
 import { stripMarks } from './rich.js';
-import { playable } from './wordle.js';
 
 // ---- 有哪几个游戏 ----
+// (v1.76: Wordle 搬到邸报, 改成每日猜词, 不再从卡片集挑词; 见 wordle.js)
 export const GAMES = [
   { key: 'match', emoji: '🧩', name: '配对', hint: '将词语与释义配对，计时' },
   { key: 'blast', emoji: '☄️', name: '打陨石', hint: '根据释义击中正确词语' },
   { key: 'blocks', emoji: '🧱', name: '方块', hint: '答题获得方块，填满一行即消除' },
   { key: 'gems', emoji: '💎', name: '宝石', hint: '三消玩法，答题增加步数' },
-  { key: 'wordle', emoji: '🟩', name: 'Wordle', hint: '6 次内猜出卡片集中的单词' },
 ];
 export const GAME_KEYS = GAMES.map((g) => g.key);
 export const gameOf = (key) => GAMES.find((g) => g.key === key) ?? null;
@@ -24,7 +23,6 @@ export function quizCards(cards) {
 // 这个卡片集玩不玩得了这个游戏: 能玩返回 '', 不能玩返回为什么
 export function whyNotPlayable(key, set) {
   const cards = set?.cards ?? [];
-  if (key === 'wordle') return playable(cards).items.length ? '' : '需要包含 3–10 个字母的英文单词';
   const pool = key === 'blocks' || key === 'gems' ? quizCards(cards) : cards;
   return pickDistinct(pool, 2).length >= 2 ? '' : '至少需要两张不同的卡片';
 }
@@ -34,7 +32,6 @@ export function bestText(key, best) {
   const v = best?.[key];
   if (!v) return '';
   if (key === 'match') return `最好 ${formatTime(v)}`;
-  if (key === 'wordle') return `最长连胜 ${v}`;
   return `最高 ${v} 分`;
 }
 

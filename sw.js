@@ -156,7 +156,9 @@ const FILES = [
   'js/views/suggest.js',
   'js/views/sync.js',
   'js/views/wordle.js',
+  'js/weather.js',
   'js/wordle.js',
+  'js/words.js',
   'js/xlsx.js',
   'js/zip.js',
 ];

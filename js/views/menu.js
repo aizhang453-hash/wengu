@@ -90,7 +90,7 @@ export function setupMenu({ store, go, syncer, pet = null }) {
         item('#/', 'home', '今日', { badge: due, match: (x) => x === '#/' || x === '#' || starts('#/review')(x) }),
         item('#/mistakes', 'book', '题目集', { badge: mistakes, match: starts('#/mistakes') }),
         item('#/read', 'read', '书斋', { match: starts('#/read') }),
-        item('#/news', 'news', '新闻', { match: starts('#/news') }),
+        item('#/news', 'news', '邸报', { match: starts('#/news') }),
         item('#/stats', 'chart', '统计', { match: starts('#/stats') }),
         folders.length
           ? [

@@ -6,9 +6,11 @@
 // 用户要页面简洁 (v1.75): 不写「在温故里读全文」「点了去原网站看」这种说明, 快讯、长文章都不按来源分
 // 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边 (长文章的标题旁边)
 
-import { h, fill, icon, toast } from '../dom.js';
+import { h, fill, icon, toast, openDialog } from '../dom.js';
 import { loadIndex, cachedIndex, loadArticle, LANGS, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
+import { savedPlace, savePlace, loadWeather, locate, searchPlaces, weatherLine } from '../weather.js';
+import { dayIndex, TRIES } from '../wordle.js';
 
 const REFRESH_MS = 3 * 60 * 1000; // 新闻页开着时多久刷新一次
 
@@ -52,7 +54,7 @@ function newsPage(cls, draw, { maxAge } = {}) {
 }
 
 function offline(retry) {
-  return h('div', { class: 'empty' }, h('h1', {}, '新闻'), h('p', {}, '还没拿到新闻，连上网再试一次。'), h('button', { class: 'btn primary', type: 'button', onclick: retry }, '再试一次'));
+  return h('div', { class: 'empty' }, h('h1', {}, '邸报'), h('p', {}, '还没拿到新闻，连上网再试一次。'), h('button', { class: 'btn primary', type: 'button', onclick: retry }, '再试一次'));
 }
 
 // 图: 拿不到 (断网) 就不占地方
@@ -67,8 +69,8 @@ const meta = (data, x) => h('span', { class: 'news-meta-line' }, h('span', { cla
 // 中文 | English
 const langTabs = (lang, href) => h('nav', { class: 'news-langs', 'aria-label': '语言' }, Object.entries(LANGS).map(([k, name]) => h('a', { class: `news-lang${k === lang ? ' on' : ''}`, href: href(k), 'aria-current': k === lang ? 'page' : null }, name)));
 
-// 最上面: 标题、中文 | English、几分钟前更新、刷新
-function head(title, data, rec, refresh, lang, href) {
+// 最上面: 标题、中文 | English、天气、几分钟前更新、刷新
+function head(title, data, rec, refresh, lang, href, weather = null) {
   return [
     h(
       'div',
@@ -78,6 +80,7 @@ function head(title, data, rec, refresh, lang, href) {
       h(
         'span',
         { class: 'news-head-tools' },
+        weather,
         h('span', { class: 'news-updated muted small' }, `${agoText(data.at)}更新`),
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': '刷新', title: '刷新', onclick: () => refresh(true) }, icon('refresh', 18)),
       ),
@@ -100,9 +103,85 @@ function longRow(data, x, big = false) {
   );
 }
 
+// ---- 天气 (v1.76): 邸报页右上角一小块; 先自动定位, 不给位置就自己填城市 ----
+function weatherChip() {
+  const el = h('button', { class: 'news-weather', type: 'button', title: '天气（点这里换城市）', onclick: () => placeDialog() });
+  const show = (place, w) => fill(el, icon(w && w.now.code <= 1 ? 'sun' : 'cloud', 16), ' ', place && w ? weatherLine(place, w) : place ? `${place.name} 天气拿不到` : '填城市看天气');
+  const update = async (place) => {
+    if (!place) return show(null, null);
+    show(place, await loadWeather(place));
+  };
+  // 自动定位的: 每次打开再定位一次 (换了地方会跟着变; 定位不了就用上次的地方)
+  const start = async () => {
+    const place = savedPlace();
+    if (place && !place.auto) return update(place);
+    try {
+      const here = await locate();
+      savePlace(here);
+      update(here);
+    } catch {
+      update(place);
+    }
+  };
+  function placeDialog() {
+    const input = h('input', { type: 'search', class: 'input', placeholder: '城市名，比如 纽约、上海、London', enterkeyhint: 'search' });
+    const list = h('div', { class: 'weather-results' });
+    const pick = (place) => {
+      savePlace(place);
+      dialog.close();
+      update(place);
+    };
+    const search = async () => {
+      const q = input.value.trim();
+      if (!q) return;
+      fill(list, h('p', { class: 'muted' }, '正在找……'));
+      try {
+        const found = await searchPlaces(q);
+        fill(list, found.length ? found.map((p) => h('button', { class: 'weather-place', type: 'button', onclick: () => pick({ name: p.name, lat: p.lat, lon: p.lon, auto: false }) }, h('strong', {}, p.name), p.detail ? h('span', { class: 'muted small' }, ` ${p.detail}`) : null)) : h('p', { class: 'muted' }, '没找到这个地方。'));
+      } catch {
+        fill(list, h('p', { class: 'muted' }, '没连上网，等一下再试。'));
+      }
+    };
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), search()));
+    const here = h('button', { class: 'btn small', type: 'button', onclick: async () => {
+      fill(list, h('p', { class: 'muted' }, '正在定位……'));
+      try {
+        pick(await locate());
+      } catch (e) {
+        fill(list, h('p', { class: 'muted' }, e?.code === 1 ? '没有位置权限，可以在上面填城市。' : '定位不了，可以在上面填城市。'));
+      }
+    } }, '用我现在的位置');
+    const place = savedPlace();
+    const dialog = openDialog({
+      title: '天气',
+      // Open-Meteo 的数据是 CC BY 4.0, 要写出处
+      body: [place ? h('p', { class: 'muted small' }, `现在是：${place.name}${place.auto ? '（自动定位）' : ''}`) : null, h('div', { class: 'row weather-search' }, input, h('button', { class: 'btn primary small', type: 'button', onclick: search }, '找')), here, list, h('p', { class: 'muted small weather-credit' }, '天气数据：', ext('https://open-meteo.com/', 'Open-Meteo.com'))],
+    });
+    input.focus();
+  }
+  start();
+  return el;
+}
+
+// 每日猜词的入口: 今天猜没猜、猜中没有
+function dailyWordCard() {
+  let state = null;
+  try {
+    state = JSON.parse(localStorage.getItem('wengu:daily-word') ?? 'null');
+  } catch {
+    state = null;
+  }
+  const today = dayIndex();
+  const guesses = state?.day === today ? (state.guesses ?? []) : [];
+  const d = new Date();
+  const status = guesses.length === 0 ? '今天的还没猜' : guesses.length >= TRIES ? '今天的猜完了' : `今天猜了 ${guesses.length} 次`;
+  return h('a', { class: 'news-word', href: '#/news/word' }, h('span', { class: 'news-word-title' }, '每日猜词'), h('span', { class: 'muted small' }, `${d.getMonth() + 1}月${d.getDate()}日 · ${status}`), h('span', { class: 'news-word-go', 'aria-hidden': 'true' }, '→'));
+}
+
 // ---- 新闻 (一种语言) ----
 // 快讯方块: 24 小时内各家的标题全列出来, 新的在上面, 不分来源 (用户 v1.75 说的); 方块里面上下翻, 不把长文章挤到老远
 export function renderNews(ctx, lang = 'zh') {
+  const weather = weatherChip(); // 一直用同一个 (重画新闻时不重新定位)
   const page = newsPage(
     'news-home',
     ({ data, ...rec }, { refresh }) => {
@@ -112,8 +191,9 @@ export function renderNews(ctx, lang = 'zh') {
       const leadAt = Math.max(0, longs.findIndex((x) => x.img));
       const ordered = longs.length ? [longs[leadAt], ...longs.filter((_, i) => i !== leadAt)] : [];
       return [
-        head('新闻', data, rec, refresh, lang, langHref),
+        head('邸报', data, rec, refresh, lang, langHref, weather),
         h('section', { class: 'news-flash', 'aria-label': '快讯' }, h('h2', { class: 'news-flash-head' }, '快讯'), live.length ? h('ul', { class: 'news-live-list news-flash-list' }, live.map((x) => liveRow(data, x))) : h('p', { class: 'muted' }, '24 小时内没有快讯。')),
+        dailyWordCard(),
         ordered.length
           ? h(
               'section',
@@ -132,7 +212,7 @@ export function renderNews(ctx, lang = 'zh') {
   );
   // 开着时几分钟自己刷新一次
   const timer = setInterval(() => page.box.isConnected && page.refresh(), REFRESH_MS);
-  return { title: lang === 'en' ? 'English · 新闻' : '新闻', el: page.box, cleanup: () => clearInterval(timer) };
+  return { title: lang === 'en' ? 'English · 邸报' : '邸报', el: page.box, cleanup: () => clearInterval(timer) };
 }
 
 // ---- 一篇全文 ----
@@ -200,7 +280,7 @@ function speaker(article, parts, lang) {
 
 export function renderArticle(ctx, id) {
   const box = h('section', { class: 'news-page news-story', 'aria-live': 'polite' }, h('p', { class: 'muted news-wait' }, '正在拿这篇文章……'));
-  const back = (lang) => h('a', { class: 'back', href: langHref(lang) }, '← 新闻');
+  const back = (lang) => h('a', { class: 'back', href: langHref(lang) }, '← 邸报');
   Promise.all([cachedIndex().then((rec) => rec ?? loadIndex()), loadArticle(id)]).then(([rec, a]) => {
     if (!box.isConnected) return;
     const data = rec?.data ?? null;
@@ -244,5 +324,5 @@ export function renderArticle(ctx, id) {
     );
     fill(box, back(lang), article, bar);
   });
-  return { title: '新闻', el: box, cleanup: () => stopSpeaking() };
+  return { title: '邸报', el: box, cleanup: () => stopSpeaking() };
 }

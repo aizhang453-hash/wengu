@@ -1,262 +1,175 @@
-// Wordle: 从卡片集里挑一个词, 6 次猜出来。解释当提示 (可以藏起来, 难一点)。
+// 每日猜词 (v1.76, #/news/word): 每天一个五个字母的英文词, 6 次猜出来 (规则见 ../wordle.js)。从邸报页进来。
+// 今天猜到哪、成绩存在这台设备上 (localStorage); 关了再开接着猜。词表 (words.js 八十多 KB) 进这一页才拿。
 
 import { h, dialogOpen, toast, fill } from '../dom.js';
-import { rich, cardImage, sayButton } from '../cardview.js';
 import { playSound } from '../sound.js';
-import { TRIES, playable, evaluate, mergeKeys } from '../wordle.js';
+import { TRIES, LEN, dayIndex, dailyWord, canGuess, evaluate, mergeKeys, emptyStats, addResult } from '../wordle.js';
 import { soundOn } from './match.js';
-import { gameHeader, cantPlay, rememberGame, exitHref } from './gameshell.js';
 
 const TYPING = 'textarea, select, input:not([type=checkbox]):not([type=radio])';
 const ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+const GAME_KEY = 'wengu:daily-word'; // { day, guesses: ['crane', ...] }
+const STATS_KEY = 'wengu:daily-word-stats';
 
-function loadStats(key) {
+function load(key, fallback) {
   try {
-    return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0, 0, 0, 0, 0, 0], recent: [], showClue: true, ...JSON.parse(localStorage.getItem(key) ?? '{}') };
+    return { ...fallback, ...JSON.parse(localStorage.getItem(key) ?? '{}') };
   } catch {
-    return { played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0, 0, 0, 0, 0, 0], recent: [], showClue: true };
+    return { ...fallback };
+  }
+}
+function save(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 存不了就算了
   }
 }
 
-export function renderWordle({ store, from }, id) {
-  const set = store.getSet(id);
-  const pool = set ? playable(set.cards) : { items: [] };
-  if (!set || pool.items.length === 0) return cantPlay({ set, game: 'wordle', from });
-  rememberGame('wordle', set.id);
-  const back = exitHref(from, set);
+export function renderDailyWord() {
+  const today = dayIndex();
+  const date = new Date();
+  const box = h('section', { class: 'wordle-page daily-word' }, h('p', { class: 'muted news-wait' }, '正在准备今天的词……'));
+  let cleanup = () => {};
 
-  const statsKey = `wengu:wordle:${set.id}`;
-  const stats = loadStats(statsKey);
-  const saveStats = () => {
-    try {
-      localStorage.setItem(statsKey, JSON.stringify(stats));
-    } catch {
-      // 存不了就算了
+  import('../words.js').then(({ ANSWERS, ALLOWED }) => {
+    const target = dailyWord(today, ANSWERS);
+    const allowed = new Set(ALLOWED.split(' '));
+    const saved = load(GAME_KEY, { day: today, guesses: [] });
+    let guesses = (saved.day === today ? saved.guesses : []).filter((w) => typeof w === 'string' && w.length === LEN).map((word) => ({ word, result: evaluate(word, target) }));
+    let stats = load(STATS_KEY, emptyStats());
+    let current = '';
+    let keys = guesses.reduce((k, g) => mergeKeys(k, g.word, g.result), {});
+    let busy = false;
+    const won = () => guesses.some((g) => g.result.every((x) => x === 'correct'));
+    let done = won() || guesses.length >= TRIES;
+
+    const statsEl = h('p', { class: 'wordle-stats muted small' });
+    const grid = h('div', { class: 'wordle-grid' });
+    const kb = h('div', { class: 'wordle-kb' });
+    const msg = h('div', { class: 'wordle-msg', 'aria-live': 'polite' });
+    grid.style.setProperty('--len', String(LEN));
+
+    // 连胜: 昨天、今天都没猜中就断了
+    const streakNow = () => (stats.lastWin !== undefined && stats.lastWin >= today - 1 ? stats.streak : 0);
+    const drawStats = () => {
+      statsEl.textContent = stats.played ? `玩了 ${stats.played} 天 · 猜中 ${Math.round((stats.won / stats.played) * 100)}% · 连胜 ${streakNow()} · 最长连胜 ${stats.maxStreak}` : '';
+    };
+
+    function drawGrid(revealRow = -1) {
+      const rows = [];
+      for (let i = 0; i < TRIES; i++) {
+        const letters = i < guesses.length ? Array.from(guesses[i].word) : i === guesses.length && !done ? Array.from(current) : [];
+        const result = guesses[i]?.result;
+        rows.push(
+          h(
+            'div',
+            { class: `wordle-row${i === guesses.length && !done ? ' active' : ''}` },
+            Array.from({ length: LEN }, (_, j) => h('div', { class: `tile${letters[j] ? ' filled' : ''}${result ? ` ${result[j]}` : ''}${i === revealRow ? ' reveal' : ''}`, style: i === revealRow ? `animation-delay:${j * 120}ms` : null }, letters[j] ?? '')),
+          ),
+        );
+      }
+      grid.replaceChildren(...rows);
     }
-  };
-  const clueSide = pool.side === 'term' ? 'def' : 'term';
-  // 键盘: 26 个字母, 再加上词里有的其他字母 (é、ü、ß……)
-  const extra = [...new Set(pool.items.flatMap((x) => Array.from(x.word)))].filter((ch) => !/[a-z]/.test(ch)).sort();
 
-  let target = null; // { card, word }
-  let guesses = [];
-  let current = '';
-  let keys = {};
-  let done = false;
-  let busy = false;
+    function drawKeyboard() {
+      const key = (ch, label = ch, cls = '') => h('button', { class: `kb-key ${keys[ch] ?? ''} ${cls}`, 'aria-label': label, onclick: () => press(ch) }, label);
+      fill(kb, ...ROWS.map((row, i) => h('div', { class: 'kb-row' }, i === 2 ? key('Enter', '确定', 'wide') : null, Array.from(row).map((ch) => key(ch)), i === 2 ? key('Backspace', '⌫', 'wide') : null)));
+      kb.hidden = done;
+    }
 
-  const statsEl = h('div', { class: 'wordle-stats muted small' });
-  const clueEl = h('div', { class: 'wordle-clue' });
-  const grid = h('div', { class: 'wordle-grid' });
-  const kb = h('div', { class: 'wordle-kb' });
-  const msg = h('div', { class: 'wordle-msg', 'aria-live': 'polite' });
-
-  function pickWord() {
-    // 最近猜过的先不出 (词够多的话)
-    const fresh = pool.items.filter((x) => !stats.recent.includes(x.card.id));
-    const list = fresh.length ? fresh : pool.items;
-    return list[Math.floor(Math.random() * list.length)];
-  }
-
-  function newGame() {
-    target = pickWord();
-    stats.recent = [...stats.recent.filter((cid) => cid !== target.card.id), target.card.id].slice(-Math.min(10, pool.items.length - 1));
-    saveStats();
-    guesses = [];
-    current = '';
-    keys = {};
-    done = false;
-    msg.replaceChildren();
-    drawAll();
-  }
-
-  function drawStats() {
-    statsEl.textContent = `玩了 ${stats.played} 次 · 猜中 ${stats.played ? Math.round((stats.won / stats.played) * 100) : 0}% · 连胜 ${stats.streak} · 最长连胜 ${stats.maxStreak}`;
-  }
-
-  function drawClue() {
-    const clue = target.card[clueSide];
-    clueEl.replaceChildren(
-      h(
-        'div',
-        { class: 'row' },
-        h('span', { class: 'muted small' }, `提示 (${clueSide === 'def' ? '解释' : '词'}) · ${Array.from(target.word).length} 个字母`),
-        h(
-          'button',
-          {
-            class: 'link-btn',
-            onclick: () => {
-              stats.showClue = !stats.showClue;
-              saveStats();
-              drawClue();
-            },
-          },
-          stats.showClue ? '藏起来 (难一点)' : '看提示',
-        ),
-      ),
-      stats.showClue || done ? h('div', { class: 'wordle-clue-text' }, clueSide === 'def' ? cardImage(target.card.image, 'q-img small') : null, rich(clue)) : h('div', { class: 'muted' }, '提示藏起来了'),
-    );
-  }
-
-  function drawGrid(revealRow = -1) {
-    const len = Array.from(target.word).length;
-    grid.style.setProperty('--len', String(len));
-    const rows = [];
-    for (let i = 0; i < TRIES; i++) {
-      const letters = i < guesses.length ? Array.from(guesses[i].word) : i === guesses.length ? Array.from(current) : [];
-      const result = guesses[i]?.result;
-      rows.push(
+    function drawEnd() {
+      if (!done) return msg.replaceChildren();
+      const win = won();
+      const max = Math.max(1, ...stats.dist);
+      msg.replaceChildren(
         h(
           'div',
-          { class: `wordle-row${i === guesses.length && !done ? ' active' : ''}` },
-          Array.from({ length: len }, (_, j) =>
-            h(
-              'div',
-              {
-                class: `tile${letters[j] ? ' filled' : ''}${result ? ` ${result[j]}` : ''}${i === revealRow ? ' reveal' : ''}`,
-                style: i === revealRow ? `animation-delay:${j * 120}ms` : null,
-              },
-              letters[j] ?? '',
-            ),
+          { class: `summary wordle-end ${win ? 'win' : 'lose'}` },
+          h('h2', {}, win ? ['太棒了！', '漂亮！', '厉害！', '不错！', '好险！', '最后一次猜中！'][guesses.length - 1] : '没猜出来'),
+          h('div', { class: 'wordle-answer' }, h('div', { class: 'answer-text' }, target)),
+          h(
+            'div',
+            { class: 'wordle-dist' },
+            stats.dist.map((n, i) => h('div', { class: 'dist-row' }, h('span', {}, String(i + 1)), h('span', { class: `dist-bar${win && i === guesses.length - 1 ? ' this' : ''}`, style: `width:${Math.max(8, (n / max) * 100)}%` }, String(n)))),
           ),
+          h('p', { class: 'muted' }, '明天再来猜新的词。'),
         ),
       );
     }
-    grid.replaceChildren(...rows);
-  }
 
-  function drawKeyboard() {
-    const key = (ch, label = ch, cls = '') => h('button', { class: `kb-key ${keys[ch] ?? ''} ${cls}`, 'aria-label': label, onclick: () => press(ch) }, label);
-    fill(
-      kb,
-      ...ROWS.map((row, i) => h('div', { class: 'kb-row' }, i === 2 ? key('Enter', '确定', 'wide') : null, Array.from(row).map((ch) => key(ch)), i === 2 ? key('Backspace', '⌫', 'wide') : null)),
-      extra.length ? h('div', { class: 'kb-row' }, extra.map((ch) => key(ch))) : null,
-    );
-  }
-
-  function drawAll(revealRow) {
-    drawStats();
-    drawClue();
-    drawGrid(revealRow);
-    drawKeyboard();
-  }
-
-  function shakeRow(text) {
-    toast(text);
-    const row = grid.children[guesses.length];
-    row?.classList.add('shake-row');
-    setTimeout(() => row?.classList.remove('shake-row'), 400);
-  }
-
-  function press(k) {
-    if (busy) return;
-    if (done) {
-      if (k === 'Enter') newGame();
-      return;
+    function drawAll(revealRow) {
+      drawStats();
+      drawGrid(revealRow);
+      drawKeyboard();
+      drawEnd();
     }
-    const len = Array.from(target.word).length;
-    if (k === 'Backspace') {
-      current = Array.from(current).slice(0, -1).join('');
-      return drawGrid();
-    }
-    if (k === 'Enter') {
-      if (Array.from(current).length < len) return shakeRow(`要 ${len} 个字母`);
-      return submit();
-    }
-    const ch = k.toLowerCase();
-    if (Array.from(ch).length !== 1 || !/\p{L}/u.test(ch) || Array.from(current).length >= len) return;
-    current += ch;
-    drawGrid();
-  }
 
-  function submit() {
-    const word = current;
-    const result = evaluate(word, target.word);
-    guesses.push({ word, result });
-    keys = mergeKeys(keys, word, result);
-    current = '';
-    const win = result.every((x) => x === 'correct');
-    const lose = !win && guesses.length >= TRIES;
-    busy = true;
-    drawGrid(guesses.length - 1);
-    setTimeout(
-      () => {
-        busy = false;
-        drawKeyboard();
-        if (win || lose) finish(win);
-        else drawGrid();
-      },
-      Array.from(word).length * 120 + 350,
-    );
-  }
-
-  function finish(win) {
-    done = true;
-    stats.played++;
-    if (win) {
-      stats.won++;
-      stats.streak++;
-      stats.maxStreak = Math.max(stats.maxStreak, stats.streak);
-      stats.dist[guesses.length - 1]++;
-      store.recordBest(set.id, 'wordle', stats.maxStreak);
-    } else {
-      stats.streak = 0;
+    function shakeRow(text) {
+      toast(text);
+      const row = grid.children[guesses.length];
+      row?.classList.add('shake-row');
+      setTimeout(() => row?.classList.remove('shake-row'), 400);
     }
-    saveStats();
-    store.recordAnswer(set.id, target.card.id, win);
-    if (soundOn()) playSound(win ? 'done' : 'wrong');
-    const card = target.card;
-    const max = Math.max(1, ...stats.dist);
-    msg.replaceChildren(
-      h(
-        'div',
-        { class: `summary wordle-end ${win ? 'win' : 'lose'}` },
-        h('h2', {}, win ? ['太棒了!', '漂亮!', '厉害!', '不错!', '好险!', '最后一次猜中!'][guesses.length - 1] : '没猜出来'),
-        h(
-          'div',
-          { class: 'wordle-answer' },
-          h('div', { class: 'answer-text' }, rich(card.term), sayButton(card, 'term', set)),
-          h('div', { class: 'muted' }, rich(card.def), sayButton(card, 'def', set)),
-        ),
-        h(
-          'div',
-          { class: 'wordle-dist' },
-          stats.dist.map((n, i) =>
-            h(
-              'div',
-              { class: 'dist-row' },
-              h('span', {}, String(i + 1)),
-              h('span', { class: `dist-bar${win && i === guesses.length - 1 ? ' this' : ''}`, style: `width:${Math.max(8, (n / max) * 100)}%` }, String(n)),
-            ),
-          ),
-        ),
-        h('div', { class: 'row center' }, h('button', { class: 'btn primary', onclick: newGame }, '下一个词 (回车)'), h('a', { class: 'btn', href: back }, '回去')),
-      ),
-    );
+
+    function press(k) {
+      if (busy || done) return;
+      if (dayIndex() !== today) return toast('已经是新的一天了，重新打开这一页猜今天的词');
+      if (k === 'Backspace') {
+        current = current.slice(0, -1);
+        return drawGrid();
+      }
+      if (k === 'Enter') {
+        if (current.length < LEN) return shakeRow(`要 ${LEN} 个字母`);
+        if (!canGuess(current, allowed)) return shakeRow('词表里没有这个词');
+        return submit();
+      }
+      const ch = k.toLowerCase();
+      if (!/^[a-z]$/.test(ch) || current.length >= LEN) return;
+      current += ch;
+      drawGrid();
+    }
+
+    function submit() {
+      const word = current;
+      const result = evaluate(word, target);
+      guesses.push({ word, result });
+      save(GAME_KEY, { day: today, guesses: guesses.map((g) => g.word) });
+      keys = mergeKeys(keys, word, result);
+      current = '';
+      const win = result.every((x) => x === 'correct');
+      done = win || guesses.length >= TRIES;
+      busy = true;
+      drawGrid(guesses.length - 1);
+      setTimeout(
+        () => {
+          busy = false;
+          if (done) {
+            stats = addResult(stats, today, win, guesses.length);
+            save(STATS_KEY, stats);
+            if (soundOn()) playSound(win ? 'done' : 'wrong');
+          }
+          drawAll();
+        },
+        LEN * 120 + 350,
+      );
+    }
+
+    function onKey(e) {
+      if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Enter' || e.key === 'Backspace' || /^[a-zA-Z]$/.test(e.key)) {
+        if (e.key === 'Enter' || e.key === 'Backspace') e.preventDefault();
+        press(e.key);
+      }
+    }
+    // 拿词表的时候已经离开这一页了: 不挂键盘
+    if (!box.isConnected) return;
+    document.addEventListener('keydown', onKey);
+    cleanup = () => document.removeEventListener('keydown', onKey);
+
+    fill(box, h('a', { class: 'back', href: '#/news' }, '← 邸报'), h('div', { class: 'page-head daily-word-head' }, h('h1', {}, '每日猜词'), h('span', { class: 'muted' }, `${date.getMonth() + 1}月${date.getDate()}日`)), statsEl, grid, msg, kb);
     drawAll();
-  }
+  });
 
-  function onKey(e) {
-    if (dialogOpen() || e.target.closest?.(TYPING) || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === 'Enter' || e.key === 'Backspace' || Array.from(e.key).length === 1) {
-      // 回车别同时点到正在选中的按钮
-      if (e.key === 'Enter' || e.key === 'Backspace') e.preventDefault();
-      if (e.key === ' ') return;
-      press(e.key);
-    }
-  }
-  document.addEventListener('keydown', onKey);
-
-  newGame();
-
-  return {
-    title: `Wordle · ${set.title}`,
-    el: h(
-      'section',
-      { class: 'game-page wordle-page' },
-      gameHeader({ store, set, game: 'wordle', from }),
-      h('div', { class: 'game-stage' }, statsEl, clueEl, grid, msg, kb),
-    ),
-    cleanup: () => document.removeEventListener('keydown', onKey),
-  };
+  return { title: '每日猜词', el: box, cleanup: () => cleanup() };
 }

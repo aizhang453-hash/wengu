@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as B from '../js/blocks.js';
 import * as G from '../js/gems.js';
-import { wordOf, playable, evaluate, mergeKeys } from '../js/wordle.js';
+import { evaluate, mergeKeys, dayIndex, dailyWord, canGuess, addResult, emptyStats, TRIES, LEN } from '../js/wordle.js';
+import { ANSWERS, ALLOWED } from '../js/words.js';
+import { inflected, seededShuffle } from '../tools/words.mjs';
 
 function seeded(seed = 1) {
   let s = seed;
@@ -112,26 +114,60 @@ test('宝石: 连四颗出炸弹, 炸弹被消时炸周围一圈; 问题宝石�
   assert.ok(r2.questions.includes(3));
 });
 
-// ---- Wordle ----
-test('Wordle: 能猜的词', () => {
-  assert.equal(wordOf('Apple'), 'apple');
-  assert.equal(wordOf('**café**'), 'café');
-  assert.equal(wordOf('ice cream'), null); // 两个词
-  assert.equal(wordOf('ab'), null); // 太短
-  assert.equal(wordOf('苹果树'), null);
-  assert.equal(wordOf('x-ray'), null);
-  const p = playable([
-    { id: 1, term: '苹果', def: 'apple' },
-    { id: 2, term: '香蕉', def: 'banana' },
-  ]);
-  assert.equal(p.side, 'def');
-  assert.deepEqual(
-    p.items.map((x) => x.word),
-    ['apple', 'banana'],
-  );
+// ---- 每日猜词 (v1.75 以前是学习游戏里的 Wordle) ----
+test('每日猜词: 2026-11-10 是第一天, 按这台设备的日子换词; 词表轮完从头再来', () => {
+  assert.equal(dayIndex(new Date(2026, 10, 10, 0, 1)), 0);
+  assert.equal(dayIndex(new Date(2026, 10, 10, 23, 59)), 0);
+  assert.equal(dayIndex(new Date(2026, 10, 11, 0, 0)), 1);
+  assert.equal(dayIndex(new Date(2027, 2, 15, 12)), 125); // 跨过夏令时也是整天
+  assert.equal(dayIndex(new Date(2026, 10, 9)), -1);
+  const list = ['aaaaa', 'bbbbb', 'ccccc'];
+  assert.equal(dailyWord(0, list), 'aaaaa');
+  assert.equal(dailyWord(4, list), 'bbbbb');
+  assert.equal(dailyWord(-1, list), 'ccccc');
+  assert.equal(TRIES, 6);
+  assert.equal(LEN, 5);
 });
 
-test('Wordle: 判色, 重复字母照真 Wordle 算', () => {
+test('每日猜词的词表: 答案都是五个字母、不重复、都能猜; 复数过去式这种去掉; 次序是固定打乱过的', () => {
+  const allowed = new Set(ALLOWED.split(' '));
+  assert.ok(ANSWERS.length > 1500, `答案 ${ANSWERS.length} 个`);
+  assert.equal(new Set(ANSWERS).size, ANSWERS.length);
+  for (const w of ANSWERS) {
+    assert.match(w, /^[a-z]{5}$/);
+    assert.ok(allowed.has(w), w);
+  }
+  assert.ok(allowed.size > 8000);
+  for (const w of ['apple', 'crane', 'about']) assert.ok(canGuess(w, allowed), w);
+  assert.equal(canGuess('abcde', allowed), false);
+  assert.equal(canGuess('apples', allowed), false);
+  // 头几天的词定死了 (以后重新生成词表也不能变)
+  assert.deepEqual(ANSWERS.slice(0, 3), ['flute', 'arose', 'knock']);
+  const known = new Set(['book', 'bake', 'go', 'box', 'aim', 'class']);
+  assert.equal(inflected('books', known), true);
+  assert.equal(inflected('boxes', known), true);
+  assert.equal(inflected('baked', known), true);
+  assert.equal(inflected('aimed', known), true);
+  assert.equal(inflected('going', known), true);
+  assert.equal(inflected('class', known), false);
+  assert.equal(inflected('naked', known), false);
+  assert.deepEqual(seededShuffle([1, 2, 3, 4, 5], 7), seededShuffle([1, 2, 3, 4, 5], 7));
+  assert.deepEqual([...seededShuffle([1, 2, 3, 4, 5], 7)].sort(), [1, 2, 3, 4, 5]);
+});
+
+test('每日猜词的成绩: 一天只记一次; 连胜要天天猜中', () => {
+  let s = addResult(emptyStats(), 0, true, 3);
+  assert.deepEqual([s.played, s.won, s.streak, s.maxStreak, s.dist[2]], [1, 1, 1, 1, 1]);
+  assert.equal(addResult(s, 0, true, 2).played, 1); // 同一天不再记
+  s = addResult(s, 1, true, 4);
+  assert.deepEqual([s.streak, s.maxStreak], [2, 2]);
+  s = addResult(s, 3, true, 5); // 第 2 天没玩: 连胜从 1 算起
+  assert.deepEqual([s.streak, s.maxStreak, s.played], [1, 2, 3]);
+  s = addResult(s, 4, false, 6);
+  assert.deepEqual([s.streak, s.won, s.played], [0, 3, 4]);
+});
+
+test('每日猜词: 判色, 重复字母照规矩算', () => {
   assert.deepEqual(evaluate('apple', 'apple'), ['correct', 'correct', 'correct', 'correct', 'correct']);
   assert.deepEqual(evaluate('crane', 'apple'), ['absent', 'absent', 'present', 'absent', 'correct']);
   // 猜了两个 l, 答案只有一个: 第一个黄, 第二个灰; 两个 a 也一样

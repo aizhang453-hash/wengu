@@ -13,7 +13,7 @@
 //   #/quizlet             从 Quizlet 一键搬 (书签小工具)
 //   #/read                书斋 (书库): 古代启蒙读物 (#/read/<书> 目录, #/read/<书>/<第几篇> 读一篇)
 //   #/read/author/<作者>  作者页: 书斋里他的所有作品
-//   #/news                新闻: 中文 (#/news/en 英文), 上面快讯、下面长文章; #/news/a/<编号> 一篇全文
+//   #/news                邸报 (v1.75 以前叫新闻): 中文 (#/news/en 英文), 上面快讯、下面长文章; #/news/a/<编号> 一篇全文; #/news/word 每日猜词
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -29,7 +29,7 @@
 //   #/set/<id>/blast      打陨石游戏
 //   #/set/<id>/blocks     方块游戏
 //   #/set/<id>/gems       宝石游戏
-//   #/set/<id>/wordle     Wordle
+//   #/set/<id>/wordle     (v1.75 以前的 Wordle) 现在打开邸报的每日猜词
 //   #/set/<id>/diagram    标注图练习
 
 import { Store, KEY } from './store.js';
@@ -46,7 +46,7 @@ import { renderMatch } from './views/match.js';
 import { renderBlast } from './views/blast.js';
 import { renderBlocks } from './views/blocks.js';
 import { renderGems } from './views/gems.js';
-import { renderWordle } from './views/wordle.js';
+import { renderDailyWord } from './views/wordle.js';
 import { renderDiagramPractice } from './views/diagram.js';
 import { renderSearch } from './views/search.js';
 import { renderFolder } from './views/folder.js';
@@ -156,6 +156,7 @@ function parse(hash) {
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
   if (parts[0] === 'news') {
     if (parts[1] === 'a' && parts[2]) return { page: 'news-article', id: parts[2] };
+    if (parts[1] === 'word') return { page: 'daily-word' };
     // v1.74 的快讯页 (#/news/live、#/news/live/en) 并进新闻页了
     if (parts[1] === 'live') return { page: 'news', lang: parts[2] === 'en' ? 'en' : 'zh' };
     return { page: 'news', lang: parts[1] === 'en' ? 'en' : 'zh' };
@@ -174,7 +175,7 @@ function parse(hash) {
     if (sub === 'blast') return { page: 'blast', id: parts[1] };
     if (sub === 'blocks') return { page: 'blocks', id: parts[1] };
     if (sub === 'gems') return { page: 'gems', id: parts[1] };
-    if (sub === 'wordle') return { page: 'wordle', id: parts[1] };
+    if (sub === 'wordle') return { page: 'daily-word' };
     if (sub === 'diagram') return { page: 'diagram', id: parts[1] };
   }
   return { page: 'missing' };
@@ -216,7 +217,6 @@ function render() {
   else if (route.page === 'blast') view = renderBlast(ctx, route.id);
   else if (route.page === 'blocks') view = renderBlocks(ctx, route.id);
   else if (route.page === 'gems') view = renderGems(ctx, route.id);
-  else if (route.page === 'wordle') view = renderWordle(ctx, route.id);
   else if (route.page === 'diagram') view = renderDiagramPractice(ctx, route.id);
   else if (route.page === 'search') view = renderSearch(ctx, route.query);
   else if (route.page === 'games') view = renderGames(ctx, route.game);
@@ -239,6 +239,7 @@ function render() {
   else if (route.page === 'read-piece') view = renderPiece(ctx, route.id, route.n);
   else if (route.page === 'news') view = renderNews(ctx, route.lang);
   else if (route.page === 'news-article') view = renderArticle(ctx, route.id);
+  else if (route.page === 'daily-word') view = renderDailyWord(ctx);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);

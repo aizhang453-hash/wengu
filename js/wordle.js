@@ -1,30 +1,33 @@
-// Wordle: 从卡片集里挑一个词, 6 次猜出来。
+// 每日猜词 (v1.76; 原来是学习游戏里的 Wordle, 从卡片集挑词, 用户说搬到邸报、改成每天一个词): 每天一个五个字母的英文词,
+// 大家一样, 6 次猜出来。词表在 words.js (tools/words.mjs 从 SCOWL 生成), 2026-11-10 是第一天, 按次序一天一个。
 // 绿: 字母对、位置也对; 黄: 有这个字母但位置不对; 灰: 没有这个字母。
-
-import { stripMarks } from './rich.js';
+// 「Wordle」是纽约时报的商标, 温故里叫「每日猜词」(用户定的)。
 
 export const TRIES = 6;
-export const MIN_LEN = 3;
-export const MAX_LEN = 10;
+export const LEN = 5;
+export const START = '2026-11-10'; // 第一天 (这台设备的日子; v1.76 发布那天)
 
-// 能拿来猜的: 一个词, 全是字母 (法语、德语带重音的也行), 3 到 10 个字母
-export function wordOf(text) {
-  const w = stripMarks(String(text ?? '')).trim().normalize('NFC').toLowerCase();
-  const len = Array.from(w).length;
-  if (len < MIN_LEN || len > MAX_LEN) return null;
-  return /^\p{L}+$/u.test(w) && !/[぀-ヿ㐀-䶿一-鿿가-힯]/.test(w) ? w : null;
+const pad = (n) => String(n).padStart(2, '0');
+export const dayKeyOf = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// 今天是第几天 (第一天是 0); 按这台设备的日子算, 跟纽约时报一样各地按自己的日子换词
+export function dayIndex(date = new Date()) {
+  const [y, m, d] = START.split('-').map(Number);
+  return Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(y, m - 1, d)) / 86400000);
 }
 
-// 挑出能玩的卡片: 先看词那面, 一个都没有再看解释那面。返回 { side, items: [{ card, word }] }
-export function playable(cards) {
-  for (const side of ['term', 'def']) {
-    const items = cards.map((card) => ({ card, word: wordOf(card[side]) })).filter((x) => x.word);
-    if (items.length) return { side, items };
-  }
-  return { side: 'term', items: [] };
+// 第几天的词 (词表轮完了从头再来)
+export function dailyWord(index, answers) {
+  const n = answers.length;
+  return answers[((index % n) + n) % n];
 }
 
-// 判一次猜的: 每个字母 'correct' | 'present' | 'absent' (同一个字母出现几次也照真 Wordle 算)
+// 能不能拿来猜: 五个字母、在词表里
+export function canGuess(word, allowed) {
+  return word.length === LEN && allowed.has(word);
+}
+
+// 判一次猜的: 每个字母 'correct' | 'present' | 'absent' (同一个字母出现几次也照规矩算)
 export function evaluate(guess, target) {
   const g = Array.from(guess.toLowerCase());
   const t = Array.from(target.toLowerCase());
@@ -53,4 +56,21 @@ export function mergeKeys(keys, guess, result) {
     if (!next[ch] || RANK[result[i]] > RANK[next[ch]]) next[ch] = result[i];
   });
   return next;
+}
+
+// 成绩: 玩了几天、猜中几天、连胜 (昨天也猜中才接着算)、最长连胜、几次猜中的分布
+export const emptyStats = () => ({ played: 0, won: 0, streak: 0, maxStreak: 0, dist: [0, 0, 0, 0, 0, 0], last: null });
+export function addResult(stats, day, win, tries) {
+  const s = { ...emptyStats(), ...stats, dist: [...(stats?.dist ?? [0, 0, 0, 0, 0, 0])] };
+  if (s.last !== null && s.last >= day) return s; // 这一天记过了
+  s.played++;
+  if (win) {
+    s.won++;
+    s.streak = s.lastWin === day - 1 ? s.streak + 1 : 1;
+    s.maxStreak = Math.max(s.maxStreak, s.streak);
+    s.dist[tries - 1]++;
+    s.lastWin = day;
+  } else s.streak = 0;
+  s.last = day;
+  return s;
 }

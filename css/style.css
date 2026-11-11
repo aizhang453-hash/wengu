@@ -10197,6 +10197,101 @@ button.pick-row:hover {
   font-weight: 600;
 }
 
+/* 天气 (右上角一小块, 点了换城市) */
+.news-weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.news-weather:hover {
+  border-color: var(--accent);
+}
+
+.weather-search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.weather-search .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.weather-results {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.weather-place {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weather-place:hover {
+  border-color: var(--accent);
+}
+
+.weather-credit {
+  margin: 14px 0 0;
+}
+
+/* 每日猜词的入口 (快讯下面一条) */
+.news-word {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: -14px 0 30px;
+  padding: 14px 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.news-word:hover {
+  border-color: var(--accent);
+}
+
+.news-word-title {
+  font-weight: 700;
+}
+
+.news-word-go {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* 每日猜词那一页 */
+.daily-word {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.daily-word-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
 /* 哪一家 (红字) */
 .news-src {
   color: var(--accent);
