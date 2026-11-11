@@ -228,7 +228,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.76;
+				MARKETING_VERSION = 1.77;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.github.aizhang453-hash.wengu";
 				PRODUCT_NAME = Wengu;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -251,7 +251,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.76;
+				MARKETING_VERSION = 1.77;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.github.aizhang453-hash.wengu";
 				PRODUCT_NAME = Wengu;
 				SWIFT_EMIT_LOC_STRINGS = NO;

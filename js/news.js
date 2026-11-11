@@ -17,6 +17,18 @@ export const GUARDIAN_MS = 24 * 3600 * 1000;
 export const LIVE_MS = 24 * 3600 * 1000; // 快讯只列 24 小时内的
 export const LANGS = { zh: '中文', en: 'English' };
 
+// 自动更新断了的提醒 (v1.77): 接力 15 分钟拿一次, 新闻一个小时都没变, 多半是断了。
+// 只提醒网站的主人 (同步设置里的 GitHub 账号就是放网站的那个): 只有主人能去 GitHub 点 Run workflow 接上
+export const BROKEN_MS = 60 * 60 * 1000;
+export const ACTIONS_URL = `https://github.com/${OWNER}/${REPO}/actions/workflows/news.yml`;
+// 新闻断了多少分钟 (没断返回 0)
+export function brokenMinutes(data, now = Date.now()) {
+  const t = Date.parse(data?.at);
+  return Number.isFinite(t) && now - t > BROKEN_MS ? Math.round((now - t) / 60000) : 0;
+}
+// 同步设置 (sync.js 的 loadConfig) 是不是网站主人的
+export const ownsSite = (config) => Boolean(config?.owner && OWNER && String(config.owner).toLowerCase() === OWNER.toLowerCase());
+
 // ---- 存在这台设备上 ----
 
 const DB_NAME = 'wengu-news';

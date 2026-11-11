@@ -10165,6 +10165,23 @@ button.pick-row:hover {
   margin-left: auto;
 }
 
+/* 自动更新断了 (只给网站主人看) */
+.news-broken {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.news-broken a {
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .news-stale {
   margin: 0 0 12px;
   padding: 8px 12px;

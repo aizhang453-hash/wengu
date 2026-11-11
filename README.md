@@ -87,7 +87,7 @@
 - 下面是「长文章」：美国之音、自由亚洲电台（中文），卫报、NASA（英文），在温故里读全文，可以朗读。
 - 来源是逐家核对过条款选的：美国之音、NASA 是美国政府的作品（美国之音转载美联社的照片不放）；自由亚洲电台允许非商业、教育用途转载，每篇写着它要求的署名；卫报用开放平台的 API，按它的规定只留 24 小时、原样显示、放「Powered by The Guardian」标志、仅供个人非商业阅读；卫报标了「法律敏感」的，文章上面写明「这篇涉及正在进行的诉讼，内容可能会被修改」。快讯只放标题和链接。
 - 每 15 分钟自动更新：GitHub Actions 跑 `tools/news.mjs`（`.github/workflows/news.yml`），放到仓库的 `news` 分支（`latest.json` 和一篇一个的全文 `a/`，每次整个覆盖）。温故从 GitHub 拿（拿不到再试 jsDelivr），存在这台设备上，断网也能看上次的（卫报的过了 24 小时就删）。在 GitHub 的 Actions › 新闻 › Run workflow 可以马上更新一次。
-- GitHub 的定时靠不住，所以每次拿完新闻自己排下一次（「接力」：先在仓库 Settings › Environments 的 `news-wait` 环境里等 14 分钟）。要停就在 Actions › 新闻 里 Disable workflow；接力断了，手动 Run workflow 一次就又接上。
+- GitHub 的定时靠不住，所以每次拿完新闻自己排下一次（「接力」：先在仓库 Settings › Environments 的 `news-wait` 环境里等 14 分钟）。要停就在 Actions › 新闻 里 Disable workflow；接力断了，手动 Run workflow 一次就又接上。新闻一个小时没更新时，邸报最上面会提醒网站的主人（同步设置用的是放网站的那个 GitHub 账号的设备才看得到），点提醒里的链接直接到那一页。
 - 卫报的 API 要密钥：在卫报开放平台免费申请，放进仓库 Settings › Secrets and variables › Actions，名字是 `GUARDIAN_API_KEY`。没有密钥就不拿卫报，别的照常。
 
 ### 导入
@@ -132,7 +132,7 @@
 
 ## 更新记录
 
-当前版本 **v1.76**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.77**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 

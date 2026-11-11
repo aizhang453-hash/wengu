@@ -7,7 +7,8 @@
 // 卫报的规定: 放卫报内容的页面上要有「Powered by The Guardian」标志 (链到卫报), 放在卫报的内容旁边 (长文章的标题旁边)
 
 import { h, fill, icon, toast, openDialog } from '../dom.js';
-import { loadIndex, cachedIndex, loadArticle, LANGS, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
+import { loadConfig } from '../sync.js';
+import { loadIndex, cachedIndex, loadArticle, LANGS, brokenMinutes, ownsSite, ACTIONS_URL, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
 import { savedPlace, savePlace, loadWeather, locate, searchPlaces, weatherLine } from '../weather.js';
 import { dayIndex, TRIES } from '../wordle.js';
@@ -86,7 +87,15 @@ function head(title, data, rec, refresh, lang, href, weather = null) {
       ),
     ),
     rec.stale ? h('p', { class: 'news-stale' }, '没连上网，这是上次的新闻。') : null,
+    brokenNote(data, rec),
   ];
+}
+
+// 自动更新断了 (一个小时没有新的): 只提醒网站的主人, 给去 GitHub 接上的链接
+function brokenNote(data, rec) {
+  const min = rec.stale ? 0 : brokenMinutes(data);
+  if (!min || !ownsSite(loadConfig())) return null;
+  return h('p', { class: 'news-broken' }, `新闻已经 ${min < 120 ? `${min} 分钟` : `${Math.floor(min / 60)} 小时`}没更新了，自动更新可能断了。`, ext(ACTIONS_URL, '去 GitHub 点「Run workflow」接上'));
 }
 
 // 快讯的一条: 时间、哪家、标题 (在新的网页里打开原网站)

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHtml, decode, blocksFrom, parseRss, itemFrom, cctvItems, isVideo, voaArticle, guardianItem, merge, collect, wirePhoto, idOf, options, SOURCES, RFA_CREDIT } from '../tools/news.mjs';
-import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, longItems, byDay, dayLabel, agoText, itemHref, langHref, inlineText, spokenParts } from '../js/news.js';
+import { validIndex, loadIndex, loadArticle, newsBases, NEWS_BASES, guardianExpired, visibleItems, itemsFor, liveItems, longItems, brokenMinutes, ownsSite, ACTIONS_URL, byDay, dayLabel, agoText, itemHref, langHref, inlineText, spokenParts } from '../js/news.js';
 
 options.gap = 0; // 测试不用等
 
@@ -350,4 +350,18 @@ test('新闻页: 从哪拿 — 先 GitHub 再 jsDelivr (自己电脑上先用本
   assert.equal(await loadArticle('g', { bases: ['b/'], now: NOW, fetchOne: async () => art }), art);
   assert.equal(await loadArticle('g', { bases: ['b/'], now: NOW, fetchOne: async () => ({ ...art, got: ago(30) }) }), null);
   assert.deepEqual(await loadArticle('v', { bases: ['b/'], now: NOW, fetchOne: async (u) => (u === 'b/a/v.json' ? { id: 'v', src: 'voa', t: 'x', body: [] } : null) }), { id: 'v', src: 'voa', t: 'x', body: [] });
+});
+
+test('邸报: 新闻一个小时没变就算自动更新断了; 只提醒网站主人 (同步设置里的 GitHub 账号)', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z');
+  assert.equal(brokenMinutes({ at: '2026-11-11T11:30:00Z' }, now), 0);
+  assert.equal(brokenMinutes({ at: '2026-11-11T11:00:00Z' }, now), 0); // 正好一个小时还不算
+  assert.equal(brokenMinutes({ at: '2026-11-11T10:45:00Z' }, now), 75);
+  assert.equal(brokenMinutes({}, now), 0);
+  assert.equal(brokenMinutes(null, now), 0);
+  assert.equal(ownsSite({ owner: 'aizhang453-hash', repo: 'wengu-data', token: 't' }), true);
+  assert.equal(ownsSite({ owner: 'AiZhang453-Hash', repo: 'x', token: 't' }), true);
+  assert.equal(ownsSite({ owner: 'someone-else', repo: 'x', token: 't' }), false);
+  assert.equal(ownsSite(null), false);
+  assert.equal(ACTIONS_URL, 'https://github.com/aizhang453-hash/wengu/actions/workflows/news.yml');
 });
