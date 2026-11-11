@@ -10,7 +10,7 @@ import { h, fill, icon, toast, openDialog } from '../dom.js';
 import { loadConfig } from '../sync.js';
 import { loadIndex, cachedIndex, loadArticle, LANGS, brokenMinutes, ownsSite, ACTIONS_URL, liveItems, longItems, localDay, clock, dayLabel, agoText, itemHref, langHref, itemOf, spokenParts } from '../news.js';
 import { canSpeak, speakLines, stopSpeaking } from '../speech.js';
-import { savedPlace, savePlace, loadWeather, locate, searchPlaces, weatherLine } from '../weather.js';
+import { savedPlace, savePlace, loadWeather, loadWorld, locate, searchPlaces, weatherLine, weatherText, windText, uvText, aqiText, moonPhase, lifeTips } from '../weather.js';
 import { dayIndex, TRIES } from '../wordle.js';
 
 const REFRESH_MS = 3 * 60 * 1000; // 新闻页开着时多久刷新一次
@@ -113,13 +113,70 @@ function longRow(data, x, big = false) {
 }
 
 // ---- 天气 (v1.76): 邸报页右上角一小块; 先自动定位, 不给位置就自己填城市 ----
-function weatherChip() {
+// v1.80: 邸报页上还有一块「天气栏」(weatherBox), 照报纸的天气版; 两个一起拿、一起更新
+const round = (x) => Math.round(Number(x));
+const WEEK = '日一二三四五六';
+const dayName = (iso, i) => {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  if (!y) return '';
+  return `${i === 0 ? '明天' : `周${WEEK[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}`} ${d}日`;
+};
+const md = (date) => `${date.getMonth() + 1}月${date.getDate()}日`;
+
+function weatherBoxBody(place, w, world, change) {
+  if (!place) return [h('div', { class: 'wx-head' }, h('h2', {}, '天气')), h('button', { class: 'btn small', type: 'button', onclick: change }, '填城市看天气')];
+  if (!w) return [h('div', { class: 'wx-head' }, h('h2', {}, '天气'), h('button', { class: 'link-btn', type: 'button', onclick: change }, `${place.name} · 换城市`)), h('p', { class: 'muted' }, '天气拿不到，等一下再看。')];
+  const t = w.today ?? {};
+  const moon = moonPhase();
+  const fact = (k, v) => (v ? h('div', {}, h('dt', {}, k), h('dd', {}, v)) : null);
+  const tips = lifeTips(t);
+  return [
+    h('div', { class: 'wx-head' }, h('h2', {}, '天气'), h('button', { class: 'link-btn', type: 'button', onclick: change }, `${place.name} · 换城市`)),
+    h(
+      'div',
+      { class: 'wx-main' },
+      h(
+        'div',
+        { class: 'wx-today' },
+        h('div', { class: 'wx-now' }, h('span', { class: 'wx-temp' }, `${round(w.now.t)}°`), h('span', { class: 'wx-now-text' }, h('strong', {}, weatherText(w.now.code) || weatherText(t.code)), h('span', { class: 'muted' }, [w.now.feels !== null && w.now.feels !== undefined ? `体感 ${round(w.now.feels)}°` : '', `今天 ${round(t.min)}° ～ ${round(t.max)}°`].filter(Boolean).join(' · ')))),
+        h(
+          'dl',
+          { class: 'wx-facts' },
+          fact('降水概率', t.rain !== null && t.rain !== undefined ? `${round(t.rain)}%` : ''),
+          fact('风', windText(w.now.wind, w.now.windDir)),
+          fact('湿度', w.now.humidity !== null && w.now.humidity !== undefined ? `${round(w.now.humidity)}%` : ''),
+          fact('紫外线', t.uv !== null && t.uv !== undefined ? `${uvText(t.uv)}（${round(t.uv)}）` : ''),
+          fact('空气', w.air ? `${aqiText(w.air.aqi)}（AQI ${w.air.aqi}${w.air.pm25 !== null ? `，PM2.5 ${round(w.air.pm25)}` : ''}）` : ''),
+          fact('日出 · 日落', t.sunrise && t.sunset ? `${t.sunrise} · ${t.sunset}` : ''),
+          fact('月相', `${moon.name} · ${md(moon.nextFull)}满月`),
+          fact('昨天', w.yesterday ? `${round(w.yesterday.min)}° ～ ${round(w.yesterday.max)}°` : ''),
+        ),
+        tips.length ? h('p', { class: 'wx-tips' }, tips.map(([k, v]) => h('span', {}, h('b', {}, k), v))) : null,
+      ),
+      w.days?.length
+        ? h(
+            'ol',
+            { class: 'wx-days', 'aria-label': '未来几天' },
+            w.days.map((d, i) => h('li', {}, h('span', { class: 'wx-day' }, dayName(d.date, i)), h('span', { class: 'wx-day-text' }, weatherText(d.code)), h('span', { class: 'wx-day-temp' }, `${round(d.min)}° ～ ${round(d.max)}°`), h('span', { class: 'wx-day-rain muted' }, d.rain !== null && d.rain !== undefined ? `${round(d.rain)}%` : ''))),
+          )
+        : null,
+    ),
+    world?.length ? h('div', { class: 'wx-world' }, h('h3', {}, '世界各地'), h('ul', {}, world.map((c) => h('li', {}, h('span', { class: 'wx-city' }, c.name), h('span', { class: 'muted' }, weatherText(c.code)), h('span', {}, `${round(c.min)}° ～ ${round(c.max)}°`))))) : null,
+  ];
+}
+
+function weatherParts() {
   // 先写「天气」: 等定位 (浏览器问要不要给位置的时候) 不是一个空框
   const el = h('button', { class: 'news-weather', type: 'button', title: '天气（点这里换城市）', onclick: () => placeDialog() }, icon('cloud', 16), ' 天气');
-  const show = (place, w) => fill(el, icon(w && w.now.code <= 1 ? 'sun' : 'cloud', 16), ' ', place && w ? weatherLine(place, w) : place ? `${place.name} 天气拿不到` : '填城市看天气');
+  const box = h('section', { class: 'wx', 'aria-label': '天气' });
+  const show = (place, w, world) => {
+    fill(el, icon(w && w.now.code <= 1 ? 'sun' : 'cloud', 16), ' ', place && w ? weatherLine(place, w) : place ? `${place.name} 天气拿不到` : '填城市看天气');
+    fill(box, weatherBoxBody(place, w, world, () => placeDialog()));
+  };
   const update = async (place) => {
-    if (!place) return show(null, null);
-    show(place, await loadWeather(place));
+    if (!place) return show(null, null, null);
+    const [w, world] = await Promise.all([loadWeather(place), loadWorld()]);
+    show(place, w, world);
   };
   // 自动定位的: 每次打开再定位一次 (换了地方会跟着变; 定位不了就用上次的地方)
   const start = async () => {
@@ -171,7 +228,7 @@ function weatherChip() {
     input.focus();
   }
   start();
-  return el;
+  return { chip: el, box };
 }
 
 // 每日猜词的入口: 今天猜没猜、猜中没有
@@ -192,7 +249,7 @@ function dailyWordCard() {
 // ---- 新闻 (一种语言) ----
 // 快讯方块: 24 小时内各家的标题全列出来, 新的在上面, 不分来源 (用户 v1.75 说的); 方块里面上下翻, 不把长文章挤到老远
 export function renderNews(ctx, lang = 'zh') {
-  const weather = weatherChip(); // 一直用同一个 (重画新闻时不重新定位)
+  const weather = weatherParts(); // 一直用同一个 (重画新闻时不重新定位、不重新拿天气)
   const page = newsPage(
     'news-home',
     ({ data, ...rec }, { refresh }) => {
@@ -202,9 +259,10 @@ export function renderNews(ctx, lang = 'zh') {
       const leadAt = Math.max(0, longs.findIndex((x) => x.img));
       const ordered = longs.length ? [longs[leadAt], ...longs.filter((_, i) => i !== leadAt)] : [];
       return [
-        head('邸报', data, rec, refresh, lang, langHref, weather),
+        head('邸报', data, rec, refresh, lang, langHref, weather.chip),
         h('section', { class: 'news-flash', 'aria-label': '快讯' }, h('h2', { class: 'news-flash-head' }, '快讯'), live.length ? h('ul', { class: 'news-live-list news-flash-list' }, live.map((x) => liveRow(data, x))) : h('p', { class: 'muted' }, '24 小时内没有快讯。')),
         dailyWordCard(),
+        weather.box,
         ordered.length
           ? h(
               'section',

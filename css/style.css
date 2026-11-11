@@ -10270,6 +10270,172 @@ button.pick-row:hover {
   margin: 14px 0 0;
 }
 
+/* 天气栏 (v1.80): 照报纸的天气版, 在每日猜词下面 */
+.wx {
+  margin: 0 0 30px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.wx-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.wx-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.wx-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px 28px;
+}
+
+.wx-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wx-temp {
+  font-family: var(--font-serif);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.wx-now-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wx-now-text strong {
+  font-size: 1.1rem;
+}
+
+.wx-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  margin: 14px 0 10px;
+}
+
+.wx-facts div {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+
+.wx-facts dt {
+  flex: none;
+  color: var(--muted);
+}
+
+.wx-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wx-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.wx-tips b {
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+.wx-days {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-days li {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) auto 3em;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.95rem;
+}
+
+.wx-day {
+  color: var(--muted);
+}
+
+.wx-day-temp {
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-day-rain {
+  text-align: right;
+}
+
+.wx-world {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.wx-world h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.wx-world ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-world li {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 0.92rem;
+}
+
+.wx-city {
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .wx {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .wx-main {
+    grid-template-columns: 1fr;
+  }
+
+  .wx-facts {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 每日猜词的入口 (快讯下面一条) */
 .news-word {
   display: flex;
