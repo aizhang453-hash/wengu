@@ -60,3 +60,12 @@ test('开局浏览器的资料: 都生成了; 开局局面大家走 e4、d4 最�
   assert.deepEqual(top.slice(0, 2).map((x) => x.uci).sort(), ['d2d4', 'e2e4']);
   for (const x of top) assert.ok(x.w + x.b <= 100 && x.n > 0);
 });
+
+test('粘贴 chess.com 分享的棋谱: 一步后面两段注释 (亮点 + 评论) 也读得了, 存的时候去掉注释', async () => {
+  const { readPgn, gameRecord } = await import('../js/chess.js');
+  const pgn = '[White "A"]\n[Black "B"]\n[Result "1-0"]\n\n1. e4 {[%c_effect e4;square;e4;type;BookMove]} {Classical chess.} 1... e5 {[%clk 0:05:00]} {Nice.} 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0';
+  assert.equal(readPgn(pgn)?.moves.length, 7);
+  const rec = gameRecord({ pgn, src: 'pgn', me: 'w' });
+  assert.ok(rec && !rec.pgn.includes('{'));
+  assert.equal(readPgn(rec.pgn).moves.length, 7);
+});

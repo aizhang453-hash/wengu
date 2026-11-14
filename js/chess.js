@@ -543,10 +543,12 @@ export function matePattern(m, i = 99) {
 // ---- 一盘棋 ----
 
 // 读棋谱 (PGN), 读不了返回 null。chess.com 的棋谱里有 {[%clk ...]} 这种时间注释, 不影响
+// v1.86.1: 注释 {…} 先去掉 —— chess.com 分享时勾上「亮点」「评论」, 一步后面跟两段注释, 规则库读不了 (用户 2026-11-14 发现粘贴打不开); 温故也用不上注释
+export const stripComments = (text) => String(text ?? '').replace(/\{[^}]*\}/g, ' ').replace(/[ \t]+/g, ' ');
 export function readPgn(text) {
   const game = new Chess();
   try {
-    game.loadPgn(String(text ?? '').trim());
+    game.loadPgn(stripComments(text).trim());
   } catch {
     return null;
   }
@@ -575,6 +577,7 @@ export function resultText(result, me = '') {
 export function gameRecord({ pgn, src, me = '', url = '', rating = 0, who = '', mode = '', now = Date.now(), id = null }) {
   const g = readPgn(pgn);
   if (!g) return null;
+  pgn = stripComments(pgn); // 存的时候也不带注释 (短很多, 同步也快)
   const hd = g.headers;
   const date = (hd.UTCDate ?? hd.Date ?? '').replace(/\./g, '-');
   return cleanGame({
