@@ -189,6 +189,7 @@ export const COACHES = [
     say: {
       brilliant: ['太漂亮了！', '这一步，真是优雅。'],
       great: ['好一步！', '你找到了它。'],
+      book: ['照着谱走，很好。'],
       best: ['很好，就是这步。'],
       excellent: ['很不错。'],
       good: ['可以的。'],
@@ -216,6 +217,7 @@ export const COACHES = [
     say: {
       brilliant: ['精彩的弃子。'],
       great: ['关键的一步。'],
+      book: ['理论走法。'],
       best: ['最佳。'],
       excellent: ['很准确。'],
       good: ['可以接受。'],
@@ -243,6 +245,7 @@ export const COACHES = [
     say: {
       brilliant: ['妙极了，这步值一杯最好的咖啡！'],
       great: ['漂亮！'],
+      book: ['老菜单。'],
       best: ['完美，像刚出炉的面包。'],
       excellent: ['不错不错。'],
       good: ['还行，咖啡还温着。'],
@@ -270,6 +273,7 @@ export const COACHES = [
     say: {
       brilliant: ['好。很好。'],
       great: ['对。'],
+      book: ['谱上的。'],
       best: ['对。'],
       excellent: ['可以。'],
       good: ['行。'],
@@ -297,6 +301,7 @@ export const COACHES = [
     say: {
       brilliant: ['这就对了！该弃就弃，别心疼！', '哇——这步太帅了！'],
       great: ['可以啊！我直播的时候都不一定想得到。'],
+      book: ['标准开局。'],
       best: ['标准答案！'],
       excellent: ['不错不错。'],
       good: ['还行吧。'],
@@ -326,6 +331,7 @@ export const COACHES = [
     say: {
       brilliant: ['哇哇哇！', '好厉害！'],
       great: ['好棋！', '嘿嘿，好棋。'],
+      book: ['书上有的～'],
       best: ['对的对的。'],
       excellent: ['不错哦。'],
       good: ['嗯嗯。'],

@@ -5,7 +5,7 @@ import { Chess } from './vendor/chess.js';
 import { PIECE_ZH, VALUE, zhSan, mateIn, winFor, BAD } from './chess.js';
 
 // 这种好坏, 讲解的人是什么表情 (views/chessface.js 画)
-export const MOOD = { brilliant: 'wow', great: 'happy', best: 'happy', excellent: 'smile', good: 'smile', forced: 'normal', inaccuracy: 'hmm', mistake: 'worried', miss: 'worried', blunder: 'shock' };
+export const MOOD = { brilliant: 'wow', great: 'happy', book: 'smile', best: 'happy', excellent: 'smile', good: 'smile', forced: 'normal', inaccuracy: 'hmm', mistake: 'worried', miss: 'worried', blunder: 'shock' };
 
 // ---- 看棋盘 ----
 

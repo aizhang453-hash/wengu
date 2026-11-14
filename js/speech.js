@@ -239,11 +239,12 @@ function problem(code) {
   toast(code ? (PROBLEMS[code] ?? `朗读出错了 (${code})`) : '朗读没反应, 再点一下 🔊 试试');
 }
 
-function say(text, code, rate, retried) {
+function say(text, code, rate, retried, pitch = 1) {
   const synth = window.speechSynthesis;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = code;
   u.rate = rate;
+  if (pitch !== 1) u.pitch = pitch;
   try {
     const voice = pickVoice(synth, code);
     if (voice) u.voice = voice;
@@ -282,7 +283,7 @@ function say(text, code, rate, retried) {
         synth.cancel();
         releaseAudio(0);
         problem();
-      } else say(text, code, rate, true);
+      } else say(text, code, rate, true, pitch);
     }, 3000);
   };
   if (busy) {
@@ -291,8 +292,8 @@ function say(text, code, rate, retried) {
   } else go();
 }
 
-// rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」); hint: 「自动」时卡片集大多是什么语言 (setLang)
-export function speak(raw, lang = 'auto', { rate = 1, hint = null } = {}) {
+// rate: 语速, 1 是正常, 小于 1 慢一点 (听写时「慢一点」); pitch: 音高 (国际象棋的教练各有各的口气); hint: 「自动」时卡片集大多是什么语言 (setLang)
+export function speak(raw, lang = 'auto', { rate = 1, pitch = 1, hint = null } = {}) {
   const text = stripMarks(raw);
   if (!canSpeak() || !text.trim()) return;
   endLines();
@@ -300,7 +301,7 @@ export function speak(raw, lang = 'auto', { rate = 1, hint = null } = {}) {
   holdAudio(); // iPhone: 念的时候一直放着无声音频, 静音开关开着也能听到
   playing?.pause();
   playing = null;
-  say(text, lang === 'auto' ? autoLang(text, hint) : lang, rate);
+  say(text, lang === 'auto' ? autoLang(text, hint) : lang, rate, false, pitch);
 }
 
 // 念卡片的一面 (side 是 'term' 或 'def'): 有录音放录音, 没有就朗读

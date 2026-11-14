@@ -22,7 +22,15 @@ import {
   judgeGame,
   countKinds,
   turningPoint,
+  keyMoments,
+  skillsOfMove,
+  mateIn,
   gameAccuracy,
+  gameRating,
+  areaGrades,
+  materialOf,
+  PIECE_ZH,
+  AREAS,
   resultText,
   gameRecord,
   gameList,
@@ -33,12 +41,17 @@ import {
   BAD,
   VALUE,
 } from '../chess.js';
-import { MOOD, explainMove, summary, threatText } from '../chesscoach.js';
+import { MOOD, explainMove, threatText } from '../chesscoach.js';
+import { moveFacts, punishFacts, coachLine, bestLine, summaryLine, triviaLine, voiceOf, speakable, keepMoves, fillLine, TRIVIA } from '../chessvoice.js';
+import { loadBook, bookMoves } from '../chessbook.js';
+import { speak, stopSpeaking, canSpeak } from '../speech.js';
 import { OPPONENTS, DEFAULT_COACH, personOf, coachOf, coachesFor, pickLine, ratingText } from '../chesspeople.js';
 import { botParams, pickMove, bookMove, STYLES } from '../chessbot.js';
 import { getEngine, engineName } from '../chessengine.js';
 import { recentGames, ccRating, NAME as CC_NAME } from '../chesscom.js';
-import { createBoard, chessSound } from './chessboard.js';
+import { createBoard, chessSound, PIECE_IMG } from './chessboard.js';
+import { kindIcon, skillIcon, endIcon } from './chessicons.js';
+import { SKILLS, SKILL_CATS, skillOf, openSkills, skillPoints, skillClaimed, claimSkill, emptySkills } from '../chessskills.js';
 import { liveFace, faceSvg } from './chessface.js';
 
 const LAST_KEY = 'wengu:chess-last'; // 上次挑的对手、教练、难度、执哪方 (这台设备上)
@@ -78,11 +91,13 @@ export function renderChess(ctx, sub = []) {
 }
 
 // ---- 人物 + 说话的气泡 ----
-function coachPanel(person, { size = 76, cls = '' } = {}) {
+// tools: 放在气泡右上角的小按钮 (复盘的「念出来」开关)
+function coachPanel(person, { size = 76, cls = '', tools = null } = {}) {
   const face = liveFace(person, { size });
   const name = h('span', { class: 'chess-say-name' }, person.name);
+  const head = h('div', { class: 'chess-say-head', hidden: true });
   const text = h('p', { class: 'chess-say-text', 'aria-live': 'polite' });
-  const bubble = h('div', { class: 'chess-bubble' }, name, text);
+  const bubble = h('div', { class: 'chess-bubble' }, tools ? h('div', { class: 'chess-bubble-tools' }, tools) : null, name, head, text);
   const el = h('div', { class: `chess-coach ${cls}` }, face.el, bubble);
   let timer = 0;
   let full = '';
@@ -99,6 +114,12 @@ function coachPanel(person, { size = 76, cls = '' } = {}) {
       person = p;
       face.setPerson(p);
       name.textContent = p.name;
+    },
+    // 气泡最上面一行 (复盘: 好坏的图标、这步、打分); null: 换回人物的名字
+    setHead(node) {
+      head.hidden = !node;
+      name.hidden = Boolean(node);
+      head.replaceChildren(...(node ? [node] : []));
     },
     say(str, mood = null) {
       if (mood) face.setMood(mood);
@@ -434,14 +455,19 @@ function pasteDialog(store, go) {
 }
 
 // ---- 走子列表 (1. e4 e5 2. 马f3 …): 点了跳到那一步 ----
-function moveList(moves, { judged = null, onPick = null } = {}) {
+// 走子列表里标图标的: 好棋、妙着、走坏了的, 还有最后一步开局谱着 (从那以后离开了开局谱)
+const LIST_MARKED = new Set(['brilliant', 'great', 'inaccuracy', 'mistake', 'miss', 'blunder']);
+// skills: 能领技巧分的步 (走法的下标), 走法后面加一个技巧的小图标
+function moveList(moves, { judged = null, onPick = null, skills = null } = {}) {
   const box = h('ol', { class: 'chess-moves' });
   const cells = [];
+  const lastBook = judged ? judged.map((j) => j.kind).lastIndexOf('book') : -1;
   for (let i = 0; i < moves.length; i += 2) {
     const cell = (j) => {
       if (j >= moves.length) return h('span', { class: 'chess-mv chess-mv-none' });
       const k = judged?.[j] ? kindOf(judged[j].kind) : null;
-      const b = h('button', { type: 'button', class: `chess-mv${k ? ` ck-${k.key}` : ''}`, onclick: () => onPick?.(j + 1) }, zhSan(moves[j].san), k?.mark ? h('span', { class: 'chess-mv-mark' }, k.mark) : null);
+      const marked = k && (LIST_MARKED.has(k.key) || j === lastBook);
+      const b = h('button', { type: 'button', class: `chess-mv${marked ? ` ck-${k.key}` : ''}`, onclick: () => onPick?.(j + 1) }, marked ? kindIcon(k.key, 16) : null, zhSan(moves[j].san), skills?.has(j) ? skillIcon(14) : null);
       cells[j] = b;
       return b;
     };
@@ -920,7 +946,31 @@ function renderGame({ store, go }, cur) {
   };
 }
 
-// ---- 复盘 ----
+// ---- 复盘 ---- (新的写在下面)
+// v1.83 照 chess.com 的「对局回顾」加了: 好坏的图标、开局谱着、总结 (准确率、各种好坏几步、棋局等级、开局 / 战术 / 战略 / 残局)、
+// 教练按自己的性格一步一步讲 (chessvoice.js) 还会念出来、走得不是最好的步按「正着」看该怎么走、分析时教练讲小知识。
+const VOICE_KEY = 'wengu:chess-voice'; // 复盘时教练念不念出来 (这台设备上; 默认念)
+const voiceOn = () => {
+  try {
+    return localStorage.getItem(VOICE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+};
+const setVoiceOn = (on) => {
+  try {
+    localStorage.setItem(VOICE_KEY, on ? 'on' : 'off');
+  } catch {}
+};
+// 这一页上点过、按过键没有: 浏览器要人动过才肯出声, 没动过就先不念 (不然一打开就弹「浏览器不让朗读」)
+const userActed = () => globalThis.navigator?.userActivation?.hasBeenActive ?? true;
+
+// 总结表里的棋手头像: 跟电脑下的对手用他的头像, 别的画一个兵
+function playerAvatar(color, person, size = 44) {
+  if (person) return faceSvg(person, { mood: 'smile', size });
+  return h('span', { class: `chess-avatar ${color}`, style: `width:${size}px;height:${size}px` }, h('img', { src: PIECE_IMG(`${color}p`), alt: '' }));
+}
+
 function renderReview({ store, go }, id) {
   const g = store.data.chess?.games?.[id];
   const parsed = g && !g.gone ? readPgn(g.pgn) : null;
@@ -935,17 +985,62 @@ function renderReview({ store, go }, id) {
   const me = g.me;
   const startTurn = moves[0].color;
   const coach = coachOf(store.data.chess?.coach?.id ?? DEFAULT_COACH);
-  const panel = coachPanel(coach, { size: 84, cls: 'review' });
+  const tts = voiceOf(coach.id).tts ?? {};
   let alive = true;
   let engine = null;
   let review = g.review && g.review.ev.length === fens.length ? g.review : null;
   let judged = null;
+  let book = null; // 每一步在不在开局谱上
   let ply = 0;
-  let trying = null; // 试走: { game, from: 从第几步开始 }
+  let trying = null; // 试走、看正着: { game }
+  let explaining = null; // 「解析」: { at 第几步, line 引擎想的几步 (chess.js 的走法), ev 打分, step 看到第几步 }
+  let keys = []; // 「下一页」停的步 (keyMoments, 走法的下标)
+  const pvCache = new Map(); // 解析过的步: 引擎算的结果 (这次打开复盘时留着, 再按不用重算)
+  let skillMoves = []; // 每一步练到的技巧 (v1.85; 只有自己的步, 走坏了的不算)
+  const skillState = () => store.data.chess?.skills ?? emptySkills();
+  const claimKey = (i) => `${id}:${i}`;
+  // 第 i 步现在算数的技巧: 这盘领过的, 或者开着、还没学会的
+  const liveSkills = (i) => {
+    const st = skillState();
+    const open = openSkills(st);
+    return (skillMoves[i] ?? []).filter((sid) => skillClaimed(st, sid, claimKey(i)) || (open.has(sid) && !st.mastered[sid]));
+  };
+  let said = ''; // 教练刚说的话 (开念出来时补念)
+  let triviaTimer = 0;
 
   const nameOf = (c) => (c === me ? '你' : me ? '对手' : c === 'w' ? '白方' : '黑方');
   const whiteName = g.src === 'cpu' ? (g.me === 'w' ? '你' : personOf(g.who).name) : g.white || '白方';
   const blackName = g.src === 'cpu' ? (g.me === 'b' ? '你' : personOf(g.who).name) : g.black || '黑方';
+  const personFor = (c) => (g.src === 'cpu' && g.me !== c ? personOf(g.who) : null);
+  // 两边平常大约多少分 (算棋局等级时往这个分靠): 跟电脑下的, 对手是他的分 (最强的算 2900), 你是你现在的分; 别的看棋谱里写的分
+  const priorOf = (c) => {
+    if (g.src === 'cpu') return c === g.me ? store.data.chess?.elo?.rating || START_RATING : g.rating || 2900;
+    return Number(parsed.headers[c === 'w' ? 'WhiteElo' : 'BlackElo']) || 0;
+  };
+
+  // 念出来的开关 (气泡右上角)
+  const voiceBtn = h('button', { type: 'button', class: 'chess-voice-btn', onclick: () => toggleVoice() });
+  const drawVoiceBtn = () => {
+    const on = voiceOn();
+    voiceBtn.replaceChildren(icon(on ? 'volume' : 'mute', 18));
+    voiceBtn.setAttribute('aria-label', on ? '教练正在念，点了不念' : '教练不念，点了念出来');
+    voiceBtn.title = on ? '不念' : '念出来';
+  };
+  drawVoiceBtn();
+  const panel = coachPanel(coach, { size: 84, cls: 'review', tools: canSpeak() ? voiceBtn : null });
+
+  function talk(text, mood = null) {
+    said = text;
+    panel.say(keepMoves(text), mood);
+    if (voiceOn() && canSpeak() && userActed()) speak(speakable(text), 'zh-CN', tts);
+  }
+  function toggleVoice() {
+    setVoiceOn(!voiceOn());
+    drawVoiceBtn();
+    if (voiceOn()) {
+      if (said) speak(speakable(said), 'zh-CN', tts);
+    } else stopSpeaking();
+  }
 
   const evalFill = h('div', { class: 'chess-eval-fill' });
   const evalNum = h('span', { class: 'chess-eval-num' });
@@ -953,7 +1048,7 @@ function renderReview({ store, go }, id) {
   const board = createBoard({
     orientation: me || 'w',
     dests: (sq) => {
-      if (!review) return [];
+      if (!review || explaining) return [];
       const gm = trying?.game ?? new Chess(fens[ply]);
       if (gm.isGameOver()) return [];
       return gm.moves({ square: sq, verbose: true }).map((m) => m.to);
@@ -961,9 +1056,43 @@ function renderReview({ store, go }, id) {
     onMove: (uci) => tryMove(uci),
   });
   const boardWrap = h('div', { class: 'chess-board-wrap' }, evalBar, board.el);
+  // 棋盘上下的名字栏: 头像、名字、吃掉的对方的子、子力多几分 (照 chess.com; 翻转棋盘时上下换)
+  const topBar = h('div', { class: 'chess-bar' });
+  const bottomBar = h('div', { class: 'chess-bar' });
+  let shownFen = fens[0];
+  function drawBars(fen = shownFen) {
+    shownFen = fen;
+    const mat = materialOf(fen);
+    const bar = (c) => {
+      const groups = [];
+      for (const t of mat.took[c]) {
+        if (groups.at(-1)?.t === t) groups.at(-1).n++;
+        else groups.push({ t, n: 1 });
+      }
+      const other = c === 'w' ? 'b' : 'w';
+      return [
+        playerAvatar(c, personFor(c), 30),
+        h('span', { class: 'chess-bar-name' }, c === 'w' ? whiteName : blackName),
+        h(
+          'span',
+          { class: 'chess-caps', 'aria-label': mat.took[c].length ? `吃掉了${mat.took[c].map((t) => PIECE_ZH[t]).join('、')}` : '' },
+          groups.map((x) => h('span', { class: 'chess-cap-group' }, Array.from({ length: x.n }, () => h('img', { src: PIECE_IMG(`${other}${x.t}`), alt: '' })))),
+        ),
+        mat.lead[c] > 0 ? h('span', { class: 'chess-lead' }, `+${mat.lead[c]}`) : null,
+      ];
+    };
+    const down = board.orientation();
+    fill(bottomBar, bar(down));
+    fill(topBar, bar(down === 'w' ? 'b' : 'w'));
+  }
+  const setBoard = (fen, opts) => {
+    board.set(fen, opts);
+    drawBars(fen);
+  };
   const info = h('div', { class: 'chess-info' });
   const graphBox = h('div', { class: 'chess-graph-box' });
   const listBox = h('div', { class: 'chess-moves-box' });
+  const side = h('div', { class: 'chess-side' }, panel.el, info, listBox, graphBox);
   let list = null;
 
   const setEval = (ev) => {
@@ -973,49 +1102,302 @@ function renderReview({ store, go }, id) {
     evalBar.classList.toggle('black-ahead', w < 50);
   };
 
+  // 气泡最上面一行: 图标 + 这步 + 好坏 (开局谱着写开局名) + 打分
+  const headRow = (kind, mv, ev, extra = '') => {
+    const k = kindOf(kind);
+    return h(
+      'div',
+      { class: `chess-head-row ck-${k.key}` },
+      kindIcon(k.key, 22),
+      h('strong', {}, mv),
+      h('span', { class: 'chess-head-kind' }, extra || k.name),
+      ev === null ? null : h('span', { class: `chess-head-ev${ev < 0 ? ' neg' : ''}` }, evalText(ev)),
+    );
+  };
+
+  // 这一步的说明 (教练讲的、正着按钮要用)
+  function factsAt(p) {
+    const m = moves[p - 1];
+    const mover = m.color;
+    return moveFacts({
+      m,
+      kind: judged[p - 1].kind,
+      ply: p - 1,
+      before: review.ev[p - 1],
+      after: review.ev[p],
+      best: review.bm[p - 1],
+      reply: review.bm[p] ?? '',
+      prev: moves[p - 2] ?? null,
+      book: book?.[p - 1] ?? null,
+      them: nameOf(mover === 'w' ? 'b' : 'w'),
+    });
+  }
+
   // 走到第 p 步 (0: 开局, 显示总结)
   function show(p, { animate = true } = {}) {
     trying = null;
+    explaining = null;
     ply = Math.max(0, Math.min(moves.length, p));
     const m = moves[ply - 1];
     const gm = new Chess(fens[ply]);
-    board.set(fens[ply], { animate, last: m ? [m.from, m.to] : null, check: checkSquare(gm) });
+    setBoard(fens[ply], { animate, last: m ? [m.from, m.to] : null, check: checkSquare(gm) });
     list?.mark(ply);
     graph?.mark(ply);
+    side.classList.toggle('is-summary', ply === 0 && Boolean(review));
     if (!review) return;
     setEval(review.ev[ply]);
-    const arrows = [];
     if (ply === 0) {
       board.badge(null);
       board.arrows([]);
       drawSummary();
       return;
     }
+    if (graph) graphBox.append(graph.svg);
     const j = judged[ply - 1];
-    board.badge(m.to, j.kind);
+    board.badge(m.to, j.kind, ply === moves.length ? endMarks() : []);
+    const f = factsAt(ply);
+    const played = m.from + m.to + (m.promotion ?? '');
     const best = review.bm[ply - 1];
-    if (best && best !== m.from + m.to + (m.promotion ?? '') && j.kind !== 'excellent' && j.kind !== 'great' && j.kind !== 'brilliant') arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' });
+    const arrows = [];
+    if (BAD.has(j.kind) && best && best !== played) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' });
     board.arrows(arrows);
     const mover = m.color;
     const mine = !me || mover === me;
-    const lines = explainMove({ m, kind: j.kind, ply: ply - 1, before: review.ev[ply - 1], after: review.ev[ply], best, reply: review.bm[ply] ?? '', who: nameOf(mover), whose: nameOf(mover === 'w' ? 'b' : 'w') });
+    const punish = !mine && BAD.has(j.kind) ? punishFacts(m.after, review.bm[ply] ?? '', review.ev[ply], me, nameOf(mover)) : null;
     let mood = MOOD[j.kind];
-    let lead = pickLine(coach.say[j.kind], ((ply * 7) % 10) / 10);
-    if (!mine) {
-      lead = BAD.has(j.kind) ? '对手走错了！' : j.kind === 'brilliant' || j.kind === 'great' ? '对手这步厉害。' : '';
-      mood = BAD.has(j.kind) ? 'happy' : j.kind === 'brilliant' || j.kind === 'great' ? 'hmm' : 'normal';
+    if (!mine) mood = BAD.has(j.kind) ? 'happy' : j.kind === 'brilliant' || j.kind === 'great' ? 'hmm' : 'normal';
+    panel.setHead(headRow(j.kind, zhSan(m.san), review.ev[ply], j.kind === 'book' && j.open ? `开局谱 · ${j.open}` : ''));
+    talk(coachLine(coach, f, { mine, who: nameOf(mover), whose: nameOf(mover === 'w' ? 'b' : 'w'), punish, seed: ply }), mood);
+    const canBest = f.best && !['best', 'book', 'forced', 'brilliant', 'great'].includes(j.kind);
+    const atEnd = ply >= moves.length;
+    // 技巧: 走到这步就领分 (没开的、学会了的、这盘领过的不加)
+    const got = claimAt(ply - 1);
+    for (const x of got) board.pop(m.to, h('span', { class: 'cb-pop' }, skillIcon(16), '+1'));
+    const master = got.find((x) => x.mastered);
+    if (master) {
+      const v = voiceOf(coach.id);
+      const sk = skillOf(master.id);
+      const next = master.unlocked ? skillOf(master.unlocked) : null;
+      talk(`${fillLine(pickLine(v.mastered, (ply % 10) / 10), { skill: sk.name })}${next ? fillLine(pickLine(v.unlocked, 0), { skill: next.name }) : ''}`, 'wow');
+      showMastery(sk, next);
+      refreshSkills();
     }
-    panel.say(`${lead}${lead ? ' ' : ''}${lines.join('')}`, mood);
-    const k = kindOf(j.kind);
+    const skillRows = [...new Set([...got.map((x) => x.id), ...liveSkills(ply - 1)])].map((sid) => skillRow(sid));
     fill(
       info,
       h(
         'div',
-        { class: 'chess-info-row' },
-        h('span', { class: `chess-kind ck-${k.key}` }, k.mark ? h('b', {}, k.mark) : null, k.name),
-        h('span', { class: 'muted small' }, `第 ${Math.ceil(ply / 2)} 回合 · ${nameOf(mover)}走 ${zhSan(m.san)}`),
+        { class: 'chess-nav chess-move-tools' },
+        canBest ? h('button', { class: 'btn', type: 'button', onclick: () => showBest(f) }, kindIcon('best', 18), '正着') : null,
+        h('button', { class: 'btn', type: 'button', onclick: () => explain() }, icon('bulb', 18), '解析'),
+        atEnd ? null : h('button', { class: 'btn primary chess-next', type: 'button', onclick: () => nextKey() }, '下一页', icon('right', 18)),
+      ),
+      // 最后一步: 回到总结、再下一盘 (照 chess.com 终局的样子)
+      atEnd
+        ? h(
+            'div',
+            { class: 'chess-nav chess-end-tools' },
+            h('button', { class: 'btn', type: 'button', onclick: () => show(0) }, icon('left', 18), '回到总结'),
+            h('button', { class: 'btn primary', type: 'button', onclick: () => go(g.mode === 'coach' ? '#/chess/coach' : '#/chess/play') }, '新棋局'),
+          )
+        : null,
+      ...skillRows,
+      h('div', { class: 'muted small chess-move-at' }, `第 ${Math.ceil(ply / 2)} 回合 · ${nameOf(mover)}走`),
+    );
+  }
+
+  // 终局两个王上贴的标记: 赢的皇冠, 输的「#」(被将死) 或小白旗 (认输、超时), 和棋两边「½」; 没下完的不贴
+  function endMarks() {
+    if (!['1-0', '0-1', '1/2-1/2'].includes(g.result)) return [];
+    const gm = new Chess(fens[moves.length]);
+    const sq = (c) => gm.findPiece({ type: 'k', color: c })[0];
+    if (g.result === '1/2-1/2') return ['w', 'b'].map((c) => ({ sq: sq(c), node: endIcon('draw') }));
+    const win = g.result === '1-0' ? 'w' : 'b';
+    const lose = win === 'w' ? 'b' : 'w';
+    return [
+      { sq: sq(win), node: endIcon('win') },
+      { sq: sq(lose), node: endIcon(gm.isCheckmate() ? 'mated' : 'lost') },
+    ];
+  }
+
+  // ---- 技巧 (v1.85) ----
+  function claimAt(i) {
+    let st = skillState();
+    const out = [];
+    for (const sid of skillMoves[i] ?? []) {
+      const r = claimSkill(st, sid, claimKey(i));
+      if (!r.got) continue;
+      st = r.state;
+      out.push({ id: sid, mastered: r.mastered, unlocked: r.unlocked });
+    }
+    if (out.length) store.updateChess((c) => ({ ...c, skills: st }));
+    return out;
+  }
+  // 一个技巧的进度: 图标、名字、进度条、几分 (点了打开技巧页)
+  function skillRow(sid) {
+    const sk = skillOf(sid);
+    const st = skillState();
+    const pts = skillPoints(st, sid);
+    const done = Boolean(st.mastered[sid]);
+    return h(
+      'button',
+      { type: 'button', class: `chess-skill-row${done ? ' done' : ''}`, onclick: () => skillsDialog(store, sid) },
+      skillIcon(26),
+      h('strong', {}, sk.name),
+      h('span', { class: 'chess-skill-bar' }, h('span', { style: `width:${Math.min(100, (pts / sk.need) * 100)}%` })),
+      h('span', { class: 'chess-skill-n' }, done ? '学会了' : `${pts} / ${sk.need}`),
+    );
+  }
+  // 学会了: 棋盘上盖一层「学会了一个技巧！」, 点「继续」收起来
+  function showMastery(sk, next) {
+    boardWrap.querySelector('.chess-master')?.remove();
+    const layer = h(
+      'div',
+      { class: 'chess-master', role: 'dialog', 'aria-label': '学会了一个技巧' },
+      h(
+        'div',
+        { class: 'chess-master-card' },
+        skillIcon(72),
+        h('strong', {}, '学会了一个技巧！'),
+        h('span', { class: 'chess-master-name' }, sk.name),
+        next ? h('span', { class: 'muted small' }, `下一个：${next.name}`) : null,
+        h('button', { class: 'btn primary', type: 'button', onclick: () => layer.remove() }, '继续'),
       ),
     );
+    boardWrap.append(layer);
+  }
+  // 走子列表的技巧小图标、「下一页」停的步 (学会一个技巧以后要重新算: 下一个技巧开了)
+  function refreshSkills() {
+    const marks = new Set(skillMoves.map((_, i) => i).filter((i) => liveSkills(i).length));
+    keys = [...new Set([...keyMoments(moves, judged, me), ...marks])].sort((a, b) => a - b);
+    list = moveList(moves, { judged, onPick: (p) => show(p), skills: marks });
+    fill(listBox, list.el);
+    list.mark(ply);
+  }
+
+  // 「下一页」: 跳到下一个关键的步 (keyMoments); 后面没有了到最后一步, 最后一步再按回到总结
+  function nextKey() {
+    const i = keys.find((k) => k >= ply);
+    if (i !== undefined) show(i + 1);
+    else if (ply < moves.length) show(moves.length);
+    else show(0);
+  }
+
+  // 「解析」: 回到这步之前, 把引擎想的那几步 (最多 6 步, 第一步就是该走的那步) 一步一步走出来, 教练每步讲一句
+  async function explain() {
+    const at = ply;
+    explaining = { at, line: null, ev: 0, step: 0 };
+    trying = null;
+    board.badge(null);
+    board.arrows([]);
+    const before = fens[at - 1];
+    setBoard(before, { animate: false, last: moves[at - 2] ? [moves[at - 2].from, moves[at - 2].to] : null, check: checkSquare(new Chess(before)) });
+    panel.setHead(h('div', { class: 'chess-head-row ck-great' }, icon('bulb', 20), h('span', { class: 'chess-head-kind' }, '解析')));
+    talk(pickLine(voiceOf(coach.id).thinking, Math.random()), 'hmm');
+    fill(info, h('div', { class: 'chess-nav chess-move-tools' }, h('button', { class: 'btn', type: 'button', onclick: () => show(at) }, '回到棋局')));
+    let r = pvCache.get(at);
+    if (!r) {
+      try {
+        engine ??= await getEngine();
+        r = await engine.analyse(before, { depth: 14, movetime: 3000 });
+      } catch {
+        r = null;
+      }
+      if (!alive || explaining?.at !== at) return;
+      if (!r?.pv?.length) {
+        talk('引擎出了点问题，再按一次试试。', 'worried');
+        return;
+      }
+      pvCache.set(at, r);
+    }
+    const gm = new Chess(before);
+    const line = [];
+    for (const uci of r.pv.slice(0, 6)) {
+      try {
+        line.push(gm.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }));
+      } catch {
+        break;
+      }
+      if (gm.isGameOver()) break;
+    }
+    if (!line.length) return show(at);
+    explaining = { at, line, ev: r.ev, step: 0 };
+    setTimeout(() => alive && explaining?.line === line && lineStep(0), 250);
+  }
+
+  // 解析里第 k 步以后的打分: 有杀棋的照步数倒数 (只算了开头那个局面, 后面的局面不再让引擎算)
+  const lineEv = (L, k) => {
+    const n = mateIn(L.ev);
+    if (!n) return L.ev;
+    const winner = n > 0 ? 'w' : 'b';
+    const left = Math.abs(n) - L.line.slice(0, k + 1).filter((m) => m.color === winner).length;
+    return Math.sign(n) * (MATE - Math.max(0, left));
+  };
+
+  function lineStep(k) {
+    const L = explaining;
+    if (!L?.line) return;
+    k = Math.max(0, Math.min(L.line.length - 1, k));
+    const back = k < L.step;
+    L.step = k;
+    const m = L.line[k];
+    const after = new Chess(m.after);
+    if (back) setBoard(m.before, { animate: false });
+    setBoard(m.after, { animate: true, last: [m.from, m.to], check: checkSquare(after) });
+    board.badge(null);
+    board.arrows([]);
+    chessSound(after.inCheck() ? 'check' : m.captured ? 'capture' : 'move');
+    const evAfter = lineEv(L, k);
+    setEval(evAfter);
+    const them = nameOf(m.color === 'w' ? 'b' : 'w');
+    const f = moveFacts({ m, kind: 'best', ply: L.at - 1 + k, before: k ? lineEv(L, k - 1) : L.ev, after: evAfter, prev: k ? L.line[k - 1] : moves[L.at - 2] ?? null, them });
+    const v = voiceOf(coach.id);
+    const last = k === L.line.length - 1;
+    const text = `${k === 0 ? pickLine(v.lineStart, (L.at % 10) / 10) : ''}${coachLine(coach, f, { mine: true, who: nameOf(m.color), whose: them, seed: L.at + k, plain: true })}${last ? pickLine(v.lineEnd, (L.at % 10) / 10) : ''}`;
+    panel.setHead(h('div', { class: 'chess-head-row ck-great' }, icon('bulb', 20), h('span', { class: 'chess-head-kind' }, '解析'), h('strong', {}, zhSan(m.san)), h('span', { class: `chess-head-ev${evAfter < 0 ? ' neg' : ''}` }, evalText(evAfter))));
+    talk(text, k === 0 ? 'smile' : 'normal');
+    // 引擎想的那几步: 1. d4 d5 2. c4 …, 点了跳到那一步
+    const steps = L.line.map((x, i) => {
+      const n = Math.floor((L.at - 1 + i + (startTurn === 'b' ? 1 : 0)) / 2) + 1;
+      const num = x.color === 'w' ? `${n}.` : i === 0 ? `${n}…` : '';
+      return h('button', { type: 'button', class: `chess-line-mv${i === k ? ' on' : ''}`, onclick: () => lineStep(i) }, num ? h('span', { class: 'muted' }, num) : null, zhSan(x.san));
+    });
+    fill(
+      info,
+      h(
+        'div',
+        { class: 'chess-nav chess-move-tools' },
+        h('button', { class: 'btn', type: 'button', 'aria-label': '解析：上一步', disabled: k === 0, onclick: () => lineStep(k - 1) }, icon('left', 18)),
+        h('button', { class: `btn${last ? '' : ' primary'}`, type: 'button', 'aria-label': '解析：下一步', disabled: last, onclick: () => lineStep(k + 1) }, icon('right', 18)),
+        h('button', { class: `btn${last ? ' primary' : ''}`, type: 'button', onclick: () => show(L.at) }, icon('check', 18), '明白了！'),
+      ),
+      h('div', { class: 'chess-line' }, steps),
+    );
+  }
+
+  // 「正着」: 回到这步之前, 把引擎最想走的那步走出来
+  function showBest(f) {
+    const before = fens[ply - 1];
+    const best = review.bm[ply - 1];
+    const gm = new Chess(before);
+    let m;
+    try {
+      m = gm.move({ from: best.slice(0, 2), to: best.slice(2, 4), promotion: best[4] });
+    } catch {
+      return;
+    }
+    trying = { game: gm };
+    setBoard(before, { animate: false, last: moves[ply - 2] ? [moves[ply - 2].from, moves[ply - 2].to] : null });
+    setTimeout(() => {
+      if (!alive || trying?.game !== gm) return;
+      chessSound(gm.inCheck() ? 'check' : m.captured ? 'capture' : 'move');
+      setBoard(gm.fen(), { last: [m.from, m.to], check: checkSquare(gm) });
+      board.badge(m.to, 'best');
+      board.arrows([{ from: m.from, to: m.to, tone: 'best' }]);
+    }, 260);
+    panel.setHead(headRow('best', zhSan(m.san), null, '正着'));
+    talk(bestLine(coach, f, ply), 'smile');
+    fill(info, h('div', { class: 'chess-nav chess-move-tools' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(ply) }, '回到棋局')));
   }
 
   const nextBad = () => {
@@ -1031,25 +1413,67 @@ function renderReview({ store, go }, id) {
     h('button', { class: 'btn primary', type: 'button', 'aria-label': '下一步', onclick: () => show(ply + 1) }, '▶'),
     h('button', { class: 'btn', type: 'button', 'aria-label': '最后', onclick: () => show(moves.length) }, '⏭'),
     h('button', { class: 'btn', type: 'button', onclick: () => nextBad() }, me ? '下一个失误' : '下一个错'),
-    h('button', { class: 'btn', type: 'button', 'aria-label': '翻转棋盘', title: '翻转棋盘', onclick: () => board.flip() }, '⇅'),
+    h(
+      'button',
+      {
+        class: 'btn',
+        type: 'button',
+        'aria-label': '翻转棋盘',
+        title: '翻转棋盘',
+        onclick: () => {
+          board.flip();
+          drawBars();
+        },
+      },
+      '⇅',
+    ),
   );
 
+  // 总结: 教练一两句话、局势曲线、双方的准确率、各种好坏几步、棋局等级、四个方面
   function drawSummary() {
     const acc = { w: gameAccuracy(review.ev, 'w', startTurn), b: gameAccuracy(review.ev, 'b', startTurn) };
     const counts = countKinds(moves, judged);
     const turning = turningPoint(judged);
-    panel.say(summary({ acc, counts, turning, me }).join(''), me && acc[me] !== null ? (acc[me] >= 85 ? 'happy' : acc[me] >= 65 ? 'smile' : 'hmm') : 'smile');
-    setEval(review.ev[0]);
-    const accBox = (c, name) => h('div', { class: `chess-acc ${c}` }, h('span', { class: 'chess-acc-name' }, name), h('strong', {}, acc[c] === null ? '—' : acc[c].toFixed(1)), h('span', { class: 'muted small' }, '准确率'));
+    const rating = { w: gameRating(moves, review, judged, 'w', priorOf('w')), b: gameRating(moves, review, judged, 'b', priorOf('b')) };
+    const grades = { w: areaGrades(moves, review, judged, 'w'), b: areaGrades(moves, review, judged, 'b') };
+    const badN = me ? ['mistake', 'blunder', 'miss'].reduce((n, k) => n + (counts[me][k] ?? 0), 0) : 0;
+    const skillTotal = skillMoves.reduce((n, _, i) => n + liveSkills(i).length, 0);
+    panel.setHead(null);
+    const mood = me && acc[me] !== null ? (acc[me] >= 85 ? 'happy' : acc[me] >= 65 ? 'smile' : 'hmm') : 'smile';
+    talk(summaryLine(coach, { acc, me, result: g.result, grades, bad: badN, turning, seed: moves.length }), mood);
+    const col = (c, node) => h('div', { class: `chess-sum-cell ${c}${c === me ? ' me' : ''}` }, node);
+    const row = (label, w, mid, b, cls = '') => h('div', { class: `chess-sum-row ${cls}` }, h('div', { class: 'chess-sum-label' }, label), col('w', w), h('div', { class: 'chess-sum-mid' }, mid), col('b', b));
+    const num = (x) => h('span', { class: 'chess-sum-box' }, x === null || x === undefined ? '—' : String(x));
+    const grade = (k) => (k ? kindIcon(k, 26) : h('span', { class: 'muted' }, '—'));
+    const table = h(
+      'div',
+      { class: 'chess-sum' },
+      row('', h('div', { class: 'chess-sum-player' }, playerAvatar('w', personFor('w')), h('span', {}, whiteName)), null, h('div', { class: 'chess-sum-player' }, playerAvatar('b', personFor('b')), h('span', {}, blackName)), 'players'),
+      row('准确率', num(acc.w === null ? null : acc.w.toFixed(1)), null, num(acc.b === null ? null : acc.b.toFixed(1)), 'big'),
+      me ? row('技巧', me === 'w' ? h('span', { class: 'chess-sum-n ck-skill' }, `+${skillTotal}`) : h('span', { class: 'muted' }, '—'), skillIcon(22), me === 'b' ? h('span', { class: 'chess-sum-n ck-skill' }, `+${skillTotal}`) : h('span', { class: 'muted' }, '—'), 'kind skill') : null,
+      ...KINDS.filter((k) => k.key !== 'forced').map((k) => {
+        const w = counts.w[k.key] ?? 0;
+        const b = counts.b[k.key] ?? 0;
+        return row(k.name, h('span', { class: `chess-sum-n ck-${k.key}` }, w), kindIcon(k.key, 22), h('span', { class: `chess-sum-n ck-${k.key}` }, b), w + b ? 'kind' : 'kind zero');
+      }),
+      row('棋局等级', num(rating.w), null, num(rating.b), 'big rating'),
+      ...AREAS.map((a) => row(a.name, grade(grades.w[a.key]), null, grade(grades.b[a.key]), 'area')),
+    );
     fill(
       info,
-      h('div', { class: 'chess-accs' }, accBox('w', whiteName), accBox('b', blackName)),
+      graph ? h('div', { class: 'chess-graph-box' }, graph.svg) : null,
+      table,
       h(
-        'table',
-        { class: 'chess-counts' },
-        h('tbody', {}, KINDS.filter((k) => k.key !== 'forced').map((k) => h('tr', { class: (counts.w[k.key] ?? 0) + (counts.b[k.key] ?? 0) ? '' : 'zero' }, h('td', {}, counts.w[k.key] ?? 0), h('td', {}, h('span', { class: `chess-kind ck-${k.key}` }, k.mark ? h('b', {}, k.mark) : null, k.name)), h('td', {}, counts.b[k.key] ?? 0)))),
+        'div',
+        { class: 'chess-nav chess-sum-go' },
+        h('button', { class: 'btn primary chess-start-review', type: 'button', onclick: () => nextKey() }, '开始回顾'),
       ),
-      h('div', { class: 'chess-nav' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(1) }, '从第一步看起'), turning !== null ? h('button', { class: 'btn', type: 'button', onclick: () => show(turning + 1) }, '看最关键的一步') : null),
+      h(
+        'div',
+        { class: 'chess-nav chess-sum-more' },
+        h('button', { class: 'btn', type: 'button', onclick: () => show(1) }, '从第一步看起'),
+        turning !== null ? h('button', { class: 'btn', type: 'button', onclick: () => show(turning + 1) }, '看最关键的一步') : null,
+      ),
     );
   }
 
@@ -1065,9 +1489,10 @@ function renderReview({ store, go }, id) {
     }
     trying = { game: base };
     chessSound(base.inCheck() ? 'check' : m.captured ? 'capture' : 'move');
-    board.set(base.fen(), { last: [m.from, m.to], check: checkSquare(base) });
+    setBoard(base.fen(), { last: [m.from, m.to], check: checkSquare(base) });
     board.arrows([]);
     board.badge(null);
+    panel.setHead(null);
     fill(info, h('div', { class: 'chess-info-row' }, h('span', { class: 'chess-kind' }, '试走'), h('span', { class: 'muted small' }, `${zhSan(m.san)}，引擎在看……`)), h('div', { class: 'chess-nav' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(ply) }, '回到棋局')));
     const e = engine ?? (engine = await getEngine());
     const [b, a] = await Promise.all([e.analyse(fen, { depth: 12 }), base.isGameOver() ? Promise.resolve(null) : e.analyse(base.fen(), { depth: 12 })]);
@@ -1077,12 +1502,13 @@ function renderReview({ store, go }, id) {
     board.badge(m.to, kind);
     if (a?.best) board.arrows([{ from: a.best.slice(0, 2), to: a.best.slice(2, 4), tone: 'move' }]);
     setEval(afterEv);
-    const k = kindOf(kind);
-    panel.say(`${pickLine(coach.say[kind])} ${explainMove({ m, kind, ply: 20, before: b.ev, after: afterEv, best: b.best, reply: a?.best ?? '', who: '你', whose: '对手' }).join('')}`, MOOD[kind]);
-    fill(info, h('div', { class: 'chess-info-row' }, h('span', { class: `chess-kind ck-${k.key}` }, k.mark ? h('b', {}, k.mark) : null, `试走：${k.name}`), h('span', { class: 'muted small' }, `${zhSan(m.san)} · ${evalText(afterEv)}`)), h('div', { class: 'chess-nav' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(ply) }, '回到棋局')));
+    const f = moveFacts({ m, kind, ply: 20, before: b.ev, after: afterEv, best: b.best, reply: a?.best ?? '', them: '对手' });
+    panel.setHead(headRow(kind, zhSan(m.san), afterEv, `试走：${kindOf(kind).name}`));
+    talk(coachLine(coach, f, { mine: true, who: '你', whose: '对手', seed: Date.now() % 10 }), MOOD[kind]);
+    fill(info, h('div', { class: 'chess-nav' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(ply) }, '回到棋局')));
   }
 
-  // 局势曲线: 白方胜率, 点了跳到那一步; 失误的地方有点
+  // 局势曲线: 白方胜率, 点了跳到那一步; 好棋、走坏了的地方有点
   let graph = null;
   function drawGraph() {
     const W = 600;
@@ -1096,9 +1522,8 @@ function renderReview({ store, go }, id) {
     svg.setAttribute('class', 'chess-graph');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', '局势曲线');
-    const dots = judged
-      .map((j, i) => (BAD.has(j.kind) && j.kind !== 'inaccuracy' ? `<circle class="ck-dot ck-${j.kind}" cx="${pts[i + 1][0].toFixed(1)}" cy="${pts[i + 1][1].toFixed(1)}" r="4" vector-effect="non-scaling-stroke"/>` : ''))
-      .join('');
+    const DOTS = new Set(['brilliant', 'great', 'mistake', 'miss', 'blunder']);
+    const dots = judged.map((j, i) => (DOTS.has(j.kind) ? `<circle class="ck-dot ck-${j.kind}" cx="${pts[i + 1][0].toFixed(1)}" cy="${pts[i + 1][1].toFixed(1)}" r="4" vector-effect="non-scaling-stroke"/>` : '')).join('');
     // 只有写死的图形和算出来的数字
     svg.innerHTML = `<rect class="chess-graph-bg" x="0" y="0" width="${W}" height="${H}"/><path class="chess-graph-area" d="${area}"/><line class="chess-graph-mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/><line class="chess-graph-now" x1="0" y1="0" x2="0" y2="${H}"/>${dots}`;
     const now = svg.querySelector('.chess-graph-now');
@@ -1106,8 +1531,8 @@ function renderReview({ store, go }, id) {
       const r = svg.getBoundingClientRect();
       show(Math.round(((e.clientX - r.left) / r.width) * n));
     });
-    fill(graphBox, svg);
     graph = {
+      svg,
       mark(p) {
         const x = (p / n) * W;
         now.setAttribute('x1', String(x));
@@ -1116,17 +1541,28 @@ function renderReview({ store, go }, id) {
     };
   }
 
-  // 还没复盘: 让引擎一个局面一个局面看
+  // 还没复盘: 让引擎一个局面一个局面看; 教练先说一句, 然后隔一会儿讲一个小知识
   async function analyse() {
     const progress = h('div', { class: 'chess-progress' }, h('div', { class: 'chess-progress-fill' }));
     const note = h('span', { class: 'muted small' }, '');
     fill(info, h('div', { class: 'chess-analysing' }, progress, note));
-    panel.say(`我先把这盘棋看一遍，${moves.length} 步，稍等一下……`, 'hmm');
+    talk(fillLine(pickLine(voiceOf(coach.id).analyse, Math.random()), { n: moves.length }), 'hmm');
     panel.face.el.classList.add('cf-thinking');
+    // 头一个小知识 4 秒后讲, 以后 9 秒一个
+    let tip = Math.floor(Math.random() * TRIVIA.length);
+    const nextTip = (ms) => {
+      triviaTimer = setTimeout(() => {
+        if (!alive) return;
+        talk(triviaLine(coach, tip++), 'smile');
+        nextTip(9000);
+      }, ms);
+    };
+    nextTip(4000);
     try {
       engine ??= await getEngine();
     } catch {
-      panel.say('引擎打不开，刷新一下试试。', 'worried');
+      clearTimeout(triviaTimer);
+      talk('引擎打不开，刷新一下试试。', 'worried');
       return;
     }
     const ev = [];
@@ -1143,7 +1579,8 @@ function renderReview({ store, go }, id) {
         const r = await engine.analyse(fens[i], { depth, multipv: 2, movetime: 2500 }).catch(() => null);
         if (!alive) return;
         if (!r || r.ev === null) {
-          panel.say('引擎出了点问题，刷新一下再试。', 'worried');
+          clearTimeout(triviaTimer);
+          talk('引擎出了点问题，刷新一下再试。', 'worried');
           return;
         }
         ev.push(r.ev);
@@ -1153,22 +1590,37 @@ function renderReview({ store, go }, id) {
       progress.firstChild.style.width = `${((i + 1) / fens.length) * 100}%`;
       note.textContent = `${i + 1} / ${fens.length}`;
     }
+    clearTimeout(triviaTimer);
     review = { depth, ev, bm, ev2 };
     store.updateChess((c, now) => ({ ...c, games: { ...c.games, [id]: { ...c.games[id], review, at: now } } }));
     panel.face.el.classList.remove('cf-thinking');
     ready();
   }
 
-  function ready() {
-    judged = judgeGame(moves, review);
-    list = moveList(moves, { judged, onPick: (p) => show(p) });
-    fill(listBox, list.el);
+  async function ready() {
+    // 开局谱: 第一次复盘时才下载 (80 KB); 下载不了就当没有开局谱着
+    book = await loadBook()
+      .then((b) => bookMoves(b, fens))
+      .catch(() => null);
+    if (!alive) return;
+    judged = judgeGame(moves, review, { book });
+    skillMoves = moves.map((m, i) => (me && m.color === me ? skillsOfMove(m, { i, prev: moves[i - 1] ?? null, bad: BAD.has(judged[i].kind) }) : []));
+    refreshSkills();
     drawGraph();
     show(0, { animate: false });
   }
 
   const onKey = (e) => {
     if (e.target.closest?.('input, textarea, [contenteditable]') || document.querySelector('dialog[open]')) return;
+    if (explaining?.line) {
+      // 解析时: 左右键在引擎想的那几步里走, Esc 回到棋局
+      if (e.key === 'ArrowLeft') lineStep(explaining.step - 1);
+      else if (e.key === 'ArrowRight') lineStep(explaining.step + 1);
+      else if (e.key === 'Escape') show(explaining.at);
+      else return;
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'ArrowLeft') show(ply - 1);
     else if (e.key === 'ArrowRight') show(ply + 1);
     else return;
@@ -1176,7 +1628,7 @@ function renderReview({ store, go }, id) {
   };
   document.addEventListener('keydown', onKey);
 
-  board.set(fens[0], { animate: false });
+  setBoard(fens[0], { animate: false });
   if (review) setTimeout(() => alive && ready(), 0);
   else {
     list = moveList(moves, { onPick: (p) => show(p) });
@@ -1197,14 +1649,95 @@ function renderReview({ store, go }, id) {
         h('h1', {}, `${whiteName} 对 ${blackName}`),
         h('span', { class: 'muted small' }, [res, g.date].filter(Boolean).join(' · ')),
         g.url ? h('a', { class: 'small', href: g.url, target: '_blank', rel: 'noopener' }, '在 chess.com 打开') : null,
+        h('button', { class: 'btn chess-skills-btn', type: 'button', onclick: () => skillsDialog(store) }, skillIcon(18), '技巧'),
       ),
-      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, boardWrap, navRow), h('div', { class: 'chess-side' }, panel.el, info, graphBox, listBox)),
+      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, topBar, boardWrap, bottomBar, navRow), side),
     ),
     cleanup: () => {
       alive = false;
+      clearTimeout(triviaTimer);
       engine?.cancel();
       panel.stop();
+      stopSpeaking();
       document.removeEventListener('keydown', onKey);
     },
   };
+}
+
+// ---- 技巧页 (v1.85): 五类, 每个技巧的进度; 点一个看说明和一张小棋盘 (摆好的例子, 箭头指着该走的那步) ----
+function skillsDialog(store, focus = null) {
+  const st = store.data.chess?.skills ?? emptySkills();
+  const open = openSkills(st);
+  const body = h('div', { class: 'chess-skills' });
+  let timer = 0;
+  const stateText = (s) => (st.mastered[s.id] ? '学会了' : open.has(s.id) ? `${skillPoints(st, s.id)} / ${s.need}` : '还没解锁');
+
+  function listView() {
+    clearTimeout(timer);
+    fill(
+      body,
+      h('p', { class: 'muted small chess-skills-note' }, '复盘自己的棋时领分，学会一个开下一个。'),
+      SKILL_CATS.map((c) =>
+        h(
+          'section',
+          { class: 'chess-skill-cat' },
+          h('h3', {}, c.name),
+          h(
+            'div',
+            { class: 'chess-skill-list' },
+            SKILLS.filter((s) => s.cat === c.key).map((s) => {
+              const done = Boolean(st.mastered[s.id]);
+              const isOpen = open.has(s.id);
+              const pts = skillPoints(st, s.id);
+              return h(
+                'button',
+                { type: 'button', class: `chess-skill${done ? ' done' : ''}${isOpen ? '' : ' locked'}`, onclick: () => detail(s) },
+                skillIcon(32, { locked: !isOpen }),
+                h('span', { class: 'chess-skill-text' }, h('strong', {}, s.name), h('span', { class: 'muted small' }, stateText(s))),
+                isOpen && !done ? h('span', { class: 'chess-skill-bar' }, h('span', { style: `width:${(pts / s.need) * 100}%` })) : null,
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  function detail(s) {
+    clearTimeout(timer);
+    const b = createBoard({ orientation: 'w', dests: () => [] });
+    b.lock?.(true);
+    const play = () => {
+      clearTimeout(timer);
+      b.arrows([]);
+      b.set(s.example.fen, { animate: false });
+      timer = setTimeout(() => {
+        const g = new Chess(s.example.fen);
+        const mv = s.example.move;
+        const m = g.move({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] });
+        b.set(g.fen(), { last: [m.from, m.to], check: checkSquare(g) });
+        b.arrows([{ from: m.from, to: m.to, tone: 'best' }]);
+      }, 700);
+    };
+    const isOpen = open.has(s.id);
+    fill(
+      body,
+      h('button', { type: 'button', class: 'chess-skills-back', onclick: () => listView() }, icon('left', 16), '全部技巧'),
+      h(
+        'div',
+        { class: 'chess-skill-detail' },
+        h('div', { class: 'chess-skill-board' }, b.el),
+        h('div', { class: 'chess-skill-head' }, skillIcon(28, { locked: !isOpen }), h('strong', {}, s.name), h('span', { class: 'muted small' }, `${SKILL_CATS.find((c) => c.key === s.cat).name} · ${stateText(s)}`)),
+        h('p', {}, s.desc),
+        h('div', { class: 'chess-nav' }, h('button', { class: 'btn', type: 'button', onclick: play }, '再看一遍'), h('button', { class: 'btn primary', type: 'button', onclick: () => dlg.close() }, '知道了')),
+      ),
+    );
+    play();
+  }
+
+  const dlg = openDialog({ title: '技巧', body, onClose: () => clearTimeout(timer) });
+  dlg.el.classList.add('chess-skills-dialog');
+  const f = focus && skillOf(focus);
+  if (f) detail(f);
+  else listView();
 }

@@ -4,9 +4,10 @@
 
 import { h } from '../dom.js';
 import { kindOf } from '../chess.js';
+import { kindIcon } from './chessicons.js';
 
 const FILES = 'abcdefgh';
-const PIECE_IMG = (code) => new URL(`../../img/chess/${code}.svg`, import.meta.url).href;
+export const PIECE_IMG = (code) => new URL(`../../img/chess/${code}.svg`, import.meta.url).href;
 
 // FEN 的棋子那段 → { e4: 'wp', … }
 export function placement(fen) {
@@ -234,14 +235,17 @@ export function createBoard({ orientation = 'w', dests = () => [], onMove = () =
     }
   }
 
-  // 好坏的小标记 (复盘时, 贴在刚走的那个子的右上角)
-  function badge(sq = null, kind = null) {
+  // 好坏的小标记 (复盘时, 贴在刚走的那个子的右上角); extra: 别的格子上也贴 [{ sq, node }] (终局两个王的皇冠、#)
+  function badge(sq = null, kind = null, extra = []) {
     badgeLayer.replaceChildren();
     const k = kindOf(kind);
-    if (!sq || !k) return;
-    const b = h('div', { class: `cb-badge-box` }, h('span', { class: `cb-badge ck-${k.key}`, title: k.name }, k.mark || '✓'));
-    place(b, sq);
-    badgeLayer.append(b);
+    const add = (where, node, cls = '') => {
+      const b = h('div', { class: 'cb-badge-box' }, h('span', { class: `cb-badge ${cls}` }, node));
+      place(b, where);
+      badgeLayer.append(b);
+    };
+    for (const x of extra) add(x.sq, x.node, 'cb-end'); // 贴在格子左上角, 跟好坏的标记 (右上角) 不打架
+    if (sq && k) add(sq, kindIcon(k.key), `ck-${k.key}`);
   }
 
   // ---- 走棋: 拖着走或者先点子再点格子 ----
@@ -350,12 +354,21 @@ export function createBoard({ orientation = 'w', dests = () => [], onMove = () =
     if (b) badgeLayer.replaceChildren();
   }
 
+  // 在一个格子上冒出一个小东西, 往上飘一下就没了 (复盘领到技巧分的「+1」)
+  function pop(sq, node, ms = 1600) {
+    const box = h('div', { class: 'cb-pop-box', 'aria-hidden': 'true' }, node);
+    place(box, sq);
+    el.append(box);
+    setTimeout(() => box.remove(), ms);
+  }
+
   drawSquares();
   return {
     el,
     set,
     arrows,
     badge,
+    pop,
     setOrientation,
     flip: () => setOrientation(side === 'w' ? 'b' : 'w'),
     orientation: () => side,

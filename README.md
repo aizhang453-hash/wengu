@@ -27,7 +27,7 @@
 | **间隔复习** | FSRS-6 算法；设置了每日计划的卡片集参与每日复习，其他卡片集可随时学习；每日新词（可按考试日期计算）、每日复习上限、目标记忆率、按个人记录优化参数；难记卡片与暂停 |
 | **题目集** | 题目按「题目集」存放（像卡片集，如「AP微积分」「SAT 阅读」）；记录错题与练习题：材料、题目、选项、答案与解析；拍照后由 AI 识别并批量录入；题型统计与专项练习；批量删除、移到其他题目集；连续答对 3 次即为掌握 |
 | **书斋** | 古诗文原文免费读（以前叫「阅读」），书架分四层：诗词（唐诗三百首、宋词三百首、千家诗）、经典与古文（论语、古文观止）、启蒙读物（三字经、百家姓、千字文、弟子规、声律启蒙、增广贤文、朱子家训、幼学琼林）、古典小说（西游记，一回一回读）；每日一首、搜索、收藏、目录里的「接着读」、简体 / 繁体、朗读；《古文观止》里 33 篇名篇有注释、译文、出自这篇的成语和名句；搜索也能搜成语；一键做成「接下句」「字词」「成语」卡片集来背 |
-| **国际象棋** | 跟电脑下（8 个对手，每人一个分，从 250 到最强，会说话）；跟教练下（5 个教练，边下边教，走错了能收回）；复盘：每一步标出好坏（妙着、好棋、最佳……失误、大错）、准确率、局势曲线，教练一步一步讲；棋从 chess.com 拿（填用户名）或粘贴棋谱；引擎是干鳕鱼（Stockfish 19） |
+| **国际象棋** | 跟电脑下（8 个对手，每人一个分，从 250 到最强，会说话）；跟教练下（5 个教练，边下边教，走错了能收回）；复盘：每一步标出好坏（妙着、好棋、开局谱、最佳……失误、大错）、准确率、棋局等级、开局 / 战术 / 战略 / 残局、局势曲线，教练按自己的性格一步一步讲还会念出来，「下一页」「解析」，15 个技巧；棋从 chess.com 拿（填用户名）或粘贴棋谱；引擎是干鳕鱼（Stockfish 19） |
 | **广播** | 全世界的网络电台：搜（台名、种类、城市、国家）、正在播放的大面板、睡觉定时、收藏（同步）、附近的台、热门；换页面接着响 |
 | **邸报** | 新闻（以前叫「新闻」），分中文、English：上面是快讯（24 小时内各家的标题），下面是报道（美国之音、自由亚洲电台、卫报、NASA、Radio Free Asia、KFF Health News、Global Voices，在温故里读全文、可以朗读）；报纸那样的天气栏；每日猜词；每 15 分钟自动更新，断网也能看上次的 |
 | **导入与导出** | Quizlet（粘贴或书签）、Excel、CSV、Anki 卡组（含复习进度）、拍照生成卡片；导出 Excel、CSV、Anki，打印，分享链接 |
@@ -111,7 +111,12 @@
 - 「跟教练下」：5 个教练（伊莎贝拉夫人、普丽娅、皮埃尔、程老师、凯；复盘完一盘以后还有彩蛋温温），难度分休闲、均势、挑战（按你的分 −200、±0、+200）。教练边下边教：对方要吃你的子、要将死你会先提醒；你走错了马上说为什么，可以「收回重走」。
 - 你的分：填了 chess.com 用户名的，先用你在 chess.com 快棋的分，以后每下完一盘按 Elo 算法涨落（没填的从 800 分开始）。
 - 对手的分是校准过的：1400 分照 Lichess 公开的真人棋局，调成在局面还接近时犯错的比例跟同水平的真人差不多（Lichess 的分照 ChessGoals 的对照表换成 chess.com 的分）；别的分数让相邻的对手互相下几百盘，调到强的那个赢的比例跟分差对得上。低分的几个比同分的真人随手走得多一些。
-- 「复盘」：电脑把每一步都看一遍（一盘四五十步大约半分钟），然后给每一步标好坏：!! 妙着（弃子还是最好的一步）、! 好棋（只有这一步好）、★ 最佳、很好、还行、?! 不太好、? 失误、✕ 错失良机、?? 大错。先看总结：双方准确率、每种好坏几步、最关键的一步；再一步一步看（◀ ▶ 或键盘左右键），讲解的人物说这步怎么样、该怎么走（绿色箭头是更好的走法），右边有局势曲线（点了跳到那一步）。也能在棋盘上自己试别的走法，电脑当场说好不好。
+- 「复盘」：电脑把每一步都看一遍（一盘四五十步大约半分钟，等的时候教练讲国际象棋小知识），然后给每一步标好坏，每种一个图标：!! 妙着（弃子还是最好的一步）、! 好棋（只有这一步好）、开局谱（开局谱上的标准走法，常见的开局有中文名）、★ 最佳、很好、还行、?! 不太好、? 失误、✕ 错失良机、?? 大错。
+  - 总结：双方准确率、每种好坏几步、棋局等级（这盘下得像多少分的人）、开局 / 战术 / 战略 / 残局各下得怎样，教练一两句话总结。
+  - 「开始回顾」以后按「下一页」只看关键的步（离开开局谱的那步、好棋、走错的步、能领技巧分的步、终局）；◀ ▶ 或键盘左右键一步一步看。
+  - 教练按自己的性格讲每一步（伊莎贝拉夫人温柔、普丽娅简短、皮埃尔爱开玩笑、程老师严格、凯像主播），还会念出来（气泡右上角能关）；认得出梯子杀、底线杀、闷杀这些将死。
+  - 「正着」把更好的走法走出来；「解析」把电脑想的几步一步步走出来，每步讲一句。也能在棋盘上自己试别的走法，电脑当场说好不好。棋盘上下有吃掉的子和多几分，右边有局势曲线（点了跳到那一步）。
+  - 技巧：复盘自己的棋时，下出好习惯的一步（吃回来、占中心、将军、捉双、兵升变……一共 15 个，分五类）就领 1 分，攒够了就学会，同一类的下一个打开；复盘页右上角「技巧」看全部，每个配一张小棋盘示意图。
 - 棋从哪来：填上 chess.com 的用户名，列出最近两个月下的棋（用 chess.com 公开的接口，不用登录）；或者「粘贴棋谱」（PGN，Lichess 等网站都能导出）；跟电脑下完的也能复盘。下过、复盘过的棋留最近 60 盘，跟着同步。
 - 复盘时讲解的教练在首页「换教练」里换。人物都是编的，没有用真人。
 - 引擎是 [Stockfish 19](https://stockfishchess.org/)（「干鳕鱼」）的网页版：默认轻量版（1.8 MB）；设置里能换成完整版（99 MB，更强，点了才下载，只存在那台设备上）。走法写成中文棋书的样子：王、后、车、象、马、兵（马f3、象×c4）。
@@ -158,7 +163,7 @@
 
 ## 更新记录
 
-当前版本 **v1.82**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.85**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -191,7 +196,7 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
-  - `js/chess.js` 国际象棋：打分、每一步的好坏、准确率（规则用 `js/vendor/chess.js`：chess.js，BSD-2-Clause）；`js/chessdata.js` 分数、存的棋局怎么清理和合并；`js/chessengine.js` 干鳕鱼引擎（`js/vendor/stockfish/`：Stockfish 19，GPL-3.0）；`js/chesscom.js` 从 chess.com 拿棋和分数；`js/chesscoach.js` 讲解的话；`js/chesspeople.js` 对手和教练（性格、说的话）；`js/chessbot.js` 对手按分数怎么走（校准过的参数、爱好、开局）；`js/views/chess.js` 页面，`js/views/chessboard.js` 棋盘，`js/views/chessface.js` 人物头像；`img/chess/` 棋子图
+  - `js/chess.js` 国际象棋：打分、每一步的好坏、准确率（规则用 `js/vendor/chess.js`：chess.js，BSD-2-Clause）；`js/chessdata.js` 分数、存的棋局怎么清理和合并；`js/chessengine.js` 干鳕鱼引擎（`js/vendor/stockfish/`：Stockfish 19，GPL-3.0）；`js/chesscom.js` 从 chess.com 拿棋和分数；`js/chesscoach.js` 讲解的话（跟教练下时）；`js/chessvoice.js` 复盘时每个教练的说法；`js/chessbook.js` 开局谱（`js/chessbook-data.js` 由 `tools/chess-book.mjs` 生成）；`js/chessskills.js` 技巧；`js/chesspeople.js` 对手和教练（性格、说的话）；`js/chessbot.js` 对手按分数怎么走（校准过的参数、爱好、开局）；`js/views/chess.js` 页面，`js/views/chessboard.js` 棋盘，`js/views/chessface.js` 人物头像，`js/views/chessicons.js` 好坏和技巧的图标；`img/chess/` 棋子图
   - `js/radio.js` 广播：Radio Browser 搜电台、热门、收藏；`js/views/radio.js` 广播页，`js/views/radiobar.js` 底下的播放条（换页面接着响）
   - `js/weather.js` 邸报的天气（Open-Meteo）；`js/wordle.js` 每日猜词的规则，`js/words.js` 词表（`tools/words.mjs` 从 SCOWL 生成）
   - `js/news.js` 邸报（新闻）：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS、央视的新闻列表和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
@@ -214,5 +219,5 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
 邸报的「今日一图」「历史上的今天」来自[维基百科](https://www.wikipedia.org/)和[维基共享资源](https://commons.wikimedia.org/)：文字是 CC BY-SA 4.0，每张图按它自己的许可（页面上写着作者和许可）。农历来自香港天文台的「公历与农历日期对照表」。
 新闻（仓库的 `news` 分支）的版权归各家：美国之音、NASA 的是美国政府的作品；自由亚洲电台的按它的条款转载（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia）；卫报的来自卫报开放平台（Powered by The Guardian，仅供个人、非商业阅读）；快讯的各家只有标题和链接。`img/guardian-powered-*.png` 是卫报提供的标志，只按卫报开放平台的规定用。
 书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
-国际象棋的引擎是 [Stockfish](https://github.com/official-stockfish/Stockfish) 19 的网页版（[Stockfish.js](https://github.com/nmrugg/stockfish.js)，`js/vendor/stockfish/`），按 GPL-3.0 发布（许可原文见 `js/vendor/stockfish/COPYING.txt`，来源和源代码见同一文件夹的 `README.txt`），是单独的程序，温故只是跟它传话；棋子图是 Cburnett 画的那一套（维基共享资源，BSD 许可，见 `img/chess/LICENSE.txt`）；规则库 chess.js（BSD-2-Clause，许可原文在 `js/vendor/chess.js` 开头）。
+国际象棋的引擎是 [Stockfish](https://github.com/official-stockfish/Stockfish) 19 的网页版（[Stockfish.js](https://github.com/nmrugg/stockfish.js)，`js/vendor/stockfish/`），按 GPL-3.0 发布（许可原文见 `js/vendor/stockfish/COPYING.txt`，来源和源代码见同一文件夹的 `README.txt`），是单独的程序，温故只是跟它传话；棋子图是 Cburnett 画的那一套（维基共享资源，BSD 许可，见 `img/chess/LICENSE.txt`）；规则库 chess.js（BSD-2-Clause，许可原文在 `js/vendor/chess.js` 开头）；开局谱来自 Lichess 整理的 [chess-openings](https://github.com/lichess-org/chess-openings)（公有领域 / CC0），中文开局名是温故自己翻的。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。

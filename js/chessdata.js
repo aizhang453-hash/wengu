@@ -1,6 +1,8 @@
 // 国际象棋存的东西 (v1.82): 分数、存的棋局怎么清理、怎么合并 (store.js、merge.js 用; 不带规则库, 打开温故不用加载它)。
 // 别的 (规则、打分、好坏) 在 chess.js。
 
+import { cleanSkills, mergeSkills } from './chessskills.js';
+
 export const MATE = 30000;
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
@@ -34,6 +36,7 @@ export const START_RATING = 800; // 还不知道水平时先按 800 分算
 //            me: 'w'/'b'/'' 我是哪方, who: 对手或教练, mode: 'bot' 跟对手 / 'coach' 跟教练, rating: 对手当时的分 (0 最强), url: chess.com 的网址,
 //            review: { depth, ev: [每个局面的打分], bm: [每个局面引擎最想走的], ev2: [第二想走的那步走完的打分 (没有是 null)] } }
 //            删掉的留个记号 { id, at, gone: 1 } (同步时别从另一台设备又合回来; 留 90 天) },
+//   skills: 技巧 (v1.85, chessskills.js) { claims: { 技巧: ['棋局编号:第几步', …] }, mastered: { 技巧: 学会的时间 } } (没有是 null),
 //   current: 正在跟电脑下的 { moves: 'e2e4 e7e5 …', color 我执哪方, who, mode, rating, diff 跟教练下的难度 ('easy' 休闲 / 'even' 均势 / 'hard' 挑战), start 开始的时间, at } (没有是 null)
 // }
 export const GAMES_MAX = 60;
@@ -113,14 +116,16 @@ export function cleanChess(raw, now = Date.now()) {
     games[g.id] = g;
   }
   const current = cleanCurrent(raw.current);
+  const skills = cleanSkills(raw.skills);
   const out = {
     user: user ? { name: user.name, at: time(user.at) } : null,
     coach: coach ? { id: coach.id, at: time(coach.at) } : null,
     elo: elo ? { rating: cleanRating(elo.rating), games: Math.max(0, Math.floor(Number(elo.games) || 0)), ...(elo.cc ? { cc: 1 } : {}), at: time(elo.at) } : null,
     games,
     current,
+    ...(skills ? { skills } : {}),
   };
-  return out.user || out.coach || out.elo || Object.keys(games).length || current ? out : null;
+  return out.user || out.coach || out.elo || Object.keys(games).length || current || skills ? out : null;
 }
 
 export function mergeChess(a, b) {
@@ -129,7 +134,7 @@ export function mergeChess(a, b) {
   const later = (x, y) => (!x ? y : !y ? x : y.at > x.at ? y : x);
   const games = { ...a.games };
   for (const [id, g] of Object.entries(b.games)) games[id] = later(games[id], g);
-  return cleanChess({ user: later(a.user, b.user), coach: later(a.coach, b.coach), elo: later(a.elo, b.elo), games, current: later(a.current, b.current) });
+  return cleanChess({ user: later(a.user, b.user), coach: later(a.coach, b.coach), elo: later(a.elo, b.elo), games, current: later(a.current, b.current), skills: mergeSkills(a.skills ?? null, b.skills ?? null) });
 }
 
 // 下过、复盘过的棋, 新的在前 (删掉的不要)

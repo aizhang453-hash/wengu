@@ -119,7 +119,7 @@ test('国际象棋: 每步好坏的分法', () => {
   // 对手刚失误, 没抓住机会
   assert.equal(classify({ ...base, before: 400, after: 60, prev: 'blunder' }), 'miss');
   assert.equal(classify({ ...base, before: 400, after: 60 }), 'blunder');
-  assert.equal(KINDS.length, 10);
+  assert.equal(KINDS.length, 11);
 });
 
 test('国际象棋: 认弃子', () => {
