@@ -143,7 +143,7 @@ export class Engine {
       ev2: second ? evalOf(second, turn) : null,
       pv: first?.pv ?? [],
       depth: r.depth,
-      lines: r.lines.map((l) => ({ uci: l.pv[0], ev: evalOf(l, turn) })), // 每一条: 先走哪步、走完的打分 (白方看)
+      lines: r.lines.map((l) => ({ uci: l.pv[0], ev: evalOf(l, turn), pv: l.pv })), // 每一条: 先走哪步、走完的打分 (白方看)、接下来的走法 (分析页列出来)
     };
   }
 

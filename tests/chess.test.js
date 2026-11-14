@@ -433,7 +433,7 @@ test('国际象棋引擎: 排队、分析', async () => {
   const engine = new Engine({ makeWorker: () => fakeWorker(log) });
   const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1';
   const [a, b] = await Promise.all([engine.analyse(fen, { depth: 10, multipv: 2 }), engine.analyse(fen, { depth: 4, movetime: 900 })]);
-  assert.deepEqual(a, { ev: -25, best: 'd2d4', ev2: 40, pv: ['d2d4', 'd7d5'], depth: 10, lines: [{ uci: 'd2d4', ev: -25 }, { uci: 'a2a4', ev: 40 }] }); // 黑走: 分数反过来
+  assert.deepEqual(a, { ev: -25, best: 'd2d4', ev2: 40, pv: ['d2d4', 'd7d5'], depth: 10, lines: [{ uci: 'd2d4', ev: -25, pv: ['d2d4', 'd7d5'] }, { uci: 'a2a4', ev: 40, pv: ['a2a4', 'e7e5'] }] }); // 黑走: 分数反过来
   assert.equal(b.best, 'd2d4');
   assert.ok(log.includes('setoption name MultiPV value 2'));
   assert.ok(log.includes('go depth 10'));

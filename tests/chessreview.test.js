@@ -316,3 +316,15 @@ test('吃掉的子、多几分: 跟 chess.com 一样', () => {
   assert.deepEqual(end.took.w, ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'b', 'b', 'n', 'n', 'r', 'r', 'q']);
   assert.deepEqual(end.took.b, ['p', 'p', 'b', 'n', 'r']);
 });
+
+test('跟教练下: 教练讲自己那步、讲你那步, 都说得通', () => {
+  const { g } = gameOf('1. d4 e6 2. Bf4 Qf6');
+  for (const c of COACHES) {
+    // 教练自己走的 后f6 (它是黑方)
+    const own = coachLine(c, moveFacts({ m: g.moves[3], kind: 'best', ply: 3, prev: g.moves[2], them: '你' }), { mine: true, who: '我', whose: '你', seed: 3, plain: true });
+    assert.ok(own.startsWith('后f6') && !/[{}]|undefined/.test(own), `${c.name}: ${own}`);
+    // 你走的 象f4
+    const yours = coachLine(c, moveFacts({ m: g.moves[2], kind: 'good', ply: 2, prev: g.moves[1], them: '我' }), { mine: true, who: '你', whose: '我', seed: 2 });
+    assert.ok(yours.includes('象f4') && !/[{}]|undefined/.test(yours), `${c.name}: ${yours}`);
+  }
+});

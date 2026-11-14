@@ -118,6 +118,7 @@
   - 「正着」把更好的走法走出来；「解析」把电脑想的几步一步步走出来，每步讲一句。也能在棋盘上自己试别的走法，电脑当场说好不好。棋盘上下有吃掉的子和多几分，右边有局势曲线（点了跳到那一步）。
   - 技巧：复盘自己的棋时，下出好习惯的一步（吃回来、占中心、将军、捉双、兵升变……一共 15 个，分五类）就领 1 分，攒够了就学会，同一类的下一个打开；复盘页右上角「技巧」看全部，每个配一张小棋盘示意图。
 - 棋从哪来：填上 chess.com 的用户名，列出最近两个月下的棋（用 chess.com 公开的接口，不用登录）；或者「粘贴棋谱」（PGN，Lichess 等网站都能导出）；跟电脑下完的也能复盘。下过、复盘过的棋留最近 60 盘，跟着同步。
+- 「分析」：自己在棋盘上随便走。右边「浏览」是开局浏览器：这个局面大家都怎么走、每步走过几盘、白赢和棋黑赢各几成，能选大师或几个分数段的人；「分析」是电脑想的几条走法。
 - 复盘时讲解的教练在首页「换教练」里换。人物都是编的，没有用真人。
 - 引擎是 [Stockfish 19](https://stockfishchess.org/)（「干鳕鱼」）的网页版：默认轻量版（1.8 MB）；设置里能换成完整版（99 MB，更强，点了才下载，只存在那台设备上）。走法写成中文棋书的样子：王、后、车、象、马、兵（马f3、象×c4）。
 
@@ -163,7 +164,7 @@
 
 ## 更新记录
 
-当前版本 **v1.85**，详见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **v1.86**，详见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 开发
 
@@ -196,7 +197,7 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
   - `js/srs.js` 间隔复习（`js/vendor/fsrs.js`：ts-fsrs，MIT）；`js/plan.js` 每日计划；`js/revlog.js` 复习记录；`js/optimize.js`、`js/optimize-worker.js` 参数优化（改写自 fsrs-rs，BSD-3-Clause）
   - `js/questions.js` 出题；`js/learn.js` 学习模式；`js/exam.js` 测试；`js/grade.js` 判分；`js/scope.js` 学习范围；`js/custom.js` 自定义学习；`js/stats.js` 统计
   - `js/reading.js` 阅读：拿书、搜索、做卡片、每日一首、收藏和读到哪；`js/library/` 书的原文（`books.js` 书目，简体在 `js/library/`、繁体在 `js/library/hant/`，由 `tools/library.mjs` 从 chinese-poetry 生成，宋词的缺字照《全宋词》补；`readings.js` 读音、`yizhu/` 注释和译文是手写的）
-  - `js/chess.js` 国际象棋：打分、每一步的好坏、准确率（规则用 `js/vendor/chess.js`：chess.js，BSD-2-Clause）；`js/chessdata.js` 分数、存的棋局怎么清理和合并；`js/chessengine.js` 干鳕鱼引擎（`js/vendor/stockfish/`：Stockfish 19，GPL-3.0）；`js/chesscom.js` 从 chess.com 拿棋和分数；`js/chesscoach.js` 讲解的话（跟教练下时）；`js/chessvoice.js` 复盘时每个教练的说法；`js/chessbook.js` 开局谱（`js/chessbook-data.js` 由 `tools/chess-book.mjs` 生成）；`js/chessskills.js` 技巧；`js/chesspeople.js` 对手和教练（性格、说的话）；`js/chessbot.js` 对手按分数怎么走（校准过的参数、爱好、开局）；`js/views/chess.js` 页面，`js/views/chessboard.js` 棋盘，`js/views/chessface.js` 人物头像，`js/views/chessicons.js` 好坏和技巧的图标；`img/chess/` 棋子图
+  - `js/chess.js` 国际象棋：打分、每一步的好坏、准确率（规则用 `js/vendor/chess.js`：chess.js，BSD-2-Clause）；`js/chessdata.js` 分数、存的棋局怎么清理和合并；`js/chessengine.js` 干鳕鱼引擎（`js/vendor/stockfish/`：Stockfish 19，GPL-3.0）；`js/chesscom.js` 从 chess.com 拿棋和分数；`js/chesscoach.js` 讲解的话（跟教练下时）；`js/chessvoice.js` 复盘时每个教练的说法；`js/chessbook.js` 开局谱（`js/chessbook-data.js` 由 `tools/chess-book.mjs` 生成）；`js/chessskills.js` 技巧；`js/chessexplorer.js` 开局浏览器（资料在 `js/explorer/`）；`js/chesspeople.js` 对手和教练（性格、说的话）；`js/chessbot.js` 对手按分数怎么走（校准过的参数、爱好、开局）；`js/views/chess.js` 页面，`js/views/chessboard.js` 棋盘，`js/views/chessface.js` 人物头像，`js/views/chessicons.js` 好坏和技巧的图标；`img/chess/` 棋子图
   - `js/radio.js` 广播：Radio Browser 搜电台、热门、收藏；`js/views/radio.js` 广播页，`js/views/radiobar.js` 底下的播放条（换页面接着响）
   - `js/weather.js` 邸报的天气（Open-Meteo）；`js/wordle.js` 每日猜词的规则，`js/words.js` 词表（`tools/words.mjs` 从 SCOWL 生成）
   - `js/news.js` 邸报（新闻）：从 news 分支拿 `latest.json` 和全文、存在 IndexedDB（卫报的 24 小时后删）、分组；`tools/news.mjs` 从各家的 RSS、央视的新闻列表和卫报的 API 拿新闻（GitHub Actions 每 15 分钟跑一次：`.github/workflows/news.yml`）；`img/` 卫报的「Powered by」标志
@@ -219,5 +220,5 @@ node tools/news.mjs   # 拿新闻，写成 news/（自己电脑上的新闻页�
 邸报的「今日一图」「历史上的今天」来自[维基百科](https://www.wikipedia.org/)和[维基共享资源](https://commons.wikimedia.org/)：文字是 CC BY-SA 4.0，每张图按它自己的许可（页面上写着作者和许可）。农历来自香港天文台的「公历与农历日期对照表」。
 新闻（仓库的 `news` 分支）的版权归各家：美国之音、NASA 的是美国政府的作品；自由亚洲电台的按它的条款转载（Copyright © 1998-2023, RFA. Used with the permission of Radio Free Asia）；卫报的来自卫报开放平台（Powered by The Guardian，仅供个人、非商业阅读）；快讯的各家只有标题和链接。`img/guardian-powered-*.png` 是卫报提供的标志，只按卫报开放平台的规定用。
 书库原文（`js/library/`）来自 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)（MIT，许可原文见 `js/library/LICENSE-chinese-poetry.txt`），简体由 OpenCC 转换。
-国际象棋的引擎是 [Stockfish](https://github.com/official-stockfish/Stockfish) 19 的网页版（[Stockfish.js](https://github.com/nmrugg/stockfish.js)，`js/vendor/stockfish/`），按 GPL-3.0 发布（许可原文见 `js/vendor/stockfish/COPYING.txt`，来源和源代码见同一文件夹的 `README.txt`），是单独的程序，温故只是跟它传话；棋子图是 Cburnett 画的那一套（维基共享资源，BSD 许可，见 `img/chess/LICENSE.txt`）；规则库 chess.js（BSD-2-Clause，许可原文在 `js/vendor/chess.js` 开头）；开局谱来自 Lichess 整理的 [chess-openings](https://github.com/lichess-org/chess-openings)（公有领域 / CC0），中文开局名是温故自己翻的。
+国际象棋的引擎是 [Stockfish](https://github.com/official-stockfish/Stockfish) 19 的网页版（[Stockfish.js](https://github.com/nmrugg/stockfish.js)，`js/vendor/stockfish/`），按 GPL-3.0 发布（许可原文见 `js/vendor/stockfish/COPYING.txt`，来源和源代码见同一文件夹的 `README.txt`），是单独的程序，温故只是跟它传话；棋子图是 Cburnett 画的那一套（维基共享资源，BSD 许可，见 `img/chess/LICENSE.txt`）；规则库 chess.js（BSD-2-Clause，许可原文在 `js/vendor/chess.js` 开头）；开局谱来自 Lichess 整理的 [chess-openings](https://github.com/lichess-org/chess-openings)（公有领域 / CC0），中文开局名是温故自己翻的。开局浏览器的统计（`js/explorer/`，只有数字，没有放棋局）是用这些棋算的：[Lichess 开放棋局库](https://database.lichess.org/)的网上计分棋（CC0）和比赛直播棋局（[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)，所以 `js/explorer/master/` 也按 CC BY-SA 4.0 给别人用）、KingBase Lite 2019（[archive.org](https://archive.org/details/KingBaseLite2019)）、[PGN Mentor](https://www.pgnmentor.com/files.html) 的名人棋局；`tools/chess-explorer.mjs` 算。
 第三方代码按其各自许可：`js/vendor/` 中的 ts-fsrs、fzstd、qrcode-generator、three.js（均为 MIT）；`js/optimize.js` 改写自 fsrs-rs（BSD-3-Clause，许可原文见文件末尾）。

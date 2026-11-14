@@ -44,6 +44,7 @@ const FILES = [
   'js/chesscom.js',
   'js/chessdata.js',
   'js/chessengine.js',
+  'js/chessexplorer.js',
   'js/chesspeople.js',
   'js/chessskills.js',
   'js/chessvoice.js',
@@ -202,7 +203,7 @@ const FILES = [
 // 很大的书 (长篇小说) 一回一个文件, 第一次打开时不全存 (几 MB): 读过哪回就存哪回, 换版本时也不删。
 // 英汉小词典 (js/endict/, 邸报点词查意思用) 也一样: 点到哪个字母的词才存那个。
 // App 里照样全部放进去 (ios/copy-web.sh 照这一行复制整个文件夹)
-const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/', 'js/vendor/stockfish/'];
+const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/', 'js/vendor/stockfish/', 'js/explorer/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

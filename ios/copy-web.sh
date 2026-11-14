@@ -18,10 +18,11 @@ done
 
 # 长篇小说一回一个文件、国际象棋引擎, 网页上用到才下载 (sw.js 的 LAZY), App 里整个文件夹都放进去
 # (引擎的 .wasm 和许可证 COPYING.txt 也要)
+# (开局浏览器的资料 js/explorer/ 里面还有子文件夹, 整个复制)
 for d in $(sed -n "s/^const LAZY = \[\(.*\)\];\$/\1/p" "$SRC/sw.js" | tr -d "' " | tr ',' ' '); do
   mkdir -p "$DEST/$d"
-  for f in "$SRC/$d"*; do if [ -f "$f" ]; then cp "$f" "$DEST/$d"; fi; done
-  count=$((count + $(ls "$SRC/$d" | wc -l)))
+  cp -R "$SRC/$d". "$DEST/$d"
+  count=$((count + $(find "$SRC/$d" -type f | wc -l)))
 done
 
 if [ ! -f "$DEST/index.html" ]; then
