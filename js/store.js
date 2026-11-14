@@ -9,6 +9,7 @@ import { cleanPet, mergePet, bankDays } from './pet.js';
 import { cleanArcade, mergeArcade, addScore } from './arcade.js';
 import { cleanReading, mergeReading } from './reading.js';
 import { cleanRadio, mergeRadio, withFavorite, withRecent, oldFavorites } from './radio.js';
+import { cleanChess, mergeChess } from './chessdata.js';
 
 // 卡片集都存在浏览器的 localStorage 里, 不用注册、不用服务器。
 // 清浏览器数据会丢, 所以首页有「导出备份」。
@@ -33,10 +34,11 @@ export function newId() {
 // arcade: 游戏厅的成绩 (arcade.js), 没玩过是 null
 // reading: 阅读的收藏、读到哪 (reading.js), 没读过是 null
 // radio: 广播的收藏、最近听过 (radio.js, v1.79), 没听过是 null
+// chess: 国际象棋下过、复盘过的棋, chess.com 用户名, 讲解的人物, 正在下的棋 (chess.js, v1.82), 没下过是 null
 // settings: { reviewsPerDay 每天最多复习几张, retention 想记住的把握 (0.70–0.97), at 改的时间 (同步时听后改的),
 //   fsrs: 按自己的记录优化过的参数 { w: [21 个数], at 哪天优化的, items 用了几道题, logLoss / rmse: [默认参数的, 这套的] }, 没优化过是 null }
 function emptyData() {
-  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null, reading: null, radio: null };
+  return { version: 1, sets: [], folders: [], qsets: [], mistakes: [], activity: {}, deleted: {}, revlog: {}, undone: {}, settings: defaultSettings(), pet: null, arcade: null, reading: null, radio: null, chess: null };
 }
 
 const defaultSettings = () => ({ reviewsPerDay: DEFAULT_REVIEW_CAP, retention: DEFAULT_RETENTION, at: 0, fsrs: null });
@@ -314,6 +316,7 @@ export function cleanData(raw) {
   data.arcade = cleanArcade(raw?.arcade);
   data.reading = cleanReading(raw?.reading);
   data.radio = cleanRadio(raw?.radio);
+  data.chess = cleanChess(raw?.chess);
   const seen = new Set();
   if (raw && Array.isArray(raw.mistakes)) {
     for (const m of raw.mistakes) {
@@ -1252,6 +1255,14 @@ export class Store {
     this.save();
   }
 
+  // 国际象棋 (v1.82): 改 chess.com 用户名、讲解的人物、正在下的棋, 存一盘、删一盘 (都记下改的时间, 同步时听后改的)
+  updateChess(fn, now = Date.now()) {
+    const old = this.data.chess ?? { user: null, coach: null, games: {}, current: null };
+    this.data.chess = cleanChess(fn({ ...old, games: { ...old.games } }, now), now);
+    this.save();
+    return this.data.chess;
+  }
+
   // 温温: 改名字、换装扮 (stamp: 记下改的时间, 同步时听后改的); 解锁、长大、庆祝过的直接合
   updatePet(patch, { stamp = false, now = Date.now() } = {}) {
     const old = this.data.pet ?? cleanPet({});
@@ -1349,6 +1360,7 @@ export class Store {
     this.data.arcade = mergeArcade(this.data.arcade, incoming.arcade);
     this.data.reading = mergeReading(this.data.reading, incoming.reading);
     this.data.radio = mergeRadio(this.data.radio, incoming.radio);
+    this.data.chess = mergeChess(this.data.chess, incoming.chess);
     this.applyParameters({ recompute: true });
     for (const q of incoming.qsets) {
       const i = this.data.qsets.findIndex((x) => x.id === q.id);

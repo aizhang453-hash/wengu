@@ -14,6 +14,18 @@ const FILES = [
   'icon-maskable-512.png',
   'img/guardian-powered-black.png',
   'img/guardian-powered-white.png',
+  'img/chess/bb.svg',
+  'img/chess/bk.svg',
+  'img/chess/bn.svg',
+  'img/chess/bp.svg',
+  'img/chess/bq.svg',
+  'img/chess/br.svg',
+  'img/chess/wb.svg',
+  'img/chess/wk.svg',
+  'img/chess/wn.svg',
+  'img/chess/wp.svg',
+  'img/chess/wq.svg',
+  'img/chess/wr.svg',
   'css/style.css',
   'js/aitext.js',
   'js/anki.js',
@@ -24,6 +36,13 @@ const FILES = [
   'js/cardfile.js',
   'js/cardimport.js',
   'js/cardview.js',
+  'js/chess.js',
+  'js/chessbot.js',
+  'js/chesscoach.js',
+  'js/chesscom.js',
+  'js/chessdata.js',
+  'js/chessengine.js',
+  'js/chesspeople.js',
   'js/csv.js',
   'js/custom.js',
   'js/diagram.js',
@@ -115,6 +134,7 @@ const FILES = [
   'js/store.js',
   'js/sync.js',
   'js/unlock.js',
+  'js/vendor/chess.js',
   'js/vendor/fsrs.js',
   'js/vendor/fzstd.js',
   'js/vendor/qrcode.js',
@@ -125,6 +145,9 @@ const FILES = [
   'js/views/blocks.js',
   'js/views/cardedit.js',
   'js/views/cards.js',
+  'js/views/chess.js',
+  'js/views/chessboard.js',
+  'js/views/chessface.js',
   'js/views/diagram.js',
   'js/views/draft.js',
   'js/views/edit.js',
@@ -174,7 +197,7 @@ const FILES = [
 // 很大的书 (长篇小说) 一回一个文件, 第一次打开时不全存 (几 MB): 读过哪回就存哪回, 换版本时也不删。
 // 英汉小词典 (js/endict/, 邸报点词查意思用) 也一样: 点到哪个字母的词才存那个。
 // App 里照样全部放进去 (ios/copy-web.sh 照这一行复制整个文件夹)
-const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/'];
+const LAZY = ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/', 'js/vendor/stockfish/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -18,8 +18,10 @@ test('断网要存的文件: 每个 js 都在, 写的文件都真的有', () => 
   const files = [...sw.matchAll(/^\s+'([^']+)',$/gm)].map((m) => m[1]);
   // 长篇小说一回一个文件、英汉小词典一个字母一个文件 (LAZY 里的文件夹), 不在名单里, 读到才存; 文件夹要真的有, 里面有文件
   const lazy = JSON.parse(/^const LAZY = (\[.*\]);$/m.exec(sw)[1].replace(/'/g, '"'));
-  assert.deepEqual(lazy, ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/']);
-  for (const d of lazy) assert.ok(readdirSync(join(root, d)).filter((f) => f.endsWith('.js')).length >= (d === 'js/endict/' ? 26 : 100), d);
+  // 国际象棋引擎 (js/vendor/stockfish/) 也是用到才下载: 轻量版的 .js、.wasm 和完整版的外壳
+  assert.deepEqual(lazy, ['js/library/xiyouji/', 'js/library/hant/xiyouji/', 'js/endict/', 'js/vendor/stockfish/']);
+  for (const d of lazy) assert.ok(readdirSync(join(root, d)).filter((f) => f.endsWith('.js')).length >= ({ 'js/endict/': 26, 'js/vendor/stockfish/': 2 }[d] ?? 100), d);
+  for (const f of ['stockfish-19-lite-single.js', 'stockfish-19-lite-single.wasm', 'stockfish-19-single.js', 'COPYING.txt']) assert.ok(statSync(join(root, 'js/vendor/stockfish', f)).isFile(), f);
   for (const js of listJs('js')) if (!lazy.some((d) => js.startsWith(d))) assert.ok(files.includes(js), `sw.js 里少了 ${js}`);
   for (const f of files) assert.ok(!lazy.some((d) => f.startsWith(d)), `${f} 在 LAZY 里, 不用写进名单`);
   for (const f of files) {

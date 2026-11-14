@@ -16,10 +16,11 @@ for f in $(sed -n "s/^[[:space:]]*'\([^']*\)',\$/\1/p" "$SRC/sw.js"); do
   count=$((count + 1))
 done
 
-# 长篇小说一回一个文件, 网页上读到才下载 (sw.js 的 LAZY), App 里整个文件夹都放进去
+# 长篇小说一回一个文件、国际象棋引擎, 网页上用到才下载 (sw.js 的 LAZY), App 里整个文件夹都放进去
+# (引擎的 .wasm 和许可证 COPYING.txt 也要)
 for d in $(sed -n "s/^const LAZY = \[\(.*\)\];\$/\1/p" "$SRC/sw.js" | tr -d "' " | tr ',' ' '); do
   mkdir -p "$DEST/$d"
-  cp "$SRC/$d"*.js "$DEST/$d"
+  for f in "$SRC/$d"*; do if [ -f "$f" ]; then cp "$f" "$DEST/$d"; fi; done
   count=$((count + $(ls "$SRC/$d" | wc -l)))
 done
 

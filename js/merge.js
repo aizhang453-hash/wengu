@@ -20,6 +20,7 @@ import { cleanPet, mergePet } from './pet.js';
 import { cleanArcade, mergeArcade } from './arcade.js';
 import { cleanReading, mergeReading } from './reading.js';
 import { cleanRadio, mergeRadio } from './radio.js';
+import { cleanChess, mergeChess } from './chessdata.js';
 
 const LOWER_IS_BETTER = new Set(['match']);
 
@@ -147,5 +148,6 @@ export function mergeData(local, remote) {
     arcade: mergeArcade(cleanArcade(local.arcade), cleanArcade(remote.arcade)),
     reading: mergeReading(cleanReading(local.reading), cleanReading(remote.reading)),
     radio: mergeRadio(cleanRadio(local.radio), cleanRadio(remote.radio)),
+    chess: mergeChess(cleanChess(local.chess), cleanChess(remote.chess)),
   };
 }

@@ -1,13 +1,14 @@
 // 设置 (#/settings): 复习 (每天最多复习几张、想记住的把握、按自己的记录优化排法)、多设备同步、备份、温温。
 // 以前散在首页 (备份)、复习页下面 (上限、把握、排法) 的, 都放在这里
 
-import { h, toast, download, today } from '../dom.js';
+import { h, toast, download, today, openDialog } from '../dom.js';
 import { exportBackup, importBackup } from '../backup.js';
 import { openCapDialog, openRetentionDialog, percent, dateText } from './plan.js';
 import { openOptimizeDialog } from './optimize.js';
 import { reviewCount } from '../revlog.js';
 import { loadConfig } from '../sync.js';
 import { inApp } from '../platform.js';
+import { engineChoice, downloadFull, removeFull, FULL_WASM_SIZE } from '../chessengine.js';
 
 const num = (n) => n.toLocaleString('zh-CN');
 
@@ -93,10 +94,72 @@ export function renderSettings({ store, go, syncer, pet = null }) {
         ),
       ),
       group(
+        '国际象棋',
+        row(
+          '引擎',
+          '轻量版 1.8 MB，打开就能用；完整版更强，但有 99 MB，只存在这台设备上',
+          engineChoice() === 'full' ? '完整版' : '轻量版',
+          engineChoice() === 'full'
+            ? h(
+                'button',
+                {
+                  class: 'btn small',
+                  type: 'button',
+                  onclick: async () => {
+                    await removeFull();
+                    toast('换回轻量版了');
+                    redraw();
+                  },
+                },
+                '换回轻量版',
+              )
+            : h('button', { class: 'btn small', type: 'button', onclick: () => openFullEngineDialog(redraw) }, '换成完整版'),
+        ),
+      ),
+      group(
         '其他',
         pet ? row(`小乌龟${pet.name()}`, '学习陪伴：显示、提醒与装扮', pet.summary(), h('button', { class: 'btn small', type: 'button', onclick: () => pet.openPanel() }, '打开')) : null,
         row('Quizlet 导入书签', '在 Quizlet 卡片集页面一键导入', null, h('a', { class: 'btn small', href: '#/quizlet' }, '查看')),
       ),
     ),
   };
+}
+
+// 下载完整版的国际象棋引擎 (99 MB, 从 unpkg 下载、核对指纹后存在这台设备上)
+function openFullEngineDialog(onDone) {
+  const bar = h('div', { class: 'chess-progress' }, h('div', { class: 'chess-progress-fill' }));
+  const note = h('p', { class: 'muted small' }, `要下载 ${Math.round(FULL_WASM_SIZE / 1e6)} MB，用 Wi-Fi 比较好。`);
+  const ctrl = new AbortController();
+  let busy = false;
+  const start = h(
+    'button',
+    {
+      class: 'btn primary',
+      type: 'button',
+      onclick: async () => {
+        if (busy) return;
+        busy = true;
+        start.disabled = true;
+        try {
+          await downloadFull({
+            signal: ctrl.signal,
+            onProgress: (x) => {
+              bar.firstChild.style.width = `${(x * 100).toFixed(1)}%`;
+              note.textContent = `${Math.round((x * FULL_WASM_SIZE) / 1e6)} / ${Math.round(FULL_WASM_SIZE / 1e6)} MB`;
+            },
+          });
+          dlg.close();
+          toast('换成完整版了');
+          onDone();
+        } catch (e) {
+          if (ctrl.signal.aborted) return;
+          note.textContent = e?.message || '下载失败';
+          busy = false;
+          start.disabled = false;
+        }
+      },
+    },
+    '下载',
+  );
+  const dlg = openDialog({ title: '完整版引擎', body: [bar, note], footer: start, onClose: () => busy && ctrl.abort() });
 }

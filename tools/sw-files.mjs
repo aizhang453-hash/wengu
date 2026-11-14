@@ -15,7 +15,9 @@ const listJs = (dir) =>
 const sw = readFileSync(join(root, 'sw.js'), 'utf8');
 // 读到才存的文件夹 (sw.js 的 LAZY: 长篇小说一回一个文件) 不写进名单
 const lazy = JSON.parse((/^const LAZY = (\[.*\]);$/m.exec(sw)?.[1] ?? '[]').replace(/'/g, '"'));
-const files = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'img/guardian-powered-black.png', 'img/guardian-powered-white.png', 'css/style.css', ...listJs('js').filter((f) => !lazy.some((d) => f.startsWith(d)))];
+// 国际象棋的棋子图 (img/chess/*.svg) 也存
+const chessImg = readdirSync(join(root, 'img/chess')).filter((f) => f.endsWith('.svg')).sort().map((f) => `img/chess/${f}`);
+const files = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'img/guardian-powered-black.png', 'img/guardian-powered-white.png', ...chessImg, 'css/style.css', ...listJs('js').filter((f) => !lazy.some((d) => f.startsWith(d)))];
 const next = sw.replace(/const FILES = \[[\s\S]*?\];/, `const FILES = [\n${files.map((f) => `  '${f}',`).join('\n')}\n];`);
 writeFileSync(join(root, 'sw.js'), next);
 console.log(`sw.js: ${files.length} 个文件`);

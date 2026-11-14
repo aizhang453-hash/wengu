@@ -15,6 +15,7 @@
 //   #/read/author/<作者>  作者页: 书斋里他的所有作品
 //   #/news                邸报 (v1.75 以前叫新闻): 中文 (#/news/en 英文), 上面快讯、下面报道; #/news/a/<编号> 一篇全文; #/news/word 每日猜词
 //   #/radio               广播 (v1.78): 全世界的网络电台, 搜、收藏; 底下的播放条换页面接着响
+//   #/chess               国际象棋 (v1.82): 跟电脑下 (#/chess/play)、复盘 (#/chess/review/<编号>); 页面代码用到才加载 (views/chess.js)
 //   #/settings            设置 (复习、同步、备份、温温)
 //   #/pet                 小乌龟温温的小窝 (长大、心情、装扮、起名字)
 //   #/sync                多设备同步 (#/sync/connect/<..>: 手机扫码连接)
@@ -36,7 +37,7 @@
 import { Store, KEY } from './store.js';
 import { cleanMedia } from './media.js';
 import { inApp, watchModals } from './platform.js';
-import { h, toast, icon, dialogOpen, fitDialogsToKeyboard } from './dom.js';
+import { h, fill, toast, icon, dialogOpen, fitDialogsToKeyboard } from './dom.js';
 import { renderHome } from './views/home.js';
 import { renderSet } from './views/set.js';
 import { renderEdit } from './views/edit.js';
@@ -154,6 +155,7 @@ function parse(hash) {
   if (parts[0] === 'quizlet') return { page: 'quizlet' };
   if (parts[0] === 'settings') return { page: 'settings' };
   if (parts[0] === 'radio') return { page: 'radio' };
+  if (parts[0] === 'chess') return { page: 'chess', sub: parts.slice(1) };
   if (parts[0] === 'pet') return { page: 'pet' };
   if (parts[0] === 'read' && parts[1] === 'author' && parts[2]) return { page: 'author', name: parts[2] }; // 作者页 (v1.71)
   if (parts[0] === 'read') return parts[2] ? { page: 'read-piece', id: parts[1], n: parts[2] } : parts[1] ? { page: 'read-book', id: parts[1] } : { page: 'read' };
@@ -244,6 +246,7 @@ function render() {
   else if (route.page === 'news-article') view = renderArticle(ctx, route.id);
   else if (route.page === 'daily-word') view = renderDailyWord(ctx);
   else if (route.page === 'radio') view = renderRadio(ctx);
+  else if (route.page === 'chess') view = chessView(ctx, route.sub);
   else if (route.page === 'sync') view = renderSync(ctx, route.sub, route.data);
   else if (route.page === 'share') view = renderShareImport(ctx, route.code);
   else if (route.page === 'quizlet') view = renderQuizlet(ctx);
@@ -257,6 +260,23 @@ function render() {
   document.title = view.title ? `${view.title} · 温故` : '温故';
   window.scrollTo(0, 0);
   view.focus?.focus();
+}
+
+// 国际象棋的页面 (连规则库一百多 KB) 打开时才加载
+function chessView(ctx, sub) {
+  const box = h('section', { class: 'chess-page' }, h('p', { class: 'muted' }, '正在打开……'));
+  const view = { title: '国际象棋', el: box };
+  import('./views/chess.js')
+    .then(({ renderChess }) => {
+      if (current !== view) return;
+      const v = renderChess(ctx, sub);
+      box.replaceWith(v.el);
+      view.el = v.el;
+      view.cleanup = v.cleanup;
+      if (v.title) document.title = `${v.title} · 温故`;
+    })
+    .catch(() => fill(box, h('p', {}, '打开失败，看看网连上没有，再刷新一下。')));
+  return view;
 }
 
 function missing() {

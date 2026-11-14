@@ -47,6 +47,7 @@ final class AppSchemeHandler: NSObject, WKURLSchemeHandler {
     case "webmanifest": return "application/manifest+json; charset=utf-8"
     case "svg": return "image/svg+xml"
     case "png": return "image/png"
+    case "wasm": return "application/wasm" // 国际象棋引擎: 不是这个类型浏览器不肯跑
     default: return UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
     }
   }

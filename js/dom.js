@@ -179,6 +179,7 @@ const ICONS = {
   right: '<path d="M5 12h14M12 5l7 7-7 7"/>',
   bulb: '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/>',
   cloud: '<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 9.6 4.2 4.2 0 0 0 7 18z"/>',
+  chess: '<path d="M7 21h10"/><path d="M8.5 21v-2.5c0-2.5 2.5-3.5 3.5-6l-3.2 1.3-1.8-2 4.2-5.3V4.5l1.6 1.2c3.2.8 5.2 3.8 5.2 8.3V21"/><circle cx="12.6" cy="8.6" r=".6" fill="currentColor"/>',
   radio: '<rect x="3" y="9" width="18" height="12" rx="2"/><path d="M7 9l10-5"/><circle cx="15.5" cy="15" r="2.5"/><path d="M6.5 13h4M6.5 17h4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/>',
