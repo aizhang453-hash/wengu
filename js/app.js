@@ -34,7 +34,8 @@
 //   #/set/<id>/wordle     (v1.75 以前的 Wordle) 现在打开邸报的每日猜词
 //   #/set/<id>/diagram    标注图练习
 
-import { Store, KEY } from './store.js';
+import { Store, KEY, VER_KEY } from './store.js';
+import { radioNow } from './views/radiobar.js';
 import { cleanMedia } from './media.js';
 import { inApp, watchModals } from './platform.js';
 import { h, fill, toast, icon, dialogOpen, fitDialogsToKeyboard } from './dom.js';
@@ -335,7 +336,9 @@ setupSuggest({ store, go }); // 顶上搜索框边打字边出结果
 // 同时开了好几个标签页: 别的标签页存了东西, 这边重新读, 免得这边一存把那边的盖掉。
 // 首页和卡片集页直接重画; 正在背、正在编辑的不打断 (它们存的时候按 id 找, 用的是新读的)
 window.addEventListener('storage', (e) => {
-  if (e.key !== null && e.key !== KEY) return;
+  if (e.key !== null && e.key !== KEY && e.key !== VER_KEY) return;
+  if (checkOutdated()) return;
+  if (e.key === VER_KEY) return;
   store.reload();
   refreshPage(['home', 'set', 'folder', 'games', 'mistakes', 'qset', 'stats']);
   pet.changed();
@@ -346,6 +349,39 @@ window.addEventListener('beforeunload', (e) => {
     e.returnValue = '';
   }
 });
+
+// 这个网页开着的时候温故更新了, 别的网页 (新版本) 已经存过 (v1.86.2, store.js DATA_VER):
+// 这边的程序旧了, 存了会把新版本的东西冲掉, 所以不存、不同步 (store.save、syncer 自己会停)。
+// 没在看、没改到一半、没在放广播的, 自己刷新一下就是新版本了; 不然提示一句 (一次刷新以后还是旧的就不再刷, 免得一直刷)
+const RELOADED = 'wengu:reloaded-for';
+let outdatedTold = false;
+function checkOutdated() {
+  if (!store.outdated) return false;
+  let tried = false;
+  try {
+    tried = sessionStorage.getItem(RELOADED) === String(store.storedVer());
+  } catch {
+    tried = true;
+  }
+  const busy = current?.isDirty?.() || dialogOpen() || ['playing', 'loading'].includes(radioNow().state);
+  if (!tried && !busy && document.visibilityState === 'hidden') {
+    try {
+      sessionStorage.setItem(RELOADED, String(store.storedVer()));
+    } catch {
+      // 记不下就不自己刷了
+      return true;
+    }
+    location.reload();
+    return true;
+  }
+  if (!outdatedTold && document.visibilityState === 'visible') {
+    outdatedTold = true;
+    toast('温故更新了，刷新一下网页再接着用（不刷新的话，这一页改的存不上）');
+  }
+  return true;
+}
+store.onOutdated = () => checkOutdated();
+document.addEventListener('visibilitychange', () => checkOutdated());
 
 // 请浏览器别在空间紧的时候自己清掉卡片 (不一定答应, 答不答应都不影响用)
 navigator.storage?.persist?.().catch(() => {});

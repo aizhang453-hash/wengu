@@ -396,3 +396,45 @@ test('导入备份时合并打卡记录 (同一天取多的)', () => {
   to.importBackup(from.exportBackup());
   assert.deepEqual(to.data.activity, { '2026-10-10': 5, '2026-10-11': 7, '2026-10-12': 1 });
 });
+
+// v1.86.2: 开着没刷新的旧网页 (程序旧) 一存就把新版本的东西冲掉 (用户的 chess.com 用户名每次都没了)。
+// 存的时候记下版本; 看见更新的版本存过就不再存
+test('存档记下是哪一版存的; 更新的版本存过, 旧的就不再存 (不冲掉新东西)', async () => {
+  const { DATA_VER, VER_KEY, KEY } = await import('../js/store.js');
+  const storage = memoryStorage();
+  const a = new Store(storage);
+  a.putSet(sampleSet());
+  assert.equal(storage.getItem(VER_KEY), String(DATA_VER));
+  assert.equal(a.outdated, false);
+
+  // 别的网页 (新一版) 存过了
+  const newer = storage.getItem(KEY);
+  storage.setItem(VER_KEY, String(DATA_VER + 1));
+  assert.equal(a.outdated, true);
+  let told = 0;
+  let errors = 0;
+  a.onOutdated = () => told++;
+  a.onSaveError = () => errors++;
+  assert.throws(() => a.putSet(makeSet({ title: '旧网页加的', cards: [makeCard('a', 'b')] })), /刷新/);
+  assert.equal(storage.getItem(KEY), newer, '存着的没被旧网页改掉');
+  assert.equal(storage.getItem(VER_KEY), String(DATA_VER + 1));
+  assert.equal(told, 1);
+  assert.equal(errors, 0, '不当成「存不下了」');
+
+  // 一下改好几样: 不说「存不下」, 退回去
+  const before = a.allSets().length;
+  assert.throws(() => a.transaction(() => a.putSet(sampleSet())), (e) => /刷新/.test(e.message) && e.size === undefined);
+  assert.equal(a.allSets().length, before);
+});
+
+test('以前的版本存的 (没记版本) 照常读、照常存, 存了记上版本', async () => {
+  const { DATA_VER, VER_KEY } = await import('../js/store.js');
+  const storage = memoryStorage();
+  storage.setItem('wengu:v1', JSON.stringify({ version: 1, sets: [sampleSet()] }));
+  const a = new Store(storage);
+  assert.equal(a.allSets().length, 1);
+  assert.equal(a.outdated, false);
+  a.putSet(makeSet({ title: '新的', cards: [makeCard('x', 'y')] }));
+  assert.equal(new Store(storage).allSets().length, 2);
+  assert.equal(storage.getItem(VER_KEY), String(DATA_VER));
+});

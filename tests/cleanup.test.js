@@ -26,7 +26,7 @@ test('删卡片集: 浏览器里另外记的 (背到哪了、学习目标、学�
   for (const kind of ['cards-session', 'learn-goal', 'learn-scope', 'wordle']) s.setItem(`wengu:${kind}:${set.id}`, '{}');
   s.setItem('wengu:review-prefs', '{}');
   store.deleteSet(set.id);
-  assert.deepEqual([...s.map.keys()].filter((k) => k !== 'wengu:v1'), ['wengu:review-prefs']);
+  assert.deepEqual([...s.map.keys()].filter((k) => k !== 'wengu:v1' && k !== 'wengu:data-ver'), ['wengu:review-prefs']);
 });
 
 test('别的设备删的 (同步过来的): 打开时把这台设备上另外记的也清掉; 首页收起的文件夹也是', () => {

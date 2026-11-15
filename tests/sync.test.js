@@ -659,3 +659,26 @@ test('同步出错时记下是哪种错 (密钥不对 → auth, 页面会直接�
     globalThis.fetch = realFetch;
   }
 });
+
+test('网页的程序旧了 (更新的版本存过): 不同步, 不把新版本的东西从仓库里冲掉', async () => {
+  const { DATA_VER, VER_KEY } = await import('../js/store.js');
+  const storage = memoryStorage();
+  storage.setItem('wengu:sync', JSON.stringify({ owner: 'o', repo: 'r', token: 't' }));
+  const local = memoryStorage();
+  const store = new Store(local);
+  local.setItem(VER_KEY, String(DATA_VER + 1));
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return new Response('{}', { status: 500 });
+  };
+  try {
+    const manager = new SyncManager(store, { storage });
+    assert.equal(await manager.sync(), null);
+    assert.match((await manager.cleanHistory()).error, /刷新/);
+    assert.equal(calls, 0, '一次都没连仓库');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

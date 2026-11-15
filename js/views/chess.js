@@ -206,6 +206,25 @@ async function myRating(store) {
 // ---- 首页 ----
 let ccCache = null; // { name, at, games }: 这次打开温故拿过的 chess.com 棋 (两分钟内不重拿)
 
+// chess.com 用户名在这台设备上另存一份 (v1.86.2): 存档万一被没刷新的旧网页冲掉了 (见 store.js 的 DATA_VER), 还能找回来
+const CC_KEY = 'wengu:chess-cc';
+export function ccSaved() {
+  try {
+    const v = globalThis.localStorage?.getItem(CC_KEY) ?? '';
+    return CC_NAME.test(v) ? v : '';
+  } catch {
+    return '';
+  }
+}
+function ccRemember(name) {
+  try {
+    if (name) globalThis.localStorage?.setItem(CC_KEY, name);
+    else globalThis.localStorage?.removeItem(CC_KEY);
+  } catch {
+    // 记不下就算了
+  }
+}
+
 function renderHub({ store, go }) {
   const chess = () => store.data.chess;
   let coach = coachOf(chess()?.coach?.id ?? DEFAULT_COACH);
@@ -268,7 +287,10 @@ function renderHub({ store, go }) {
   // chess.com 的棋
   const cc = h('section', { class: 'chess-sec' });
   const drawCC = async (refresh = false) => {
+    // 存档里一点记录都没有 (不是点了「换人」), 这台设备记得: 找回来。时间记成最早, 别的设备真改过的照样听那边的
+    if (!chess()?.user && ccSaved()) store.updateChess((c) => ({ ...c, user: { name: ccSaved(), at: 1 } }));
     const name = chess()?.user?.name ?? '';
+    ccRemember(name);
     if (!name) {
       const input = h('input', { class: 'input', type: 'text', placeholder: 'chess.com 用户名', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'go', 'aria-label': 'chess.com 用户名' });
       const save = () => {

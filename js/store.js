@@ -16,6 +16,12 @@ import { cleanChess, mergeChess } from './chessdata.js';
 
 export const KEY = 'wengu:v1';
 
+// 存档是哪一版的程序存的 (v1.86.2)。存档里加了新东西 (新的一块, 或者旧的一块里加了新字段) 就加一; 只能加, 不能减。
+// 为什么: 开了好几天没刷新的旧网页不认识新东西, 它一存就把新东西冲掉 (2026-11-15 用户在电脑网页上每次都要重填 chess.com 用户名)。
+// 所以每次存顺便记下版本; 旧网页看见更新的版本存过, 就不再存、不再同步, 等刷新 (app.js checkOutdated)
+export const DATA_VER = 2;
+export const VER_KEY = 'wengu:data-ver';
+
 // 时间 + 同一毫秒里第几个 + 随机几位, 14 个字 (以前用 36 个字的 UUID; 一张卡片的 id 要存好几遍, 几千张能省不少地方)
 let seq = 0;
 export function newId() {
@@ -449,12 +455,36 @@ export class Store {
 
   // 存不下 (超过浏览器给的空间、无痕模式) 时不抛错, 调 onSaveError 提示一下, 返回 false。
   // 存好了调 onChange (同步用; 同步自己存的不算)
+  // 存着的是哪一版的程序存的 (没记过是 0)
+  storedVer() {
+    try {
+      return Number(this.storage?.getItem(VER_KEY)) || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  // 这个网页的程序比存着的旧了 (别的网页已经是新版本、存过): 再存会把新版本的东西冲掉
+  get outdated() {
+    return this.storedVer() > DATA_VER;
+  }
+
+  // 存不进去时抛的错: 程序旧了的说刷新, 不然是空间满了
+  saveError() {
+    return new Error(this.outdated ? '温故更新了，刷新一下网页再试' : '存不下了');
+  }
+
   save({ fromSync = false } = {}) {
     if (this.holding) return true; // transaction 里: 最后一起存
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
+    if (this.outdated) {
+      this.onOutdated?.();
+      return false;
+    }
     try {
       this.storage?.setItem(KEY, JSON.stringify(this.data, compact));
+      if (this.storedVer() !== DATA_VER) this.storage?.setItem(VER_KEY, String(DATA_VER));
       if (!fromSync) this.onChange?.();
       return true;
     } catch (e) {
@@ -483,6 +513,7 @@ export class Store {
       const size = this.size();
       this.data = before;
       this.applyParameters();
+      if (this.outdated) throw this.saveError();
       throw Object.assign(new Error('存不下了'), { size });
     }
     return result;
@@ -602,7 +633,7 @@ export class Store {
       if (i === -1) this.data.sets.pop();
       else this.data.sets[i] = prev;
       this.data.deleted = deletedBefore;
-      throw new Error('存不下了');
+      throw this.saveError();
     }
     return clean;
   }
@@ -686,7 +717,7 @@ export class Store {
       if (i === -1) this.data.mistakes.pop();
       else this.data.mistakes[i] = prev;
       Object.assign(qset, qsetBefore);
-      throw new Error('存不下了');
+      throw this.saveError();
     }
     return clean;
   }
@@ -933,7 +964,7 @@ export class Store {
       Object.assign(card, before);
       if (!before.edited) delete card.edited;
       set.updatedAt = before.updatedAt;
-      throw new Error('存不下了');
+      throw this.saveError();
     }
     return card;
   }

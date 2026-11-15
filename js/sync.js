@@ -704,6 +704,7 @@ export class SyncManager {
   async cleanHistory() {
     const c = this.config;
     if (!c) return { error: '未开启同步' };
+    if (this.store.outdated) return { error: '温故更新了，刷新一下网页再试' };
     while (this.running) await this.running;
     this.setStatus('syncing', '清理历史版本');
     this.running = (async () => {
@@ -742,6 +743,7 @@ export class SyncManager {
   async sync() {
     const c = this.config;
     if (!c) return null;
+    if (this.store.outdated) return null; // 这个网页的程序旧了 (别的网页是新版本): 不同步, 免得把新版本的东西从仓库里冲掉
     if (this.running) {
       this.again = true;
       return this.running;
