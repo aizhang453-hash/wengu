@@ -11991,3 +11991,35 @@ body.radio-on:has(.radio-page) .radio-bar {
 /* 分析页: 棋盘小一点, 右边放得下开局浏览器的比例条 */
 .chess-analysis .chess-layout { grid-template-columns: minmax(0, 520px) minmax(360px, 1fr); }
 @media (max-width: 860px) { .chess-analysis .chess-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 跟教练下 (v1.87, 照 chess.com「挑战教练」): 开始前右边挑难度、执哪方; 下棋时三个大按钮、小图标、设置开关 ---------- */
+.chess-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+.chess-side-head strong { font-size: 1.1rem; }
+.chess-setup-side { display: flex; flex-direction: column; gap: 12px; }
+.chess-diffs.col { grid-template-columns: minmax(0, 1fr); max-width: none; }
+.chess-diffs.col .chess-diff { align-items: stretch; text-align: left; padding: 12px 14px; }
+.chess-diffs.col .chess-diff strong { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.chess-diffs.col .chess-diff > span { text-align: left; }
+.chess-diff .chess-diff-rating { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+.chess-more { align-self: center; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 0.92rem; cursor: pointer; }
+.chess-more:hover { color: var(--text); }
+.chess-more[aria-expanded='true'] svg { transform: rotate(180deg); }
+.chess-setup-side .chess-levels { grid-template-columns: repeat(5, 1fr); max-width: none; }
+.chess-setup-side .chess-level strong { font-size: 1rem; }
+.chess-colors { display: flex; justify-content: center; gap: 12px; }
+.chess-color { width: 56px; height: 56px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 2px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; }
+.chess-color.on { border-color: var(--accent); background: var(--accent-soft); }
+.chess-color-king { width: 40px; height: 40px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.chess-color-q { font-size: 1.6rem; font-weight: 700; color: var(--muted); }
+.chess-go { width: 100%; padding-top: 14px; padding-bottom: 14px; font-size: 1.15rem; }
+.chess-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.chess-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 6px; white-space: nowrap; }
+.chess-mini { display: flex; gap: 4px; }
+.chess-mini-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.chess-mini-btn:hover { background: var(--surface-2); color: var(--text); }
+.chess-opts { display: flex; flex-direction: column; padding: 2px 14px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.chess-opts .btn { margin-top: 8px; }
+.chess-opts[hidden], .chess-moves-box[hidden], .chess-eval[hidden] { display: none; }
+.chess-eval.flip .chess-eval-fill { top: 0; bottom: auto; }
+.chess-eval.flip .chess-eval-num { bottom: auto; top: 4px; }
+.chess-eval.flip.black-ahead .chess-eval-num { top: auto; bottom: 4px; }

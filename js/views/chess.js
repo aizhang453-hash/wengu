@@ -7,7 +7,7 @@
 // 用户 2026-11-13 要的: 参考 chess.com、Lichess, 用干鳕鱼引擎; 主要是 chess.com 的复盘要收费, 而且它有动画、有人物讲, 比 Lichess 光秃秃的舒服。
 // 人物在 chesspeople.js (用户定的), 头像在 chessface.js, 对手怎么走在 chessbot.js。
 
-import { h, fill, icon, toast, openDialog } from '../dom.js';
+import { h, fill, icon, toast, openDialog, download, today } from '../dom.js';
 import { Chess } from '../vendor/chess.js';
 import {
   START_FEN,
@@ -526,7 +526,186 @@ const checkSquare = (game) => {
 function renderPlay(ctx, mode) {
   const cur = ctx.store.data.chess?.current;
   if (cur?.mode === mode) return renderGame(ctx, cur);
-  return renderSetup(ctx, mode);
+  return mode === 'coach' ? renderCoachSetup(ctx) : renderSetup(ctx, mode);
+}
+
+// ---- 跟教练下的设置 (v1.87, 照 chess.com「挑战教练」右下角的齿轮; 这台设备上) ----
+const COACH_OPTS_KEY = 'wengu:chess-coach-opts';
+const COACH_OPTS = [
+  ['suggest', '建议箭头', false], // 轮到你时画出最好的一步
+  ['threat', '威胁箭头', true], // 对方下一步想干什么 (教练也会提醒)
+  ['evalbar', '评估条', false], // 棋盘旁边谁占优的竖条
+  ['feedback', '走法反馈', true], // 你每步的好坏图标、教练讲评, 走错了能收回
+  ['legal', '显示能走到哪', true], // 点了子, 能走的格子上有小圆点
+];
+export function readCoachOpts() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(COACH_OPTS_KEY) ?? 'null') ?? {};
+  } catch {}
+  return Object.fromEntries(COACH_OPTS.map(([k, , d]) => [k, typeof saved[k] === 'boolean' ? saved[k] : d]));
+}
+const saveCoachOpts = (o) => {
+  try {
+    localStorage.setItem(COACH_OPTS_KEY, JSON.stringify(o));
+  } catch {}
+};
+
+// 「全部难度」: 直接挑教练按多少分下
+const LEVELS = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800];
+
+// 跟教练下: 开始以前 (v1.87, 照 chess.com「挑战教练」): 左边棋盘 (摆好了还没开始), 右边教练打招呼、挑难度、执哪方、「下棋」
+function renderCoachSetup({ store, go }) {
+  const last = readLast().coach ?? {};
+  const people = coachesFor(wenwenOpen(store.data.chess));
+  let who = people.some((p) => p.id === last.who) ? last.who : store.data.chess?.coach?.id ?? DEFAULT_COACH;
+  if (!people.some((p) => p.id === who)) who = people[0].id;
+  let diff = DIFFS.some((d) => d.key === last.diff) || (last.diff === 'fixed' && LEVELS.includes(last.rating)) ? last.diff : 'even';
+  let fixed = diff === 'fixed' ? last.rating : 0;
+  let color = ['w', 'b', 'r'].includes(last.color) ? last.color : 'w';
+  let showAll = diff === 'fixed';
+  let mine = null; // 我大约多少分
+  const other = store.data.chess?.current; // 跟电脑下的那盘还没下完
+  const target = (key = diff) => (key === 'fixed' ? fixed : Math.max(100, Math.min(3000, (mine?.rating ?? START_RATING) + DIFFS.find((d) => d.key === key).delta)));
+
+  const board = createBoard({ orientation: color === 'b' ? 'b' : 'w', dests: () => [] });
+  board.set(START_FEN, { animate: false });
+  board.lock(true);
+  const topName = h('strong', {});
+  const topRating = h('span', { class: 'muted small' });
+  const topFace = h('span');
+  const top = h('div', { class: 'chess-player' }, topFace, topName, topRating);
+  const myNote = h('span', { class: 'muted small' });
+  const bottom = h('div', { class: 'chess-player' }, h('span', { class: 'chess-dot w' }), h('strong', {}, '你'), myNote);
+  const panel = coachPanel(personOf(who), { size: 80, cls: 'play' });
+  const box = h('div', { class: 'chess-setup-side' });
+
+  const drawTop = () => {
+    const p = personOf(who);
+    fill(topFace, faceSvg(p, { size: 34 }));
+    topName.textContent = p.name;
+    topRating.textContent = String(target());
+    myNote.textContent = mine ? `约 ${mine.rating} 分` : '';
+    bottom.querySelector('.chess-dot').className = `chess-dot ${color === 'b' ? 'b' : 'w'}`;
+  };
+  const changeCoach = () => {
+    let pick = who;
+    const intro = h('p', { class: 'muted small chess-intro' }, personOf(pick).intro);
+    const grid = h('div');
+    const drawGrid = () =>
+      fill(
+        grid,
+        peoplePicker(
+          people,
+          pick,
+          (id) => {
+            pick = id;
+            intro.textContent = personOf(id).intro;
+            drawGrid();
+          },
+          { label: '挑教练' },
+        ),
+      );
+    drawGrid();
+    const dlg = openDialog({
+      title: '挑教练',
+      body: [grid, intro],
+      footer: h(
+        'button',
+        {
+          class: 'btn primary',
+          type: 'button',
+          onclick: () => {
+            who = pick;
+            panel.setPerson(personOf(who));
+            panel.say(pickLine(personOf(who).hi), 'happy');
+            dlg.close();
+            draw();
+          },
+        },
+        '就是 TA',
+      ),
+    });
+  };
+  const colorBtn = (v, label, node) =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: `chess-color${v === color ? ' on' : ''}`,
+        role: 'radio',
+        'aria-checked': String(v === color),
+        'aria-label': label,
+        title: label,
+        onclick: () => {
+          color = v;
+          board.setOrientation(v === 'b' ? 'b' : 'w');
+          draw();
+        },
+      },
+      node,
+    );
+  const kingImg = (c) => h('span', { class: 'chess-color-king', style: `background-image:url("${PIECE_IMG(`${c}K`)}")` });
+  const draw = () => {
+    drawTop();
+    fill(
+      box,
+      other ? h('p', { class: 'chess-other' }, `还有一盘没下完（对 ${personOf(other.who).name}）。`, h('a', { href: other.mode === 'coach' ? '#/chess/coach' : '#/chess/play' }, '接着下')) : null,
+      h(
+        'div',
+        { class: 'chess-diffs col', role: 'radiogroup', 'aria-label': '难度' },
+        DIFFS.map((d) =>
+          h(
+            'button',
+            { type: 'button', class: `chess-diff${d.key === diff ? ' on' : ''}`, role: 'radio', 'aria-checked': String(d.key === diff), onclick: () => ((diff = d.key), (fixed = 0), draw()) },
+            h('strong', {}, d.name, h('span', { class: 'chess-diff-rating' }, String(target(d.key)))),
+            h('span', {}, d.hint),
+          ),
+        ),
+      ),
+      h('button', { type: 'button', class: 'chess-more', 'aria-expanded': String(showAll), onclick: () => ((showAll = !showAll), draw()) }, '全部难度', icon('down', 16)),
+      showAll
+        ? h(
+            'div',
+            { class: 'chess-levels', role: 'radiogroup', 'aria-label': '按多少分下' },
+            LEVELS.map((r) => h('button', { type: 'button', class: `chess-level${diff === 'fixed' && fixed === r ? ' on' : ''}`, role: 'radio', 'aria-checked': String(diff === 'fixed' && fixed === r), onclick: () => ((diff = 'fixed'), (fixed = r), draw()) }, h('strong', {}, String(r)))),
+          )
+        : null,
+      h('div', { class: 'chess-colors', role: 'radiogroup', 'aria-label': '执白还是执黑' }, colorBtn('w', '执白（先走）', kingImg('w')), colorBtn('r', '随便', h('span', { class: 'chess-color-q' }, '?')), colorBtn('b', '执黑', kingImg('b'))),
+      h(
+        'button',
+        {
+          class: 'btn primary chess-go',
+          type: 'button',
+          onclick: () => {
+            if (other && !confirm('那盘没下完的就不要了？')) return;
+            saveLast({ ...readLast(), coach: { who, diff, color, ...(diff === 'fixed' ? { rating: fixed } : {}) } });
+            const c = color === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : color;
+            store.updateChess((x, now) => ({ ...x, current: { moves: '', color: c, who, mode: 'coach', rating: target(), diff, start: now, at: now } }));
+            go('#/chess/coach');
+          },
+        },
+        '下棋',
+      ),
+    );
+  };
+  draw();
+  setTimeout(() => panel.say(pickLine(personOf(who).hi), 'smile'), 150);
+  myRating(store).then((r) => {
+    mine = r;
+    draw();
+  });
+  const head = h('div', { class: 'chess-side-head' }, h('strong', {}, '跟教练下'), h('button', { class: 'btn small', type: 'button', onclick: changeCoach }, '换教练'));
+  return {
+    title: '跟教练下',
+    el: h(
+      'section',
+      { class: 'chess-page chess-play' },
+      h('a', { class: 'back', href: '#/chess' }, '← 国际象棋'),
+      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, top, board.el, bottom), h('div', { class: 'chess-side' }, head, panel.el, box)),
+    ),
+    cleanup: () => panel.stop(),
+  };
 }
 
 function seg(list, value, onPick, label) {
@@ -646,7 +825,34 @@ function renderGame({ store, go }, cur) {
   let over = false;
   let waiting = null; // 跟教练下: 我走错了, 等我挑「收回重走」还是「接着下」
 
-  const panel = coachPanel(person, { size: 80, cls: 'play', stack: true });
+  // 跟教练下的设置 (v1.87, 右下角齿轮); 跟电脑下照旧: 不提醒威胁、不讲评, 能走的格子有小圆点
+  const opts = coachMode ? readCoachOpts() : { suggest: false, threat: false, evalbar: false, feedback: false, legal: true };
+  // 跟教练下: 教练说的话念出来 (跟复盘一个开关, 照 chess.com「挑战教练」右上角的喇叭)
+  const tts = coachMode ? voiceOf(person.id).tts ?? {} : {};
+  let said = '';
+  const voiceBtn = h('button', {
+    type: 'button',
+    class: 'chess-voice-btn',
+    onclick: () => {
+      setVoiceOn(!voiceOn());
+      drawVoiceBtn();
+      if (!voiceOn()) stopSpeaking();
+      else if (said) speak(speakable(said), 'zh-CN', tts);
+    },
+  });
+  const drawVoiceBtn = () => {
+    const on = voiceOn();
+    voiceBtn.replaceChildren(icon(on ? 'volume' : 'mute', 18));
+    voiceBtn.setAttribute('aria-label', on ? '教练正在念，点了不念' : '教练不念，点了念出来');
+    voiceBtn.title = on ? '不念' : '念出来';
+  };
+  drawVoiceBtn();
+  const panel = coachPanel(person, { size: 80, cls: 'play', stack: true, tools: coachMode && canSpeak() ? voiceBtn : null });
+  const say = (text, mood = null) => {
+    said = text;
+    panel.say(text, mood);
+    if (coachMode && voiceOn() && canSpeak() && userActed()) speak(speakable(text), 'zh-CN', tts);
+  };
   const lines = (key) => (coachMode ? person[key] : person.lines[key]);
   const thinking = h('span', { class: 'chess-thinking', hidden: true }, '思考中', h('i'), h('i'), h('i'));
   // 名字旁边只写分数 (v1.85.1, 用户说「最强型教练 · 均势 · 按 800 分下」像废话, chess.com 只写名字和分数)
@@ -665,7 +871,7 @@ function renderGame({ store, go }, cur) {
     return openBook && hist.length ? bookMoves(openBook, [hist[0].before, ...hist.map((m) => m.after)]) : [];
   };
   const drawOpening = () => {
-    const name = bookList().filter((x) => x.book && x.name).at(-1)?.name ?? '';
+    const name = game.history().length ? bookList().filter((x) => x.book && x.name).at(-1)?.name ?? '' : '初始局面';
     openName.textContent = name;
     openName.hidden = !name;
   };
@@ -682,9 +888,34 @@ function renderGame({ store, go }, cur) {
 
   const board = createBoard({
     orientation: me,
+    hints: opts.legal,
     dests: (sq) => (busy || over || waiting || game.turn() !== me ? [] : game.moves({ square: sq, verbose: true }).map((m) => m.to)),
     onMove: (uci) => myMove(uci),
   });
+  // 评估条 (设置里开): 从白方看谁占优; 你执黑 (或者翻了棋盘) 时倒过来, 你这边在下面
+  const evalFill = h('div', { class: 'chess-eval-fill' });
+  const evalNum = h('span', { class: 'chess-eval-num' });
+  const evalBar = h('div', { class: 'chess-eval', 'aria-hidden': 'true', hidden: !opts.evalbar }, evalFill, evalNum);
+  const setEval = (ev) => {
+    if (ev === null || ev === undefined) return;
+    const w = winPct(ev);
+    evalFill.style.height = `${w}%`;
+    evalNum.textContent = evalText(ev);
+    evalBar.classList.toggle('black-ahead', w < 50);
+  };
+  const drawEvalSide = () => evalBar.classList.toggle('flip', board.orientation() === 'b');
+  drawEvalSide();
+  // 棋盘上的箭头: 建议 (绿)、威胁 (红)、提示或者走错时对方怎么走, 各管各的
+  let arrowSet = {};
+  const setArrow = (key, a) => {
+    arrowSet = { ...arrowSet, [key]: a };
+    board.arrows(Object.values(arrowSet).filter(Boolean));
+  };
+  const clearArrows = () => {
+    arrowSet = {};
+    board.arrows([]);
+  };
+  let badgeSq = null; // 我上一步的好坏图标贴在哪 (走法反馈)
 
   const save = () => {
     const moves = game.history({ verbose: true }).map((m) => m.from + m.to + (m.promotion ?? ''));
@@ -710,13 +941,18 @@ function renderGame({ store, go }, cur) {
   }
   const analyseNow = async () => (await engineReady()).analyse(game.fen(), { depth: 11 });
   const prepare = () => {
-    pre = analyseNow();
-    pre.catch(() => {});
+    const p = analyseNow();
+    pre = p;
+    p.then((r) => {
+      if (!alive || p !== pre || over || game.turn() !== me) return;
+      if (opts.evalbar) setEval(r?.ev);
+      if (opts.suggest && r?.best) setArrow('suggest', { from: r.best.slice(0, 2), to: r.best.slice(2, 4), tone: 'best' });
+    }).catch(() => {});
   };
 
   // 跟教练下: 对手下一步想干什么, 有威胁就提醒 (假装轮到对手再走一步, 看引擎最想走哪步)
   async function warnThreat() {
-    if (!coachMode || game.inCheck()) return;
+    if (!coachMode || !opts.threat || game.inCheck()) return;
     const parts = game.fen().split(' ');
     parts[1] = cpu;
     parts[3] = '-';
@@ -728,7 +964,7 @@ function renderGame({ store, go }, cur) {
     }
     const e = await engineReady();
     const r = await e.analyse(flipped, { depth: 8 }).catch(() => null);
-    if (!alive || !r?.best || game.turn() !== me || waiting) return;
+    if (!alive || !r?.best || game.turn() !== me || waiting || !opts.threat) return;
     const mate = Math.abs(r.ev) >= MATE - 1000 ? MATE - Math.abs(r.ev) : 0;
     const mateForThem = mate && (r.ev > 0) === (cpu === 'w') ? mate : 0;
     // 吃了以后我能不能吃回来: 能吃回来、又不亏的不提醒
@@ -741,8 +977,8 @@ function renderGame({ store, go }, cur) {
     if (!mateForThem && gain < 2) return;
     const text = threatText(game.fen(), r.best, { mate: mateForThem });
     if (text) {
-      panel.say(`${pickLine(lines('warn'))}${text}`, 'worried');
-      board.arrows([{ from: m.from, to: m.to, tone: 'hint' }]);
+      say(`${pickLine(lines('warn'))}${text}`, 'worried');
+      setArrow('threat', { from: m.from, to: m.to, tone: 'danger' });
     }
   }
 
@@ -756,8 +992,9 @@ function renderGame({ store, go }, cur) {
       return draw(false);
     }
     busy = true;
-    board.arrows([]);
+    clearArrows();
     board.badge(null);
+    badgeSq = null;
     sound(m);
     draw();
     save();
@@ -768,20 +1005,24 @@ function renderGame({ store, go }, cur) {
     const t0 = Date.now();
     const after = await analyseNow().catch(() => null);
     if (!alive) return;
-    let said = false;
+    if (opts.evalbar) setEval(after?.ev);
+    let talked = false;
     if (before?.ev !== null && before?.ev !== undefined && after) {
       const legal = new Chess(fen).moves().length;
       const kind = classify({ before: before.ev, after: after.ev, turn: me, played: uci, best: before.best, legal, sac: sacrificeValue(fen, m.san) });
       // 下棋时棋盘上不贴好坏的图标 (v1.85.1, 用户说 chess.com 只有复盘时才有); 好坏只拿来让教练、对手说话
       const ply = game.history().length - 1;
       const facts = () => moveFacts({ m, kind, ply, before: before.ev, after: after.ev, best: before.best, reply: after.best, prev: game.history({ verbose: true }).at(-2) ?? null, book: bookList().at(-1) ?? null, them: '我' });
-      if (coachMode) {
+      if (coachMode && opts.feedback) {
+        // 走法反馈 (设置里能关): 你走的子上贴好坏的图标 (照 chess.com 的教练模式)
+        badgeSq = m.to;
+        board.badge(m.to, kind);
         // 你的每一步教练都说一句 (照 chess.com 的教练模式, v1.85.1): 按自己的性格讲这步做了什么, 走坏了说吃什么亏、该怎么走
         const line = coachLine(person, facts(), { mine: true, who: '你', whose: '我', seed: ply });
         if (kind === 'mistake' || kind === 'blunder' || kind === 'miss') {
           // 走错了: 教练讲为什么, 红箭头指出对方接下来怎么走 (照 chess.com 的教练模式), 等我挑收回还是接着下
-          panel.say(line, MOOD[kind]);
-          if (after.best) board.arrows([{ from: after.best.slice(0, 2), to: after.best.slice(2, 4), tone: 'danger' }]);
+          say(line, MOOD[kind]);
+          if (after.best) setArrow('reply', { from: after.best.slice(0, 2), to: after.best.slice(2, 4), tone: 'danger' });
           thinking.hidden = true;
           const choice = await new Promise((resolve) => {
             waiting = resolve;
@@ -794,35 +1035,38 @@ function renderGame({ store, go }, cur) {
           if (choice === 'back') {
             game.undo();
             board.badge(null);
+            badgeSq = null;
+            clearArrows();
             draw();
             save();
             busy = false;
             pre = Promise.resolve(before);
-            if (before.best) board.arrows([]);
-            panel.say('好，再想一次。', 'smile');
+            if (opts.evalbar) setEval(before.ev);
+            if (opts.suggest && before.best) setArrow('suggest', { from: before.best.slice(0, 2), to: before.best.slice(2, 4), tone: 'best' });
+            say('好，再想一次。', 'smile');
             return;
           }
-          board.arrows([]);
-        } else panel.say(line, MOOD[kind]);
-        said = true;
-      } else {
+          setArrow('reply', null);
+        } else say(line, MOOD[kind]);
+        talked = true;
+      } else if (!coachMode) {
         // 对手: 你走了好棋、走错了, 它说两句 (从它那边看: 你走好了它着急, 你走错了它高兴)
-        if (kind === 'brilliant' || kind === 'great') (panel.say(pickLine(person.lines.good), kind === 'brilliant' ? 'shock' : 'worried'), (said = true));
-        else if (kind === 'blunder' || kind === 'miss' || (kind === 'mistake' && Math.random() < 0.6)) (panel.say(pickLine(person.lines.bad), 'happy'), (said = true));
-        else if (m.captured && VALUE[m.captured] >= 3 && Math.random() < 0.7) (panel.say(pickLine(person.lines.lost), 'worried'), (said = true));
+        if (kind === 'brilliant' || kind === 'great') (say(pickLine(person.lines.good), kind === 'brilliant' ? 'shock' : 'worried'), (talked = true));
+        else if (kind === 'blunder' || kind === 'miss' || (kind === 'mistake' && Math.random() < 0.6)) (say(pickLine(person.lines.bad), 'happy'), (talked = true));
+        else if (m.captured && VALUE[m.captured] >= 3 && Math.random() < 0.7) (say(pickLine(person.lines.lost), 'worried'), (talked = true));
       }
     }
-    await cpuMove(t0, said);
+    await cpuMove(t0, talked);
   }
 
-  async function cpuMove(t0 = Date.now(), said = false) {
+  async function cpuMove(t0 = Date.now(), talked = false) {
     busy = true;
     thinking.hidden = false;
     board.lock(true);
     const e = await engineReady().catch(() => null);
     if (!e) {
       thinking.hidden = true;
-      panel.say('引擎打不开，刷新一下试试。', 'worried');
+      say('引擎打不开，刷新一下试试。', 'worried');
       return;
     }
     const legal = game.moves({ verbose: true }).map((m) => ({ ...m, uci: uciOf(m) }));
@@ -845,6 +1089,8 @@ function renderGame({ store, go }, cur) {
     thinking.hidden = true;
     if (uci) {
       const m = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+      // 教练吃掉了贴着图标的子: 图标拿掉
+      if (badgeSq && (m.to === badgeSq || m.from === badgeSq)) (board.badge(null), (badgeSq = null));
       sound(m);
       draw();
       save();
@@ -852,10 +1098,10 @@ function renderGame({ store, go }, cur) {
         // 教练自己走完也说一句这步在干什么 (照 chess.com 的教练模式, v1.85.1; 上一句挪到上面的小气泡里)
         const ply = game.history().length - 1;
         const f = moveFacts({ m, kind: 'best', ply, prev: game.history({ verbose: true }).at(-2) ?? null, book: bookList().at(-1) ?? null, them: '你' });
-        panel.say(coachLine(person, f, { mine: true, who: '我', whose: '你', seed: ply, plain: true }), game.isCheckmate() ? 'happy' : 'smile');
-      } else if (!said) {
-        if (m.captured && VALUE[m.captured] >= 3 && Math.random() < 0.6) panel.say(pickLine(person.lines.take), 'happy');
-        else if (game.inCheck() && Math.random() < 0.5) panel.say(pickLine(person.lines.check), 'smile');
+        say(coachLine(person, f, { mine: true, who: '我', whose: '你', seed: ply, plain: true }), game.isCheckmate() ? 'happy' : 'smile');
+      } else if (!talked) {
+        if (m.captured && VALUE[m.captured] >= 3 && Math.random() < 0.6) say(pickLine(person.lines.take), 'happy');
+        else if (game.inCheck() && Math.random() < 0.5) say(pickLine(person.lines.check), 'smile');
       }
     }
     if (game.isGameOver()) return finish();
@@ -863,6 +1109,18 @@ function renderGame({ store, go }, cur) {
     busy = false;
     board.lock(false);
     warnThreat();
+  }
+
+  // 棋谱上面的几行 (哪天、谁执白谁执黑、结果)
+  function setHeaders(result = '*') {
+    const now = new Date();
+    const them = `${person.name}（${coachMode ? '教练 · ' : ''}${cur.rating || '最强'}）`;
+    game.setHeader('Event', coachMode ? '温故 · 跟教练下' : '温故 · 跟电脑下');
+    game.setHeader('Site', '温故');
+    game.setHeader('Date', `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`);
+    game.setHeader('White', me === 'w' ? '你' : them);
+    game.setHeader('Black', me === 'b' ? '你' : them);
+    game.setHeader('Result', result);
   }
 
   async function finish(resigned = false) {
@@ -885,14 +1143,7 @@ function renderGame({ store, go }, cur) {
     else if (game.isDrawByFiftyMoves()) how = '五十步没吃子没动兵';
     const iWon = result === (me === 'w' ? '1-0' : '0-1');
     const drawn = result === '1/2-1/2';
-    const now = new Date();
-    const them = `${person.name}（${coachMode ? '教练 · ' : ''}${cur.rating || '最强'}）`;
-    game.setHeader('Event', coachMode ? '温故 · 跟教练下' : '温故 · 跟电脑下');
-    game.setHeader('Site', '温故');
-    game.setHeader('Date', `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`);
-    game.setHeader('White', me === 'w' ? '你' : them);
-    game.setHeader('Black', me === 'b' ? '你' : them);
-    game.setHeader('Result', result);
+    setHeaders(result);
     let id = null;
     let rated = null;
     // 我的分: 至少走了几步才算 (开局就认输的不算)
@@ -911,10 +1162,12 @@ function renderGame({ store, go }, cur) {
       elo: rated ? { rating: rated.rating, games: (before.games ?? 0) + 1, ...(before.cc ? { cc: 1 } : {}), at: t } : c.elo,
     }));
     const end = drawn ? lines('draw') : iWon ? lines('lose') : lines('win');
-    panel.say(pickLine(end), drawn ? 'smile' : iWon ? (coachMode ? 'wow' : 'worried') : coachMode ? 'smile' : 'happy');
+    say(pickLine(end), drawn ? 'smile' : iWon ? (coachMode ? 'wow' : 'worried') : coachMode ? 'smile' : 'happy');
+    clearArrows();
     const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : '';
     fill(
       side,
+      sideHead,
       panel.el,
       h(
         'div',
@@ -931,7 +1184,9 @@ function renderGame({ store, go }, cur) {
       ),
       openName,
       listBox,
+      coachMode ? miniRow : null,
     );
+    optsBox.hidden = true;
   }
 
   const undo = async () => {
@@ -941,8 +1196,9 @@ function renderGame({ store, go }, cur) {
     // 退掉电脑的最后一步 (有的话) 和我的最后一步, 回到上次轮到我走
     if (hist().at(-1)?.color !== me) game.undo();
     if (hist().at(-1)?.color === me) game.undo();
-    board.arrows([]);
+    clearArrows();
     board.badge(null);
+    badgeSq = null;
     draw();
     save();
     busy = false;
@@ -950,16 +1206,16 @@ function renderGame({ store, go }, cur) {
     if (game.turn() !== me) return cpuMove();
     board.lock(false);
     prepare();
-    panel.say(coachMode ? '好，重来这步。' : pickLine(person.lines.hi), 'normal');
+    say(coachMode ? '好，重来这步。' : pickLine(person.lines.hi), 'normal');
   };
   const hint = async () => {
     if (busy || over || waiting || game.turn() !== me) return;
     const r = await (pre ?? analyseNow()).catch(() => null);
     if (!r?.best || !alive) return;
     const m = new Chess(game.fen()).move({ from: r.best.slice(0, 2), to: r.best.slice(2, 4), promotion: r.best[4] });
-    board.arrows([{ from: m.from, to: m.to, tone: 'hint' }]);
+    setArrow('hint', { from: m.from, to: m.to, tone: 'hint' });
     // 跟对手下: 提示不从对手嘴里说出来
-    if (coachMode) panel.say(`试试 ${zhSan(m.san)}。`, 'smile');
+    if (coachMode) say(`试试 ${zhSan(m.san)}。`, 'smile');
     else toast(`提示：试试 ${zhSan(m.san)}`);
   };
   const resign = () => {
@@ -970,27 +1226,103 @@ function renderGame({ store, go }, cur) {
     finish(true);
   };
 
-  const side = h(
-    'div',
-    { class: 'chess-side' },
-    panel.el,
-    askBox,
-    h(
-      'div',
-      { class: 'chess-tools' },
-      h('button', { class: 'btn', type: 'button', onclick: undo }, icon('undo', 18), '悔棋'),
-      h('button', { class: 'btn', type: 'button', onclick: hint }, '💡 提示'),
-      h('button', { class: 'btn', type: 'button', onclick: () => board.flip() }, '⇅ 翻转'),
-      h('button', { class: 'btn', type: 'button', onclick: resign }, '🏳 认输'),
-    ),
-    openName,
-    listBox,
-  );
+  const flip = () => {
+    board.flip();
+    drawEvalSide();
+  };
+  // 下载棋谱 (PGN, 还没下完的也行)
+  const downloadPgn = () => {
+    if (!game.history().length) return toast('还没走棋');
+    if (!over) setHeaders('*');
+    download(`温故-${coachMode ? '跟教练下' : '跟电脑下'}-${today()}.pgn`, game.pgn(), 'application/x-chess-pgn');
+  };
+
+  // 设置 (跟教练下, 照 chess.com 右下角的齿轮): 开关一排, 「保存」以后回到走子记录
+  const optsBox = h('div', { class: 'chess-opts', hidden: true });
+  const applyOpts = (next) => {
+    const was = { ...opts };
+    Object.assign(opts, next);
+    saveCoachOpts(opts);
+    board.setHints(opts.legal);
+    evalBar.hidden = !opts.evalbar;
+    if (!opts.suggest) setArrow('suggest', null);
+    if (!opts.threat) setArrow('threat', null);
+    if (!opts.feedback) (board.badge(null), (badgeSq = null));
+    const myTurn = !over && !busy && !waiting && game.turn() === me;
+    if (myTurn && ((opts.evalbar && !was.evalbar) || (opts.suggest && !was.suggest))) prepare();
+    if (myTurn && opts.threat && !was.threat) warnThreat();
+  };
+  const openOpts = () => {
+    if (!optsBox.hidden) return (optsBox.hidden = true), (listBox.hidden = false);
+    const next = { ...opts };
+    fill(
+      optsBox,
+      COACH_OPTS.map(([k, label]) => {
+        const input = h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: next[k], onchange: (e) => (next[k] = e.target.checked) });
+        return h('label', { class: 'switch-row' }, h('span', {}, label), input);
+      }),
+      h(
+        'button',
+        {
+          class: 'btn primary',
+          type: 'button',
+          onclick: () => {
+            applyOpts(next);
+            optsBox.hidden = true;
+            listBox.hidden = false;
+          },
+        },
+        '保存',
+      ),
+    );
+    optsBox.hidden = false;
+    listBox.hidden = true;
+  };
+  const sideHead = coachMode ? h('div', { class: 'chess-side-head' }, h('strong', {}, '跟教练下')) : null;
+  const miniBtn = (ic, label, onclick) => h('button', { class: 'chess-mini-btn', type: 'button', title: label, 'aria-label': label, onclick }, icon(ic, 20));
+  const miniRow = h('div', { class: 'chess-mini' }, miniBtn('import', '下载棋谱', downloadPgn), miniBtn('flip', '翻转棋盘', flip), coachMode ? miniBtn('gear', '设置', openOpts) : null);
+
+  // 跟教练下: 照 chess.com 「认输 · 提示 · 悔棋」三个大按钮在走子记录下面, 下载、翻转、设置是小图标
+  const side = coachMode
+    ? h(
+        'div',
+        { class: 'chess-side' },
+        sideHead,
+        panel.el,
+        askBox,
+        openName,
+        listBox,
+        optsBox,
+        h(
+          'div',
+          { class: 'chess-actions' },
+          h('button', { class: 'btn', type: 'button', onclick: resign, title: '认输' }, icon('flag', 18), '认输'),
+          h('button', { class: 'btn primary', type: 'button', onclick: hint, title: '提示' }, icon('bulb', 18), '提示'),
+          h('button', { class: 'btn', type: 'button', onclick: undo, title: '悔棋' }, icon('undo', 18), '悔棋'),
+        ),
+        miniRow,
+      )
+    : h(
+        'div',
+        { class: 'chess-side' },
+        panel.el,
+        askBox,
+        h(
+          'div',
+          { class: 'chess-tools' },
+          h('button', { class: 'btn', type: 'button', onclick: undo }, icon('undo', 18), '悔棋'),
+          h('button', { class: 'btn', type: 'button', onclick: hint }, '💡 提示'),
+          h('button', { class: 'btn', type: 'button', onclick: flip }, '⇅ 翻转'),
+          h('button', { class: 'btn', type: 'button', onclick: resign }, '🏳 认输'),
+        ),
+        openName,
+        listBox,
+      );
 
   draw(false);
   setTimeout(() => {
     if (!alive) return;
-    if (!game.history().length) panel.say(pickLine(lines('hi')), 'smile');
+    if (!game.history().length) say(pickLine(lines('hi')), 'smile');
     if (game.isGameOver()) return finish();
     if (game.turn() === cpu) cpuMove();
     else prepare();
@@ -1002,13 +1334,14 @@ function renderGame({ store, go }, cur) {
       'section',
       { class: 'chess-page chess-play' },
       h('a', { class: 'back', href: '#/chess' }, '← 国际象棋'),
-      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, top, board.el, bottom), side),
+      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, top, h('div', { class: 'chess-board-wrap' }, evalBar, board.el), bottom), side),
     ),
     cleanup: () => {
       alive = false;
       waiting?.('go');
       engine?.cancel();
       panel.stop();
+      if (coachMode) stopSpeaking();
     },
   };
 }

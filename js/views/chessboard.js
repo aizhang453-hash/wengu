@@ -85,8 +85,9 @@ export function chessSound(kind = 'move') {
 }
 
 // orientation: 'w' 白在下面 / 'b'; dests(square) → 这个子能走到的格子 (不能动是 []); onMove(uci) 走了一步 (升变的带 q/r/b/n)
-export function createBoard({ orientation = 'w', dests = () => [], onMove = () => {}, onTapEmpty = null } = {}) {
+export function createBoard({ orientation = 'w', dests = () => [], onMove = () => {}, onTapEmpty = null, hints = true } = {}) {
   let side = orientation;
+  let showDests = hints; // 点了子显示能走到哪 (小圆点); 跟教练下的设置里能关 (v1.87)
   let pieces = {}; // 格子 → 棋子的 div
   let current = {};
   let selected = null;
@@ -149,7 +150,7 @@ export function createBoard({ orientation = 'w', dests = () => [], onMove = () =
     if (check) mark(check, 'm-check');
     if (selected) {
       mark(selected, 'm-sel');
-      for (const to of dests(selected)) mark(to, current[to] ? 'm-cap' : 'm-dot');
+      if (showDests) for (const to of dests(selected)) mark(to, current[to] ? 'm-cap' : 'm-dot');
     }
   }
 
@@ -373,6 +374,10 @@ export function createBoard({ orientation = 'w', dests = () => [], onMove = () =
     setOrientation,
     flip: () => setOrientation(side === 'w' ? 'b' : 'w'),
     orientation: () => side,
+    setHints: (on) => {
+      showDests = on;
+      drawMarks();
+    },
     lock: (on) => {
       locked = on;
       if (on) {

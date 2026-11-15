@@ -37,7 +37,7 @@ export const START_RATING = 800; // 还不知道水平时先按 800 分算
 //            review: { depth, ev: [每个局面的打分], bm: [每个局面引擎最想走的], ev2: [第二想走的那步走完的打分 (没有是 null)] } }
 //            删掉的留个记号 { id, at, gone: 1 } (同步时别从另一台设备又合回来; 留 90 天) },
 //   skills: 技巧 (v1.85, chessskills.js) { claims: { 技巧: ['棋局编号:第几步', …] }, mastered: { 技巧: 学会的时间 } } (没有是 null),
-//   current: 正在跟电脑下的 { moves: 'e2e4 e7e5 …', color 我执哪方, who, mode, rating, diff 跟教练下的难度 ('easy' 休闲 / 'even' 均势 / 'hard' 挑战), start 开始的时间, at } (没有是 null)
+//   current: 正在跟电脑下的 { moves: 'e2e4 e7e5 …', color 我执哪方, who, mode, rating, diff 跟教练下的难度 ('easy' 休闲 / 'even' 均势 / 'hard' 挑战 / 'fixed' 在「全部难度」里挑的具体分数), start 开始的时间, at } (没有是 null)
 // }
 export const GAMES_MAX = 60;
 const GONE_KEEP_MS = 90 * 24 * 3600 * 1000;
@@ -90,7 +90,7 @@ function cleanCurrent(c) {
     who: typeof c.who === 'string' && /^[a-z0-9-]{1,24}$/.test(c.who) ? c.who : '',
     mode: c.mode === 'coach' ? 'coach' : 'bot',
     rating: cleanRating(c.rating),
-    ...(c.mode === 'coach' ? { diff: ['easy', 'even', 'hard'].includes(c.diff) ? c.diff : 'even' } : {}),
+    ...(c.mode === 'coach' ? { diff: ['easy', 'even', 'hard', 'fixed'].includes(c.diff) ? c.diff : 'even' } : {}),
     start: time(c.start) || time(c.at),
     at: time(c.at),
   };

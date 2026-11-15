@@ -495,3 +495,12 @@ test('chess.com: 拿一个人的分 (快棋优先)', async () => {
   assert.equal(await ccRating('a b'), 0);
   assert.equal(await ccRating('Alice_1', { fetchFn: async () => ({ ok: false, status: 500 }) }), 0);
 });
+
+test('跟教练下在「全部难度」里挑了具体分数: 存得下, 不认识的难度当均势 (v1.87)', () => {
+  const now = Date.now();
+  const cur = (diff) => cleanChess({ current: { moves: 'e2e4', color: 'w', who: 'kai', mode: 'coach', rating: 1200, diff, start: now, at: now } }, now).current;
+  assert.equal(cur('fixed').diff, 'fixed');
+  assert.equal(cur('fixed').rating, 1200);
+  assert.equal(cur('hard').diff, 'hard');
+  assert.equal(cur('crazy').diff, 'even');
+});
