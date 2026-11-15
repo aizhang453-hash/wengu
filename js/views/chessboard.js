@@ -317,7 +317,8 @@ export function createBoard({ orientation = 'w', dests = () => [], onMove = () =
     drag.moved = true;
     const size = drag.rect.width / 8;
     drag.node.classList.add('dragging');
-    drag.node.style.transform = `translate(${e.clientX - drag.rect.left - size / 2}px, ${e.clientY - drag.rect.top - size / 2}px)`;
+    // 子的正中间对着手指 / 鼠标; 拿起来的放大一点 (放大写在 translate 后面, 不然位置也跟着放大, 子会歪)
+    drag.node.style.transform = `translate(${e.clientX - drag.rect.left - size / 2}px, ${e.clientY - drag.rect.top - size / 2}px) scale(1.12)`;
   });
   const endDrag = (e) => {
     if (!drag || e.pointerId !== drag.id) return;

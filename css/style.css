@@ -11681,17 +11681,20 @@ body.radio-on:has(.radio-page) .radio-bar {
 .cb-mark.m-check { background: radial-gradient(circle, rgb(230 40 30 / 85%) 0%, rgb(230 40 30 / 45%) 40%, transparent 72%); }
 .cb-mark.m-dot::after { content: ''; position: absolute; inset: 37%; border-radius: 50%; background: rgb(30 30 30 / 22%); }
 .cb-mark.m-cap::after { content: ''; position: absolute; inset: 4%; border-radius: 50%; border: 5px solid rgb(30 30 30 / 22%); }
+/* 别用 CSS 的 scale 放大缩小棋子: 它跟 transform 里的 translate 叠在一起, 连位置也跟着放大, 棋子会歪到一边 (v1.86.3 用户发现拿起来的子不在手指 / 鼠标正中间) */
 .cb-piece {
   background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
   transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1), opacity 0.22s;
   will-change: transform;
   cursor: grab;
 }
-.cb-piece.dragging { transition: none; z-index: 5; cursor: grabbing; filter: drop-shadow(0 6px 6px rgb(0 0 0 / 30%)); scale: 1.12; }
+.cb-piece.dragging { transition: none; z-index: 5; cursor: grabbing; filter: drop-shadow(0 6px 6px rgb(0 0 0 / 30%)); }
 .cb-piece.moving { z-index: 4; }
 .cb-piece.gone { opacity: 0; transition-delay: 0.1s; }
 .cb-piece.born { animation: cb-born 0.3s ease-out; }
-@keyframes cb-born { from { opacity: 0; scale: 0.6; } }
+@keyframes cb-born { from { opacity: 0; background-size: 60% 60%; } }
 .cb-arrows { position: absolute; inset: 0; width: 100%; height: 100%; }
 .cb-arrow { stroke-width: 0.17; stroke-linecap: round; opacity: 0.82; }
 .cb-arrow.best, .cb-arrow-head.best { stroke: #3fa35b; fill: #3fa35b; }
