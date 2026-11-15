@@ -1153,8 +1153,8 @@ function renderGame({ store, go }, cur) {
     setHeaders(result);
     let id = null;
     let rated = null;
-    // 我的分: 至少走了几步才算 (开局就认输的不算)
-    const counted = game.history().length >= 6;
+    // 我的分: 在棋盘上下完的 (将死、和棋) 才算, 至少走了几步。认输不算 (v1.87.2, 用户说有事下不完、想换教练才点认输, 不该扣分)
+    const counted = !resigned && game.history().length >= 6;
     const before = counted ? await myRating(store) : null;
     if (counted) rated = { old: before.rating, rating: nextRating(before.rating, before.games, cur.rating, iWon ? 1 : drawn ? 0.5 : 0) };
     const rec = game.history().length >= 2 ? gameRecord({ pgn: game.pgn(), src: 'cpu', me, rating: cur.rating, who: person.id, mode: cur.mode }) : null;
@@ -1171,7 +1171,7 @@ function renderGame({ store, go }, cur) {
     const end = resigned && game.history().length < 2 ? ['没关系，下次再来。'] : drawn ? lines('draw') : iWon ? lines('lose') : lines('win');
     say(pickLine(end), drawn ? 'smile' : iWon ? (coachMode ? 'wow' : 'worried') : coachMode ? 'smile' : 'happy');
     clearArrows();
-    const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : '';
+    const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : resigned ? '不算分' : '';
     // 下完了 (v1.87.1, 照 chess.com): 棋盘上弹一个框 (谁赢了、「复盘这盘棋」「新棋局」, ✕ 能关);
     // 两个王上贴标记 (赢的皇冠、输的小白旗或「#」、和棋两边「½」), 走子记录最后写结果, ‹ › 能前后翻着看
     const aborted = resigned && game.history().length < 2; // 一步没走就认输: chess.com 叫「棋局已中止」
@@ -1279,7 +1279,7 @@ function renderGame({ store, go }, cur) {
   };
   const resign = () => {
     if (over) return;
-    if (!confirm('认输吗？')) return;
+    if (!confirm('认输吗？（不算分）')) return;
     engine?.cancel();
     waiting?.('go');
     finish(true);
