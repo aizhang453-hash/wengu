@@ -1171,7 +1171,7 @@ function renderGame({ store, go }, cur) {
     const end = resigned && game.history().length < 2 ? ['没关系，下次再来。'] : drawn ? lines('draw') : iWon ? lines('lose') : lines('win');
     say(pickLine(end), drawn ? 'smile' : iWon ? (coachMode ? 'wow' : 'worried') : coachMode ? 'smile' : 'happy');
     clearArrows();
-    const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : resigned ? '不算分' : '';
+    const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : '';
     // 下完了 (v1.87.1, 照 chess.com): 棋盘上弹一个框 (谁赢了、「复盘这盘棋」「新棋局」, ✕ 能关);
     // 两个王上贴标记 (赢的皇冠、输的小白旗或「#」、和棋两边「½」), 走子记录最后写结果, ‹ › 能前后翻着看
     const aborted = resigned && game.history().length < 2; // 一步没走就认输: chess.com 叫「棋局已中止」
@@ -1192,7 +1192,8 @@ function renderGame({ store, go }, cur) {
       { class: `chess-end-pop ${aborted ? 'aborted' : drawn ? 'draw' : iWon ? 'win' : 'lose'}`, role: 'dialog', 'aria-label': title },
       h('button', { class: 'chess-end-x', type: 'button', 'aria-label': '关上', onclick: () => pop.remove() }, icon('x', 20)),
       h('strong', {}, title),
-      aborted ? null : h('span', { class: 'muted small' }, [how, diffText].filter(Boolean).join(' · ')),
+      // 认输的不写小字 (标题「你输了」就够了; 用户 2026-11-15 嫌「你认输了 · 不算分」多余)
+      aborted || resigned ? null : h('span', { class: 'muted small' }, [how, diffText].filter(Boolean).join(' · ')),
       h('div', { class: 'chess-end-btns' }, reviewBtn(), newBtn()),
     );
     boardWrap.append(pop);
@@ -1279,7 +1280,7 @@ function renderGame({ store, go }, cur) {
   };
   const resign = () => {
     if (over) return;
-    if (!confirm('认输吗？（不算分）')) return;
+    if (!confirm('认输吗？')) return;
     engine?.cancel();
     waiting?.('go');
     finish(true);
