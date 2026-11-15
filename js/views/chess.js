@@ -334,7 +334,8 @@ function renderHub({ store, go }) {
     }
   };
   const fillCC = (list, games) => {
-    if (!games.length) return fill(list, h('li', { class: 'muted small' }, '最近两个月没有下过棋。'));
+    // chess.com 的公开接口只给跟真人下的棋, 跟电脑、虚拟教练下的拿不到 (v1.86.3, 用户只跟电脑下, 列表空着以为没认出来)
+    if (!games.length) return fill(list, h('li', { class: 'muted small' }, '最近两个月没有跟真人下的棋（跟电脑、教练下的，复制棋谱后点「粘贴棋谱」）'));
     const saved = chess()?.games ?? {};
     fill(
       list,
