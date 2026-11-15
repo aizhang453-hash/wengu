@@ -11783,7 +11783,7 @@ body.radio-on:has(.radio-page) .radio-bar {
 .chess-mv-mark { color: var(--ck); font-weight: 800; font-size: 0.85rem; }
 .chess-mv.on .chess-mv-mark { color: inherit; }
 .chess-mv.chess-mv-none { cursor: default; }
-.chess-moves-box:not(:has(li)) { display: none; }
+.chess-moves-box:not(:has(li, .chess-result-line)) { display: none; }
 .chess-progress { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .chess-progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
 .chess-analysing { display: flex; flex-direction: column; gap: 4px; }
@@ -12023,3 +12023,16 @@ body.radio-on:has(.radio-page) .radio-bar {
 .chess-eval.flip .chess-eval-fill { top: 0; bottom: auto; }
 .chess-eval.flip .chess-eval-num { bottom: auto; top: 4px; }
 .chess-eval.flip.black-ahead .chess-eval-num { top: auto; bottom: 4px; }
+/* 下完了: 棋盘上的弹框 (v1.87.1, 照 chess.com), 走子记录最后的结果 */
+.chess-end-pop { position: absolute; left: 50%; top: 50%; z-index: 20; transform: translate(-50%, -50%); width: min(320px, 86%); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 18px 18px; text-align: center; background: var(--surface); border-radius: var(--radius); box-shadow: 0 12px 40px rgb(0 0 0 / 35%); animation: chess-end-in 0.25s ease-out; }
+.chess-end-pop > strong { font-size: 1.5rem; }
+.chess-end-pop.win > strong { color: var(--accent); }
+.chess-end-btns { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 6px; }
+.chess-end-btns .btn { width: 100%; justify-content: center; text-align: center; }
+.chess-end-x { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.chess-end-x:hover { background: var(--surface-2); color: var(--text); }
+@keyframes chess-end-in { from { opacity: 0; transform: translate(-50%, -46%); } }
+.chess-result-line { padding: 6px 12px 8px; font-weight: 700; color: var(--muted); }
+.chess-actions.two { grid-template-columns: repeat(2, 1fr); }
+.chess-mini-gap { flex: 1; }
+.chess-actions.one { grid-template-columns: minmax(0, 1fr); }

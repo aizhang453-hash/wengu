@@ -551,6 +551,9 @@ const saveCoachOpts = (o) => {
   } catch {}
 };
 
+// 刚下完一盘点了「新棋局」: 教练问「再来一盘？」
+let againNext = false;
+
 // 「全部难度」: 直接挑教练按多少分下
 const LEVELS = [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800];
 
@@ -690,7 +693,9 @@ function renderCoachSetup({ store, go }) {
     );
   };
   draw();
-  setTimeout(() => panel.say(pickLine(personOf(who).hi), 'smile'), 150);
+  const greet = againNext ? '再来一盘？' : pickLine(personOf(who).hi);
+  againNext = false;
+  setTimeout(() => panel.say(greet, 'smile'), 150);
   myRating(store).then((r) => {
     mine = r;
     draw();
@@ -717,6 +722,7 @@ function seg(list, value, onPick, label) {
 }
 
 function renderSetup({ store, go }, mode) {
+  againNext = false;
   const coachMode = mode === 'coach';
   const last = readLast()[mode] ?? {};
   const people = coachMode ? coachesFor(wenwenOpen(store.data.chess)) : OPPONENTS;
@@ -905,6 +911,7 @@ function renderGame({ store, go }, cur) {
   };
   const drawEvalSide = () => evalBar.classList.toggle('flip', board.orientation() === 'b');
   drawEvalSide();
+  const boardWrap = h('div', { class: 'chess-board-wrap' }, evalBar, board.el);
   // 棋盘上的箭头: 建议 (绿)、威胁 (红)、提示或者走错时对方怎么走, 各管各的
   let arrowSet = {};
   const setArrow = (key, a) => {
@@ -1161,33 +1168,85 @@ function renderGame({ store, go }, cur) {
       games: rec ? { ...c.games, [rec.id]: rec } : c.games,
       elo: rated ? { rating: rated.rating, games: (before.games ?? 0) + 1, ...(before.cc ? { cc: 1 } : {}), at: t } : c.elo,
     }));
-    const end = drawn ? lines('draw') : iWon ? lines('lose') : lines('win');
+    const end = resigned && game.history().length < 2 ? ['没关系，下次再来。'] : drawn ? lines('draw') : iWon ? lines('lose') : lines('win');
     say(pickLine(end), drawn ? 'smile' : iWon ? (coachMode ? 'wow' : 'worried') : coachMode ? 'smile' : 'happy');
     clearArrows();
     const diffText = rated ? `你的分：${rated.old} → ${rated.rating}（${rated.rating >= rated.old ? '+' : ''}${rated.rating - rated.old}）` : '';
+    // 下完了 (v1.87.1, 照 chess.com): 棋盘上弹一个框 (谁赢了、「复盘这盘棋」「新棋局」, ✕ 能关);
+    // 两个王上贴标记 (赢的皇冠、输的小白旗或「#」、和棋两边「½」), 走子记录最后写结果, ‹ › 能前后翻着看
+    const aborted = resigned && game.history().length < 2; // 一步没走就认输: chess.com 叫「棋局已中止」
+    const title = aborted ? '棋局已中止' : drawn ? '和棋' : iWon ? '你赢了！' : '你输了';
+    const kingSq = (c) => game.findPiece({ type: 'k', color: c })[0];
+    const winner = result === '1-0' ? 'w' : 'b';
+    endMarks = drawn
+      ? ['w', 'b'].map((c) => ({ sq: kingSq(c), node: endIcon('draw') }))
+      : [
+          { sq: kingSq(winner), node: endIcon('win') },
+          { sq: kingSq(winner === 'w' ? 'b' : 'w'), node: endIcon(game.isCheckmate() ? 'mated' : 'lost') },
+        ];
+    resultLine = result;
+    const reviewBtn = () => (id ? h('a', { class: 'btn primary', href: `#/chess/review/${encodeURIComponent(id)}` }, '复盘这盘棋') : null);
+    const newBtn = () => h('button', { class: `btn${id ? '' : ' primary'}`, type: 'button', onclick: newGame }, '新棋局');
+    const pop = h(
+      'div',
+      { class: `chess-end-pop ${aborted ? 'aborted' : drawn ? 'draw' : iWon ? 'win' : 'lose'}`, role: 'dialog', 'aria-label': title },
+      h('button', { class: 'chess-end-x', type: 'button', 'aria-label': '关上', onclick: () => pop.remove() }, icon('x', 20)),
+      h('strong', {}, title),
+      aborted ? null : h('span', { class: 'muted small' }, [how, diffText].filter(Boolean).join(' · ')),
+      h('div', { class: 'chess-end-btns' }, reviewBtn(), newBtn()),
+    );
+    boardWrap.append(pop);
+    clearArrows();
+    showPly(game.history().length);
     fill(
       side,
       sideHead,
       panel.el,
-      h(
-        'div',
-        { class: `chess-over ${drawn ? 'draw' : iWon ? 'win' : 'lose'}` },
-        h('strong', {}, drawn ? '和棋' : iWon ? '你赢了！' : '你输了'),
-        h('span', { class: 'muted small' }, [how, diffText].filter(Boolean).join(' · ')),
-        h(
-          'div',
-          { class: 'chess-over-btns' },
-          id ? h('a', { class: 'btn primary', href: `#/chess/review/${encodeURIComponent(id)}` }, '复盘这盘棋') : null,
-          // 网址跟现在一样, 用 go 才会重新画 (挑对手的页面)
-          h('button', { class: 'btn', type: 'button', onclick: () => go(coachMode ? '#/chess/coach' : '#/chess/play') }, '再来一盘'),
-        ),
-      ),
       openName,
       listBox,
-      coachMode ? miniRow : null,
+      h('div', { class: `chess-actions${id ? ' two' : ' one'}` }, reviewBtn(), newBtn()),
+      h(
+        'div',
+        { class: 'chess-mini' },
+        miniBtn('import', '下载棋谱', downloadPgn),
+        miniBtn('flip', '翻转棋盘', flip),
+        h('span', { class: 'chess-mini-gap' }),
+        miniBtn('left', '上一步', () => showPly(viewPly - 1)),
+        miniBtn('right', '下一步', () => showPly(viewPly + 1)),
+      ),
     );
     optsBox.hidden = true;
   }
+
+  // 下完以后: 新棋局回到开始以前 (教练问「再来一盘？」)。网址跟现在一样, 用 go 才会重新画
+  function newGame() {
+    againNext = true;
+    go(coachMode ? '#/chess/coach' : '#/chess/play');
+  }
+  // 下完以后前后翻着看: 第 i 步走完的样子 (0 是开始)
+  let viewPly = 0;
+  let endMarks = [];
+  let resultLine = '';
+  function showPly(i) {
+    const hist = game.history({ verbose: true });
+    viewPly = Math.max(0, Math.min(hist.length, i));
+    const fen = viewPly ? hist[viewPly - 1].after : hist[0]?.before ?? game.fen();
+    const m = hist[viewPly - 1];
+    board.set(fen, { animate: true, last: m ? [m.from, m.to] : null, check: checkSquare(new Chess(fen)) });
+    board.badge(null, null, viewPly === hist.length ? endMarks : []);
+    const mat = materialOf(fen);
+    fill(topCaps, capsOf(mat, cpu));
+    fill(bottomCaps, capsOf(mat, me));
+    const list = moveList(hist, { onPick: (ply) => showPly(ply) });
+    fill(listBox, list.el, resultLine ? h('div', { class: 'chess-result-line' }, resultLine) : null);
+    list.mark(viewPly);
+  }
+  const onKey = (e) => {
+    if (!over || e.target.closest?.('input, textarea, [contenteditable]')) return;
+    if (e.key === 'ArrowLeft') showPly(viewPly - 1);
+    else if (e.key === 'ArrowRight') showPly(viewPly + 1);
+  };
+  document.addEventListener('keydown', onKey);
 
   const undo = async () => {
     const hist = () => game.history({ verbose: true });
@@ -1334,13 +1393,14 @@ function renderGame({ store, go }, cur) {
       'section',
       { class: 'chess-page chess-play' },
       h('a', { class: 'back', href: '#/chess' }, '← 国际象棋'),
-      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, top, h('div', { class: 'chess-board-wrap' }, evalBar, board.el), bottom), side),
+      h('div', { class: 'chess-layout' }, h('div', { class: 'chess-board-col' }, top, boardWrap, bottom), side),
     ),
     cleanup: () => {
       alive = false;
       waiting?.('go');
       engine?.cancel();
       panel.stop();
+      document.removeEventListener('keydown', onKey);
       if (coachMode) stopSpeaking();
     },
   };
