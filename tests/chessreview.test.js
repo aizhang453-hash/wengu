@@ -5,7 +5,7 @@ import { Chess } from '../js/vendor/chess.js';
 import { readPgn, positionsOf, judgeGame, keyMoments, skillsOfMove, cleanChess, mergeChess, matePattern, MATE_PATTERNS, materialOf, KINDS, ratingForLoss, RATING_LOSS, gameRating, areasOf, areaGrades, areaKind, pieceCount, AREAS, MATE } from '../js/chess.js';
 import { bookKey, hashText, parseBook, bookMoves } from '../js/chessbook.js';
 import * as bookData from '../js/chessbook-data.js';
-import { VOICES, moveFacts, coachLine, bestLine, summaryLine, fillLine, mainAct, speakable, keepMoves, TRIVIA, triviaLine, whyText, punishFacts } from '../js/chessvoice.js';
+import { VOICES, moveFacts, coachLine, bestLine, summaryLine, fillLine, mainAct, speakable, keepMoves, TRIVIA, triviaLine, whyText, punishFacts, lossOf, lineLoss } from '../js/chessvoice.js';
 import { COACHES } from '../js/chesspeople.js';
 import { moveOf } from '../js/chesscoach.js';
 import { GLYPHS } from '../js/views/chessicons.js';
@@ -111,7 +111,7 @@ test('教练的话: 每个教练每种情况都有说法, 空都填得上', () =
     for (const k of KINDS) assert.ok(c.say[k.key]?.length, `${c.name} 没有「${k.name}」的话`);
   }
   // 句子里只用认得的空
-  const KNOWN = new Set(['mv', 'who', 'whose', 'took', 'piece', 'targets', 'open', 'promo', 'n', 'soon', 'reply', 'lose', 'best', 'why', 'acc', 'wacc', 'bacc', 'phase', 'k', 'bad', 'skill', 'pattern', 'desc']);
+  const KNOWN = new Set(['mv', 'who', 'whose', 'took', 'piece', 'targets', 'open', 'promo', 'n', 'soon', 'reply', 'lose', 'best', 'why', 'acc', 'wacc', 'bacc', 'phase', 'k', 'bad', 'skill', 'pattern', 'desc', 'at', 'by', 'forked', 'pinned', 'behind', 'front', 'slider', 'target', 'line', 'lost', 'gotText']);
   for (const v of Object.values(VOICES))
     for (const [slot, lines] of Object.entries(v)) {
       if (slot === 'tts') continue;
@@ -154,7 +154,8 @@ test('教练讲走坏了的步: 说吃什么亏、该怎么走', () => {
   assert.equal(f.best, '后e7');
   const isa = COACHES.find((c) => c.id === 'isabella');
   const line = coachLine(isa, f, { mine: true, who: '你', whose: '对手', seed: 0 });
-  assert.ok(line.includes('后×f7#') && line.includes('后e7'), line);
+  // 讲得出对方怎么罚的: 走错时只讲这个, 该怎么走留给「正着」(v1.87.4, 照 chess.com)
+  assert.ok(line.includes('后×f7#') && !line.includes('后e7'), line);
   assert.ok(bestLine(isa, f).includes('后e7'));
   // 对手走错: 教练说这时候你该怎么走
   const p = punishFacts(m.after, 'h5f7', MATE - 1, 'w');
@@ -327,4 +328,65 @@ test('跟教练下: 教练讲自己那步、讲你那步, 都说得通', () => {
     const yours = coachLine(c, moveFacts({ m: g.moves[2], kind: 'good', ply: 2, prev: g.moves[1], them: '我' }), { mine: true, who: '你', whose: '我', seed: 2 });
     assert.ok(yours.includes('象f4') && !/[{}]|undefined/.test(yours), `${c.name}: ${yours}`);
   }
+});
+
+// v1.87.4: 用户说 chess.com 会讲「你的兵没人保护, 白吃」, 温故只说「安静的一步, 但有想法……这步有点亏」
+test('教练讲走错: 哪个子没人保护、对方怎么吃、为什么; 「正着」讲那步救了它', () => {
+  const at = (fen, uci, reply, best, kind = 'mistake') => {
+    const g = new Chess(fen);
+    const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4) });
+    return moveFacts({ m, kind, ply: 20, before: 0, after: -60, best, reply });
+  };
+  const kai = COACHES.find((c) => c.id === 'kai');
+  // 用户那盘 11.马e5: 黑后早就打着 b2 兵, 这步没管, 后×b2 白吃; 正着 车b1 保护住它
+  const f = at('r1b1k2r/pp2bpp1/1qn1pn1p/3p4/3P4/2PB1N1P/PP1N1PPB/R2QK2R w KQkq - 0 11', 'f3e5', 'b6b2', 'a1b1');
+  assert.deepEqual([f.bad, f.at, f.lose, f.reply], ['hangIgnored', 'b2', '兵', '后×b2']);
+  const line = coachLine(kai, f, { mine: true, who: '你', whose: '对手', seed: 3 });
+  assert.ok(line.includes('b2') && line.includes('后×b2') && !/安静|有想法/.test(line), line);
+  assert.ok(bestLine(kai, f).includes('车b1，保护住 b2 的兵'), bestLine(kai, f));
+  // 保护 e4 兵的马走开了
+  assert.equal(at('rnbqkb1r/pppp1ppp/5n2/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3', 'c3b5', 'f6e4', 'g1f3').bad, 'hangUnguarded');
+  // 象走到兵能吃的地方
+  assert.equal(at('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2', 'f1a6', 'b7a6', 'g1f3', 'blunder').bad, 'hangMoved');
+  // 车走到兵打得到的地方, 能吃回来也亏
+  const x = at('4k3/8/8/4p3/R7/2P5/8/4K3 w - - 0 1', 'a4d4', 'e5d4', 'a4a7');
+  assert.deepEqual([x.bad, x.lose, x.by], ['loseExchange', '车', '兵']);
+  // 将军带打车
+  const k = at('4k3/8/8/8/1n6/8/7P/R3K3 w - - 0 1', 'h2h3', 'b4c2', 'e1d2', 'blunder');
+  assert.deepEqual([k.bad, k.forked], ['forkedKing', '车']);
+  // 吃了也会被吃回来的 (兑子) 不算亏; 每个教练都说得通
+  assert.equal(lossOf({ captured: 'n', to: 'e5', before: '' }, { captured: 'n', piece: 'n', to: 'e5', after: 'rnbqkb1r/pppp1ppp/8/4n3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3' }, 'w'), null);
+  for (const c of COACHES)
+    for (const g of [f, x, k]) {
+      const s = coachLine(c, g, { mine: true, who: '你', whose: '对手', seed: 1 });
+      assert.ok(s.length > 6 && !/[{}]|undefined|null/.test(s), `${c.name}: ${s}`);
+    }
+});
+
+// v1.87.4: 教练认得更多招数 —— 牵制、串击、抽将、一步杀是哪种杀法, 往后多看几步算账
+test('教练认招数: 牵制、串击、抽将、底线杀; 往后几步算账', () => {
+  const at = (fen, uci, reply, { after = -300, pv = null } = {}) => {
+    const g = new Chess(fen);
+    const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4) });
+    return moveFacts({ m, kind: 'blunder', ply: 30, before: 0, after, reply, pv });
+  };
+  const pin = at('rnbqkbnr/pppp1ppp/8/4p3/3P4/2N5/PPP1PPPP/R1BQKBNR w KQkq - 0 2', 'h2h3', 'f8b4');
+  assert.deepEqual([pin.bad, pin.pinned, pin.behind], ['pinned', '马', '王']);
+  const sk = at('r3k3/8/8/8/8/8/2K3QP/8 w - - 0 1', 'h2h3', 'a8a2');
+  assert.deepEqual([sk.bad, sk.front, sk.behind], ['skewered', '王', '后']);
+  const dc = at('4k3/1b6/8/8/4n3/8/P7/3Q3K w - - 0 1', 'a2a3', 'e4c5');
+  assert.deepEqual([dc.bad, dc.slider], ['discoveredCheck', '象']);
+  const mate = at('1r4k1/5ppp/8/8/8/8/P4PPP/6K1 w - - 0 1', 'a2a3', 'b8b1', { after: -(MATE - 1) });
+  assert.deepEqual([mate.bad, mate.pattern], ['allowMate1', '底线杀']);
+  const kai = COACHES.find((c) => c.id === 'kai');
+  assert.ok(coachLine(kai, mate, { mine: true, who: '你', whose: '对手' }).includes('底线杀'));
+  // 往后算账: 后e4+ 王d2 后×h1, 丢车
+  assert.deepEqual(lineLoss('4k3/8/8/8/3q4/8/8/R3K2R b KQ - 0 1', ['d4e4', 'e1d2', 'e4h1'], 'w'), { bad: 'lineLoss', line: '后e4+ 王d2 后×h1', lost: '车', gotText: '' });
+  // 两边都吃了一样的: 抵掉, 不算亏
+  assert.equal(lineLoss('4k3/8/8/3p4/8/8/8/3RK3 w - - 0 1', ['d1d5'], 'b'), null);
+  for (const c of COACHES)
+    for (const f of [pin, sk, dc]) {
+      const line = coachLine(c, f, { mine: true, who: '你', whose: '对手', seed: 1 });
+      assert.ok(line.length > 6 && !/[{}]|undefined|null/.test(line), `${c.name}: ${line}`);
+    }
 });

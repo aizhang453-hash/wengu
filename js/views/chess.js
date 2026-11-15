@@ -42,7 +42,7 @@ import {
   VALUE,
 } from '../chess.js';
 import { MOOD, threatText } from '../chesscoach.js';
-import { moveFacts, punishFacts, coachLine, bestLine, summaryLine, triviaLine, voiceOf, speakable, keepMoves, fillLine, TRIVIA } from '../chessvoice.js';
+import { moveFacts, punishFacts, coachLine, bestLine, summaryLine, triviaLine, voiceOf, speakable, keepMoves, fillLine, TRIVIA, VAGUE } from '../chessvoice.js';
 import { loadBook, bookMoves } from '../chessbook.js';
 import { EX_DBS, explore } from '../chessexplorer.js';
 import { speak, stopSpeaking, canSpeak } from '../speech.js';
@@ -1019,7 +1019,7 @@ function renderGame({ store, go }, cur) {
       const kind = classify({ before: before.ev, after: after.ev, turn: me, played: uci, best: before.best, legal, sac: sacrificeValue(fen, m.san) });
       // 下棋时棋盘上不贴好坏的图标 (v1.85.1, 用户说 chess.com 只有复盘时才有); 好坏只拿来让教练、对手说话
       const ply = game.history().length - 1;
-      const facts = () => moveFacts({ m, kind, ply, before: before.ev, after: after.ev, best: before.best, reply: after.best, prev: game.history({ verbose: true }).at(-2) ?? null, book: bookList().at(-1) ?? null, them: '我' });
+      const facts = () => moveFacts({ m, kind, ply, before: before.ev, after: after.ev, best: before.best, reply: after.best, pv: after.pv, prev: game.history({ verbose: true }).at(-2) ?? null, book: bookList().at(-1) ?? null, them: '我' });
       if (coachMode && opts.feedback) {
         // 走法反馈 (设置里能关): 你走的子上贴好坏的图标 (照 chess.com 的教练模式)
         badgeSq = m.to;
@@ -1349,10 +1349,11 @@ function renderGame({ store, go }, cur) {
         { class: 'chess-side' },
         sideHead,
         panel.el,
-        askBox,
         openName,
         listBox,
         optsBox,
+        // 走错了问收回还是接着下: 放在三个大按钮的位置上 (那时它们先藏起来), 下面的东西不跟着动
+        askBox,
         h(
           'div',
           { class: 'chess-actions' },
@@ -1475,6 +1476,7 @@ function renderReview({ store, go }, id) {
   let explaining = null; // 「解析」: { at 第几步, line 引擎想的几步 (chess.js 的走法), ev 打分, step 看到第几步 }
   let keys = []; // 「下一页」停的步 (keyMoments, 走法的下标)
   const pvCache = new Map(); // 解析过的步: 引擎算的结果 (这次打开复盘时留着, 再按不用重算)
+  const afterCache = new Map(); // 走错了又说不清亏在哪的步: 走完以后引擎往后想的几步 (v1.87.4 往后多看几步算账)
   let skillMoves = []; // 每一步练到的技巧 (v1.85; 只有自己的步, 走坏了的不算)
   const skillState = () => store.data.chess?.skills ?? emptySkills();
   const claimKey = (i) => `${id}:${i}`;
@@ -1578,17 +1580,18 @@ function renderReview({ store, go }, id) {
   };
 
   // 这一步的说明 (教练讲的、正着按钮要用)
-  function factsAt(p) {
+  function factsAt(p, pv = null) {
     const m = moves[p - 1];
     const mover = m.color;
     return moveFacts({
       m,
+      pv,
       kind: judged[p - 1].kind,
       ply: p - 1,
       before: review.ev[p - 1],
       after: review.ev[p],
       best: review.bm[p - 1],
-      reply: review.bm[p] ?? '',
+      reply: pv?.[0] ?? review.bm[p] ?? '',
       prev: moves[p - 2] ?? null,
       book: book?.[p - 1] ?? null,
       them: nameOf(mover === 'w' ? 'b' : 'w'),
@@ -1621,15 +1624,20 @@ function renderReview({ store, go }, id) {
     const played = m.from + m.to + (m.promotion ?? '');
     const best = review.bm[ply - 1];
     const arrows = [];
-    if (BAD.has(j.kind) && best && best !== played) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' });
-    board.arrows(arrows);
     const mover = m.color;
     const mine = !me || mover === me;
+    // 走错了 (v1.87.4, 照 chess.com): 讲得出对方怎么罚的, 红箭头画对方那步; 讲不出的, 绿箭头画更好的走法 (教练也会说)
+    const reply = review.bm[ply] ?? '';
+    if (BAD.has(j.kind) && mine && f.bad && !VAGUE.has(f.bad) && reply) arrows.push({ from: reply.slice(0, 2), to: reply.slice(2, 4), tone: 'danger' });
+    else if (BAD.has(j.kind) && best && best !== played) arrows.push({ from: best.slice(0, 2), to: best.slice(2, 4), tone: 'best' });
+    board.arrows(arrows);
     const punish = !mine && BAD.has(j.kind) ? punishFacts(m.after, review.bm[ply] ?? '', review.ev[ply], me, nameOf(mover)) : null;
     let mood = MOOD[j.kind];
     if (!mine) mood = BAD.has(j.kind) ? 'happy' : j.kind === 'brilliant' || j.kind === 'great' ? 'hmm' : 'normal';
     panel.setHead(headRow(j.kind, zhSan(m.san), review.ev[ply], j.kind === 'book' && j.open ? `开局谱 · ${j.open}` : ''));
     talk(coachLine(coach, f, { mine, who: nameOf(mover), whose: nameOf(mover === 'w' ? 'b' : 'w'), punish, seed: ply }), mood);
+    // 说不清亏在哪 (v1.87.4): 让引擎从走完这步往后想几步, 照着算账; 算出来了再讲一遍、画红箭头
+    if (BAD.has(j.kind) && mine && (!f.bad || VAGUE.has(f.bad) || f.bad === 'danger') && f.bad !== 'missedMate') deepen(ply);
     const canBest = f.best && !['best', 'book', 'forced', 'brilliant', 'great'].includes(j.kind);
     const atEnd = ply >= moves.length;
     // 技巧: 走到这步就领分 (没开的、学会了的、这盘领过的不加)
@@ -1837,6 +1845,27 @@ function renderReview({ store, go }, id) {
     );
   }
 
+  async function deepen(p) {
+    let r = afterCache.get(p);
+    if (!r) {
+      try {
+        engine ??= await getEngine();
+        r = await engine.analyse(fens[p], { depth: 14, movetime: 2500 });
+      } catch {
+        r = null;
+      }
+      if (!r?.pv?.length) return;
+      afterCache.set(p, r);
+    }
+    if (!alive || ply !== p || trying || explaining) return;
+    const m = moves[p - 1];
+    const f = factsAt(p, r.pv);
+    if (f.bad !== 'lineLoss') return;
+    talk(coachLine(coach, f, { mine: true, who: nameOf(m.color), whose: nameOf(m.color === 'w' ? 'b' : 'w'), seed: p }), MOOD[judged[p - 1].kind]);
+    const reply = r.pv[0];
+    board.arrows([{ from: reply.slice(0, 2), to: reply.slice(2, 4), tone: 'danger' }]);
+  }
+
   // 「正着」: 回到这步之前, 把引擎最想走的那步走出来
   function showBest(f) {
     const before = fens[ply - 1];
@@ -1857,9 +1886,21 @@ function renderReview({ store, go }, id) {
       board.badge(m.to, 'best');
       board.arrows([{ from: m.from, to: m.to, tone: 'best' }]);
     }, 260);
-    panel.setHead(headRow('best', zhSan(m.san), null, '正着'));
+    // 照 chess.com: 头一行写这步和走完的打分 (走了最好的一步, 打分跟走前差不多), 教练讲为什么好; 下面「解析」「继续」
+    panel.setHead(headRow('best', zhSan(m.san), review.ev[ply - 1], '正着'));
     talk(bestLine(coach, f, ply), 'smile');
-    fill(info, h('div', { class: 'chess-nav chess-move-tools' }, h('button', { class: 'btn primary', type: 'button', onclick: () => show(ply) }, '回到棋局')));
+    fill(
+      info,
+      h(
+        'div',
+        { class: 'chess-nav chess-move-tools' },
+        // 回到这步: 只放箭头 (三个按钮一排放得下, 下面的走子记录不跟着动)
+        h('button', { class: 'btn', type: 'button', 'aria-label': '回到棋局', title: '回到棋局', onclick: () => show(ply) }, icon('left', 18)),
+        h('button', { class: 'btn', type: 'button', onclick: () => explain() }, icon('bulb', 18), '解析'),
+        h('button', { class: 'btn primary chess-next', type: 'button', onclick: () => nextKey() }, '继续', icon('right', 18)),
+      ),
+      h('div', { class: 'muted small chess-move-at' }, `第 ${Math.ceil(ply / 2)} 回合 · ${nameOf(moves[ply - 1].color)}走`),
+    );
   }
 
   const nextBad = () => {

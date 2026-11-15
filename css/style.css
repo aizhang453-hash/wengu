@@ -12036,3 +12036,22 @@ body.radio-on:has(.radio-page) .radio-bar {
 .chess-actions.two { grid-template-columns: repeat(2, 1fr); }
 .chess-mini-gap { flex: 1; }
 .chess-actions.one { grid-template-columns: minmax(0, 1fr); }
+/* 教练的对话框固定高度 (v1.87.4, 用户要下面的按钮不跟着字多字少上下动): 字多了在框里上下滑 */
+.chess-coach.play .chess-bubbles, .chess-coach.play > .chess-bubble, .chess-coach.review > .chess-bubble { height: 200px; }
+.chess-coach.play > .chess-bubble, .chess-coach.review > .chess-bubble, .chess-coach.play .chess-bubbles > .chess-bubble:not(.chess-bubble-prev) { display: flex; flex-direction: column; min-height: 0; }
+.chess-coach.play .chess-bubbles > .chess-bubble:not(.chess-bubble-prev) { flex: 1 1 0; }
+.chess-coach.play .chess-say-text, .chess-coach.review .chess-say-text { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.chess-coach.play .chess-bubble-prev .chess-say-text { flex: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 下棋页右边别的会动的: 开局名一直占一行, 走子记录固定高 (设置开关一样高), 收回还是接着下顶替三个大按钮 */
+.chess-play .chess-open-name { min-height: 1.6em; }
+.chess-play .chess-open-name[hidden] { display: block; visibility: hidden; }
+.chess-play .chess-moves-box, .chess-play .chess-opts { height: 300px; max-height: none; }
+.chess-play .chess-moves-box:not(:has(li, .chess-result-line)) { display: block; }
+.chess-play .chess-moves-box[hidden], .chess-play .chess-opts[hidden] { display: none; }
+.chess-play .chess-opts { overflow-y: auto; }
+.chess-play .chess-opts .switch-row { padding: 9px 0; }
+.chess-play .chess-ask { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.chess-play .chess-ask .btn { padding-top: 12px; padding-bottom: 12px; white-space: normal; }
+.chess-play .chess-ask[hidden] { display: none; }
+.chess-side:has(> .chess-ask:not([hidden])) > .chess-actions { display: none; }
+@media (max-width: 860px) { .chess-play .chess-moves-box, .chess-play .chess-opts { height: 220px; } }

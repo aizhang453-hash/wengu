@@ -29,6 +29,131 @@ function inDanger(g, sq, color) {
   return by.some((a) => VALUE[g.get(a).type] < VALUE[p.type]) || !g.isAttacked(sq, color);
 }
 
+// 走完以后对方最好的应着 r 吃了这边 (color) 的东西: 亏在哪、为什么 (v1.87.4, 用户说 chess.com 会讲「你的兵没人保护, 白吃」, 温故只说「这步有点亏」)。
+//   返回 { bad, reply, lose 丢的子, at 在哪个格子, by 对方用什么吃 } 或 null (吃了也会被吃回来、本来就是换子的, 不算)
+//   bad: hangMoved 这步把子走到了没人保护的地方 · hangUnguarded 这步把保护它的子走开了 · hangIgnored 本来就被打着, 这步没管 ·
+//        hang 别的没人保护 · loseExchange 能吃回来, 但对方用便宜的子换了你值钱的子
+export function lossOf(m, r, color) {
+  if (!r?.captured || VALUE[r.captured] < 1) return null;
+  if (m.captured && VALUE[m.captured] >= VALUE[r.captured]) return null; // 这步自己也吃了一样值钱的: 换子
+  const g = tryGame(r.after);
+  const back = g ? g.isAttacked(r.to, color) : false; // 吃了以后能不能吃回来
+  if (back && VALUE[r.captured] <= VALUE[r.piece]) return null;
+  const base = { reply: r.zh, lose: NAME(r.captured), at: r.to, by: NAME(r.piece) };
+  if (back) return { ...base, bad: 'loseExchange' };
+  if (m.to === r.to) return { ...base, bad: 'hangMoved' };
+  const was = tryGame(m.before);
+  if (was && was.get(r.to)?.color === color) {
+    const other = color === 'w' ? 'b' : 'w';
+    if (was.attackers(r.to, color).includes(m.from)) return { ...base, bad: 'hangUnguarded' };
+    if (was.attackers(r.to, other).length) return { ...base, bad: 'hangIgnored' };
+  }
+  return { ...base, bad: 'hang' };
+}
+
+// ---- 认招数 (v1.87.4, 用户要教练认得更多: 牵制、串击、闪击、抽将, 往后多看几步算账) ----
+const FILES = 'abcdefgh';
+const DIRS = {
+  b: [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+  r: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+};
+DIRS.q = [...DIRS.b, ...DIRS.r];
+const worth = (t) => (t === 'k' ? 100 : VALUE[t]);
+// 从 sq 往 (df, dr) 方向走, 碰到的第一个子: { sq, p } 或 null
+function firstHit(g, sq, df, dr) {
+  let f = FILES.indexOf(sq[0]) + df;
+  let r = Number(sq[1]) - 1 + dr;
+  while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+    const at = FILES[f] + (r + 1);
+    const p = g.get(at);
+    if (p) return { sq: at, p };
+    f += df;
+    r += dr;
+  }
+  return null;
+}
+const slides = (type, [df, dr]) => type === 'q' || (df && dr ? type === 'b' : type === 'r');
+
+// 对方的应着 r (车、象、后) 走完, 沿一条线先打到这边 (color) 的 A, A 后面是这边的 B:
+//   牵制 pinned: B 比 A 值钱 (或者 B 是王) —— A 不能动; 串击 skewered: A 比 B 值钱 (或者 A 是王, 被将军) —— A 躲开, B 丢
+function lineTactic(r, color) {
+  if (!DIRS[r.piece]) return null;
+  const g = tryGame(r.after);
+  if (!g) return null;
+  for (const [df, dr] of DIRS[r.piece]) {
+    const a = firstHit(g, r.to, df, dr);
+    if (!a || a.p.color !== color) continue;
+    const b = firstHit(g, a.sq, df, dr);
+    if (!b || b.p.color !== color) continue;
+    const by = NAME(r.piece);
+    if (a.p.type !== 'k' && VALUE[a.p.type] >= 3 && worth(b.p.type) > VALUE[a.p.type]) return { bad: 'pinned', by, pinned: NAME(a.p.type), behind: NAME(b.p.type) };
+    // 串击: 后面那个要么没人保护, 要么比打它的子值钱 (不然躲开以后被吃也不亏)
+    const guarded = g.attackers(b.sq, color).some((x) => x !== a.sq);
+    if (worth(a.p.type) > VALUE[b.p.type] && VALUE[b.p.type] >= 3 && (a.p.type === 'k' || VALUE[a.p.type] > VALUE[r.piece]) && (!guarded || VALUE[b.p.type] > VALUE[r.piece]))
+      return { bad: 'skewered', by, front: NAME(a.p.type), behind: NAME(b.p.type) };
+  }
+  return null;
+}
+
+// 对方的应着 r 一让开, 后面它的车、象、后就打到这边的王 (抽将 discoveredCheck) 或者值钱的子 (闪击 discovered)
+function discovered(r, color) {
+  const g = tryGame(r.after);
+  if (!g) return null;
+  for (const dir of DIRS.q) {
+    const back = firstHit(g, r.from, -dir[0], -dir[1]);
+    const front = firstHit(g, r.from, dir[0], dir[1]);
+    if (!back || !front || back.sq === r.to || back.p.color !== r.color || front.p.color !== color || !slides(back.p.type, dir)) continue;
+    const base = { by: NAME(r.piece), slider: NAME(back.p.type) };
+    if (front.p.type === 'k') return { ...base, bad: 'discoveredCheck' };
+    if (VALUE[front.p.type] >= 3 && (VALUE[front.p.type] > VALUE[back.p.type] || !g.isAttacked(front.sq, color))) return { ...base, bad: 'discovered', target: NAME(front.p.type) };
+  }
+  return null;
+}
+
+// 往后多看几步算账: 走完这步以后, 照引擎想的接着走 (pv: uci, 第一步是对方的), 最多 6 步;
+//   吃掉的子两边抵掉一样的, 这边净丢了值 2 分以上的东西: { bad: 'lineLoss', line 那几步, lost 丢了什么, gotText 换来什么 }
+export function lineLoss(fen, pv, color, them = '对手') {
+  const g = tryGame(fen);
+  if (!g || !pv?.length) return null;
+  const mine = [];
+  const theirs = [];
+  const zh = [];
+  for (const uci of pv.slice(0, 6)) {
+    let m;
+    try {
+      m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    } catch {
+      break;
+    }
+    zh.push(zhSan(m.san));
+    if (m.captured) (m.color === color ? theirs : mine).push(m.captured);
+    if (g.isGameOver()) break;
+  }
+  for (const t of [...theirs]) {
+    const i = mine.indexOf(t);
+    if (i >= 0) (mine.splice(i, 1), theirs.splice(theirs.indexOf(t), 1));
+  }
+  const sum = (xs) => xs.reduce((a, t) => a + VALUE[t], 0);
+  if (sum(mine) - sum(theirs) < 2) return null;
+  // 只说到最后一次吃这边的子为止
+  const order = ['q', 'r', 'b', 'n', 'p'];
+  const names = (xs) => [...new Set(xs)].sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(NAME).join('和');
+  return { bad: 'lineLoss', line: zh.join(' '), lost: names(mine), gotText: theirs.length ? `，只换来${them}的${names(theirs)}` : '' };
+}
+
+// 更好的那步 bm 是不是把 at 格上的子救了: 挪开、保护住、挡住 (给「正着」讲为什么好)
+//   guarded: 走坏的那步以前, 这个子本来就有人保护 (那步把保护它的子走开了; 更好的那步没走开, 就说「还有人保护」)
+function saveText(bm, at, lose, color, guarded = false) {
+  if (!bm || !at) return '';
+  if (bm.from === at) return `，把${lose}挪到安全的地方`;
+  const g = tryGame(bm.after);
+  const p = g?.get(at);
+  if (!p || p.color !== color) return '';
+  if (!g.attackers(at, color === 'w' ? 'b' : 'w').length) return `，${at} 的${lose}就安全了`;
+  if (g.isAttacked(at, color)) return guarded ? `，${at} 的${lose}也还有人保护` : `，保护住 ${at} 的${lose}`;
+  return '';
+}
+
 // 为什么那步好 (跟在走法后面的半句, 带逗号): 「，直接将死」「，3 步就能将死」「，吃掉对手的车」「，将军」「，同时打到对手的王和车」
 //   mv: moveOf 的结果; mate: 走的人走这步以后几步杀 (0: 不是杀棋); them: 对方怎么称呼
 export function whyText(mv, { mate = 0, them = '对手' } = {}) {
@@ -47,7 +172,7 @@ export function whyText(mv, { mate = 0, them = '对手' } = {}) {
 //   best: 走前引擎最想走的 (uci); reply: 走完以后对方最好的应着 (uci); prev: 上一步 (chess.js 的走法, 认「吃回来」);
 //   book: 开局谱 ({ book, name }); them: 对方怎么称呼 (算「为什么」那半句用)
 // 返回 { kind, mv, piece, took, acts: [做了什么, 要紧的在前], bad: 走坏了吃什么亏, best, why, reply, lose, n, … }
-export function moveFacts({ m, kind, ply = 0, before = 0, after = 0, best = '', reply = '', prev = null, book = null, them = '对手' }) {
+export function moveFacts({ m, kind, ply = 0, before = 0, after = 0, best = '', reply = '', pv = null, prev = null, book = null, them = '对手' }) {
   const color = m.color;
   const sgn = color === 'w' ? 1 : -1;
   const other = color === 'w' ? 'b' : 'w';
@@ -121,13 +246,26 @@ export function moveFacts({ m, kind, ply = 0, before = 0, after = 0, best = '', 
       f.bad = theirMate === 1 && r ? 'allowMate1' : 'allowMate';
       f.n = theirMate;
       f.reply = r?.zh ?? '';
+      // 一步杀认得出是哪种杀法 (底线杀、闷杀……): 后面补一句「这叫……」
+      const pat = r?.mate ? MATE_PATTERNS[matePattern(r, ply + 1)] : null;
+      if (pat) f.pattern = pat.name;
     } else if (hadMate > 0 && kind !== 'inaccuracy') {
       f.bad = 'missedMate';
       f.n = hadMate;
-    } else if (r && r.captured && VALUE[r.captured] >= 3 && !(m.captured && VALUE[m.captured] >= VALUE[r.captured])) {
-      f.bad = 'losePiece';
+    } else if (r && lossOf(m, r, color)) {
+      Object.assign(f, lossOf(m, r, color));
+      // 更好的那步要是把这个子救了, 「正着」就讲它救了 (没有别的理由的时候)
+      if (bm && !f.why) f.why = saveText(bm, f.at, f.lose, color, f.bad === 'hangUnguarded');
+    } else if (r && forkTargets(r).length >= 2) {
+      // 对方一步打到两个; 有一个是王 (将军带打): 王得先躲, 另一个就丢了
+      const t = [...new Set(forkTargets(r))];
+      f.bad = t.includes('k') ? 'forkedKing' : 'forked';
       f.reply = r.zh;
-      f.lose = NAME(r.captured);
+      f.forked = t.filter((x) => x !== 'k').map(NAME).join('和');
+    } else if (r && (lineTactic(r, color) || discovered(r, color))) {
+      Object.assign(f, lineTactic(r, color) || discovered(r, color), { reply: r.zh });
+    } else if (r && lineLoss(m.after, pv?.[0] === reply ? pv : null, color, them)) {
+      Object.assign(f, lineLoss(m.after, pv, color, them), { reply: r.zh });
     } else if (r && !r.captured && hanging(r.after, color)) {
       f.bad = 'danger';
       f.reply = r.zh;
@@ -155,7 +293,11 @@ export function punishFacts(fen, reply, after, color, them = '对手') {
 //   winPiece 吃白给的子 · trade 兑子 · capture 吃子 · fork 捉双 · threat 打对方的子 · check 将军 · evade 被将军了躲开 · escape 被打的子躲开 ·
 //   center 兵占中心 · develop 出马出象 · pawn 挺兵 · quiet 别的 · mateNext 走完能逼杀 · brilliant 妙着 · great 好棋
 // 走坏了的: allowMate1 对方一步杀 · allowMate 对方几步杀 · missedMate 错过将死 · losePiece 丢子 · danger 子危险 · missChance 没抓住对方的错 ·
-//   worse 变差了 · better 更好的走法
+//   worse 变差了 · better 更好的走法 ·
+//   (v1.87.4, lossOf) hang 子没人保护被白吃 · hangMoved 这步把子走到没人保护的地方 · hangUnguarded 这步把保护它的子走开了 ·
+//   hangIgnored 本来就被打着、这步没管 · loseExchange 被对方用便宜的子换掉 · forked 对方一步打到两个 · forkedKing 将军带打 ·
+//   (v1.87.4) pinned 牵制 ({pinned} 被牵住的 {behind} 后面的) · skewered 串击 ({front} 前面的 {behind}) · discovered 闪击 ({slider} 后面让出来的子 {target}) ·
+//   discoveredCheck 抽将 · lineLoss 往后几步算账 ({line} 那几步 {lost} 丢了什么 {gotText} 「，只换来对手的马」) ({at} 格子 · {by} 对方用什么吃 · {forked} 打到的子)
 // 对手的步 (复盘自己的棋时): oppBad 对手走错 · punish 这时候该怎么走 · oppGood 对手走得好 · oppMate 对手将死你
 // 总结: sumWin / sumLose / sumDraw 赢输和 · sumOther 不是自己的棋 · sumGoodPhase 哪方面最好 · sumBadPhase 哪方面要练 · sumClean 没大错 · sumBad 走错几步 · sumTurn 关键回合
 // 别的: analyse 开始看棋 · trivia 讲小知识前面那句 · showBest 「正着」按钮按了以后 ·
@@ -193,6 +335,18 @@ export const VOICES = {
     allowMate: ['这样一来，{whose}有 {n} 步杀，王很危险。'],
     missedMate: ['其实这里 {n} 步就能将死{whose}，错过了。'],
     losePiece: ['走完以后，{whose}可以走 {reply}，吃掉{who}的{lose}。'],
+    hang: ['{who} {at} 的{lose}没有人保护，{whose}走 {reply} 就能白白吃掉。'],
+    hangMoved: ['{piece}走到 {at} 以后没有人保护，{whose}走 {reply} 就吃掉了。'],
+    hangIgnored: ['{whose}本来就在打{who} {at} 的{lose}，这步没去管它，{reply} 就白白吃掉了。'],
+    hangUnguarded: ['{piece}一走开，{at} 的{lose}就没人保护了，{whose}走 {reply} 吃掉它。'],
+    loseExchange: ['{whose}走 {reply}，用{by}换{who}的{lose}，这笔买卖亏了。'],
+    forked: ['{whose}走 {reply}，同时打到{who}的{forked}，只能救一个。'],
+    forkedKing: ['{whose}走 {reply}，一边将军一边打{who}的{forked}，王得先躲开，{forked}就保不住了。'],
+    pinned: ['{whose}走 {reply}，{by}牵制住了{who}的{pinned}——它后面是{behind}，{pinned}动不了了。'],
+    skewered: ['{whose}走 {reply}，{by}先打{who}的{front}，{front}躲开以后，后面的{behind}就保不住了。这叫串击。'],
+    discovered: ['{whose}走 {reply}，{by}一让开，后面的{slider}就打到了{who}的{target}。这叫闪击。'],
+    discoveredCheck: ['{whose}走 {reply}，{by}一让开，后面的{slider}就将军了。这叫抽将，{who}得先救王。'],
+    lineLoss: ['{whose}接下来 {line}，算下来{who}丢了{lost}{gotText}。'],
     danger: ['{whose}走 {reply} 以后，{who}的{lose}就危险了。'],
     missChance: ['{whose}刚才走错了，这里本来能占到便宜。'],
     worse: ['局面变得难下了一些。', '这步让局面差了一点。'],
@@ -250,6 +404,18 @@ export const VOICES = {
     allowMate: ['对方有 {n} 步杀。'],
     missedMate: ['这里有 {n} 步杀，没看到。'],
     losePiece: ['对方 {reply}，丢{lose}。'],
+    hang: ['{at} 的{lose}没有保护，{whose} {reply} 直接吃。'],
+    hangMoved: ['{piece}到 {at} 没有保护，{whose} {reply} 吃掉。'],
+    hangIgnored: ['{at} 的{lose}已经被攻击，这步没有处理，{whose} {reply} 吃掉。'],
+    hangUnguarded: ['{piece}离开后，{at} 的{lose}失去保护，{whose} {reply} 吃掉。'],
+    loseExchange: ['{whose} {reply}，用{by}换{lose}，子力吃亏。'],
+    forked: ['{whose} {reply} 形成双重攻击：{forked}。'],
+    forkedKing: ['{whose} {reply}，将军并攻击{forked}，王必须先走，{forked}丢失。'],
+    pinned: ['{whose} {reply}，{pinned}被{by}牵制，后面是{behind}。'],
+    skewered: ['{whose} {reply}，串击：{front}必须移开，{behind}失去。'],
+    discovered: ['{whose} {reply}，闪击：{slider}攻击{target}。'],
+    discoveredCheck: ['{whose} {reply}，抽将：{slider}将军。'],
+    lineLoss: ['后续 {line}，结果损失{lost}{gotText}。'],
     danger: ['对方 {reply} 之后，{lose}受到攻击。'],
     missChance: ['对方失误了，这里应该惩罚。'],
     worse: ['评估下降了。', '局面变差。'],
@@ -307,6 +473,18 @@ export const VOICES = {
     allowMate: ['小心，{whose}有 {n} 步杀，咖啡要洒了。'],
     missedMate: ['刚才 {n} 步就能将死，蛋糕放在桌上没吃！'],
     losePiece: ['{whose}走 {reply}，{who}的{lose}就被端走了。'],
+    hang: ['{at} 的{lose}孤零零的，没人照看，{whose}走 {reply} 就端走了。'],
+    hangMoved: ['{piece}跑到 {at}，可那里没人照看，{whose}走 {reply} 一口吃掉。'],
+    hangIgnored: ['{whose}早就盯着 {at} 的{lose}了，这步却没理它——{reply}，端走！'],
+    hangUnguarded: ['{piece}一出门，{at} 的{lose}就没人看家了，{whose}走 {reply} 端走。'],
+    loseExchange: ['{whose}走 {reply}，拿{by}换{lose}，这买卖不划算。'],
+    forked: ['{whose}走 {reply}，一叉子叉到{forked}，只能救一个了。'],
+    forkedKing: ['{whose}走 {reply}，将军加一叉子：王得先跑，{forked}就被端走了。'],
+    pinned: ['{whose}走 {reply}，{pinned}被{by}钉在原地——后面坐着{behind}，它可不敢动。'],
+    skewered: ['{whose}走 {reply}，像一串糖葫芦！{front}躲开，后面的{behind}就被端走。'],
+    discovered: ['{whose}走 {reply}，{by}一闪身，后面的{slider}就冲着{target}去了。'],
+    discoveredCheck: ['{whose}走 {reply}，{by}一闪身，{slider}将军！抽将，先救王吧。'],
+    lineLoss: ['接下来 {line}，这顿饭吃完，{who}少了{lost}{gotText}。'],
     danger: ['{whose}走 {reply} 以后，{lose}就要被端走了。'],
     missChance: ['{whose}刚才失手，送上门的点心没拿。'],
     worse: ['嗯……咖啡有点凉了。', '这步有点苦，像没加糖的咖啡。'],
@@ -364,6 +542,18 @@ export const VOICES = {
     allowMate: ['对方 {n} 步杀。'],
     missedMate: ['{n} 步杀，没看见。'],
     losePiece: ['对方 {reply}，丢{lose}。'],
+    hang: ['{at} {lose}无保护。{whose} {reply}，白吃。'],
+    hangMoved: ['{piece}到 {at} 无保护。{whose} {reply}，吃掉。'],
+    hangIgnored: ['{at} {lose}被打，没管。{whose} {reply}，白吃。'],
+    hangUnguarded: ['{piece}走开，{at} {lose}没保护了。{whose} {reply}。'],
+    loseExchange: ['{whose} {reply}，{by}换{lose}，亏。'],
+    forked: ['{whose} {reply}，捉双：{forked}。'],
+    forkedKing: ['{whose} {reply}，将军带打{forked}。王先走，丢{forked}。'],
+    pinned: ['{whose} {reply}，牵制。{pinned}不能动，后面是{behind}。'],
+    skewered: ['{whose} {reply}，串击。{front}走，{behind}丢。'],
+    discovered: ['{whose} {reply}，闪击{target}。'],
+    discoveredCheck: ['{whose} {reply}，抽将。'],
+    lineLoss: ['后面 {line}，丢{lost}{gotText}。'],
     danger: ['对方 {reply}，{lose}危险。'],
     missChance: ['对方错了，没抓住。'],
     worse: ['局面变差。'],
@@ -421,6 +611,18 @@ export const VOICES = {
     allowMate: ['危险！{whose}有 {n} 步杀！'],
     missedMate: ['啊——这里 {n} 步杀啊！错过了！'],
     losePiece: ['{whose}走 {reply}，{lose}就没了。'],
+    hang: ['{at} 的{lose}没人管！{whose} {reply}，白送！'],
+    hangMoved: ['{piece}去了 {at}，结果没人保护，{whose} {reply} 直接吃！'],
+    hangIgnored: ['{whose}一直盯着 {at} 的{lose}啊！没管它，{reply}，白吃一个！'],
+    hangUnguarded: ['{piece}一走，{at} 的{lose}就光着了，{whose} {reply}，拿下！'],
+    loseExchange: ['{whose} {reply}，{by}换{lose}，血亏！'],
+    forked: ['{whose} {reply}，捉双！{forked}只能保一个！'],
+    forkedKing: ['{whose} {reply}，将军还带打{forked}！王先跑，{forked}没了！'],
+    pinned: ['{whose} {reply}，牵制！{pinned}被钉死了，后面就是{behind}！'],
+    skewered: ['{whose} {reply}，串击！{front}一躲，{behind}没了！'],
+    discovered: ['{whose} {reply}，闪击！{slider}直接打{target}！'],
+    discoveredCheck: ['{whose} {reply}，抽将！先救王，别的顾不上了！'],
+    lineLoss: ['往下走 {line}，一算账，{lost}没了{gotText}！'],
     danger: ['{whose}走 {reply}，{lose}就悬了。'],
     missChance: ['{whose}刚送了机会，没接住啊！'],
     worse: ['嗯……差点意思。', '这步有点亏。'],
@@ -478,6 +680,18 @@ export const VOICES = {
     allowMate: ['{whose}有 {n} 步杀，好可怕……'],
     missedMate: ['刚才 {n} 步就能将死的……'],
     losePiece: ['{whose}走 {reply}，{lose}就被吃掉了……'],
+    hang: ['{at} 的{lose}没人保护，{whose}走 {reply} 就吃掉了……'],
+    hangMoved: ['{piece}走到 {at}，那里没人保护，{whose}走 {reply} 吃掉了……'],
+    hangIgnored: ['{whose}一直在打 {at} 的{lose}，没有管它，{reply} 就被吃掉了……'],
+    hangUnguarded: ['{piece}走开以后，{at} 的{lose}就没人保护了，{whose}走 {reply} 吃掉了……'],
+    loseExchange: ['{whose}走 {reply}，用{by}换{lose}，亏了一点……'],
+    forked: ['{whose}走 {reply}，一下打到{forked}，只能救一个……'],
+    forkedKing: ['{whose}走 {reply}，又将军又打{forked}，王要先躲，{forked}就被吃了……'],
+    pinned: ['{whose}走 {reply}，{pinned}被{by}定住了，后面是{behind}，不能动……'],
+    skewered: ['{whose}走 {reply}，{front}要躲开，后面的{behind}就被吃了……'],
+    discovered: ['{whose}走 {reply}，{by}一让开，{slider}就打到{target}了……'],
+    discoveredCheck: ['{whose}走 {reply}，{by}一让开就将军了，这叫抽将……'],
+    lineLoss: ['接着 {line}，最后少了{lost}{gotText}……'],
     danger: ['{whose}走 {reply} 以后，{lose}有危险哦。'],
     missChance: ['{whose}刚才走错了，机会溜走了……'],
     worse: ['嗯……好像变难了。'],
@@ -514,6 +728,10 @@ export function fillLine(line, vars) {
   return String(line ?? '').replace(/\{(\w+)\}/g, (_, k) => (vars[k] === undefined || vars[k] === null ? '' : String(vars[k])));
 }
 
+// 走坏了的步还要先说一下做了什么的 (别的像「出子」「安静的一步」听着像在夸, 不说)
+const BAD_ACTS = new Set(['castle', 'promote', 'recapture', 'winPiece', 'trade', 'capture', 'check', 'evade']);
+// 说不出对方具体怎么罚的: 这种才在走错的时候直接说更好的走法
+export const VAGUE = new Set(['worse', 'missChance', 'missedMate']);
 const ACT_ORDER = ['mate', 'forced', 'book', 'bookPlain', 'castle', 'promote', 'fork', 'recapture', 'winPiece', 'trade', 'capture', 'check', 'evade', 'threat', 'escape', 'center', 'develop', 'pawn', 'quiet'];
 export const mainAct = (f) => ACT_ORDER.find((a) => f.acts.includes(a)) ?? 'quiet';
 
@@ -551,19 +769,25 @@ export function coachLine(coach, f, { mine = true, who = '你', whose = '对手'
     return out.join('');
   }
   if (f.kind === 'brilliant' || f.kind === 'great') out.push(say(f.kind));
-  else {
+  else if (BAD.has(f.kind)) {
+    // 走坏了 (v1.87.4, 照 chess.com): 不夸这步「安静」「有想法」, 直接讲亏在哪、对方怎么吃; 吃子、将军这种还是先说一下做了什么
+    const lead = pickLine(coach.say?.[f.kind], ((seed * 3) % 10) / 10);
+    if (lead) out.push(lead);
+    if (BAD_ACTS.has(act)) out.push(say(act === 'winPiece' ? 'capture' : act));
+    if (f.bad) out.push(say(f.bad));
+    if (f.bad === 'allowMate1' && f.pattern) out.push(`这叫${f.pattern}。`);
+    // 说不出具体亏在哪的, 告诉更好的走法; 说得出的, 更好的走法留给「正着」
+    if (f.best && (!f.bad || VAGUE.has(f.bad))) out.push(say('better', 1));
+    return out.join('');
+  } else {
     if (f.kind !== 'book') {
       const lead = pickLine(coach.say?.[f.kind], ((seed * 3) % 10) / 10);
       // 好棋、平常的步: 一半的时候不说前面那句 (不然每步都「很好，就是这步」)
-      if (lead && (BAD.has(f.kind) || seed % 2 === 0)) out.push(lead);
+      if (lead && seed % 2 === 0) out.push(lead);
     }
     out.push(say(act));
   }
-  if (f.soon && !BAD.has(f.kind)) out.push(say('mateNext'));
-  if (BAD.has(f.kind)) {
-    if (f.bad) out.push(say(f.bad));
-    if (f.best) out.push(say('better', 1));
-  }
+  if (f.soon) out.push(say('mateNext'));
   return out.join('');
 }
 
